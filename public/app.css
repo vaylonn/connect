@@ -142,6 +142,7 @@ button { cursor: pointer; }
 .grid-home { display: grid; gap: 14px; grid-template-columns: minmax(0, 1fr); }
 .grid-home > *, .col > * { min-width: 0; }
 .col { display: grid; gap: 14px; align-content: start; min-width: 0; }
+.col > :first-child > .section-head:first-child { margin-top: 0; } /* aligne le haut des deux colonnes */
 @media (min-width: 1100px) { .grid-home { grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr); gap: 22px; align-items: start; } }
 
 .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); padding: 20px; min-width: 0; }
