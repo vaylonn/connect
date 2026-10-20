@@ -5,7 +5,7 @@ import { eur, signedEur, pct, signedPct, pts, qty as fqty, num, dateLong, dateSh
 import { load, save, clearAll, emptyData, normalize, validateBackup, encryptBackup, decryptBackup, backupPayload, storageWorks } from './store.js';
 import { syncState, saveSyncState, clearSyncState, deriveAccount, pullVault, pushVault, deleteVault, normUser, USER_RE } from './sync.js';
 import { importTradeRepublic, mergeImport } from './importer.js';
-import { totals, staleLines, lookthrough, DIRECT, lineComposition, history as buildHistory, lineValue, lineCost, lineGain, pru, isCashLike, NEEDS_PRICE, simulate, envelopeForAccount, ENVELOPE_ORDER } from './compute.js';
+import { totals, staleLines, lookthrough, DIRECT, heldLines, isHeld, lineComposition, history as buildHistory, lineValue, lineCost, lineGain, pru, isCashLike, NEEDS_PRICE, simulate, envelopeForAccount, ENVELOPE_ORDER } from './compute.js';
 import { libraryFor, libraryChoices, SECTORS, COMPOSITION_NOTE, setFetchedLibrary, wantsComposition } from './library.js';
 import { lineChart, hoverText } from './chart.js';
 
@@ -169,9 +169,10 @@ function accountCard(a) {
 }
 
 function linesSection() {
-  const envs = [...new Set(data.lines.map(l => l.envelope || 'Autre'))].sort((a, b) => ENVELOPE_ORDER.indexOf(a) - ENVELOPE_ORDER.indexOf(b));
+  const held = heldLines(data);
+  const envs = [...new Set(held.map(l => l.envelope || 'Autre'))].sort((a, b) => ENVELOPE_ORDER.indexOf(a) - ENVELOPE_ORDER.indexOf(b));
   if (ui.filter !== 'all' && !envs.includes(ui.filter)) ui.filter = 'all';
-  const ls = data.lines.filter(l => ui.filter === 'all' || (l.envelope || 'Autre') === ui.filter).sort((a, b) => lineValue(b) - lineValue(a));
+  const ls = held.filter(l => ui.filter === 'all' || (l.envelope || 'Autre') === ui.filter).sort((a, b) => lineValue(b) - lineValue(a));
   return `<div><div class="section-head"><h2>Lignes</h2><button class="linkish" data-action="add-line">Ajouter</button></div>
     <div class="filters" role="group" aria-label="Filtrer par enveloppe">
       <button class="filter" data-action="filter" data-v="all" aria-pressed="${ui.filter === 'all'}">Toutes</button>
@@ -278,7 +279,7 @@ function emptyHint() {
 // ——— Onglet Simuler ———
 function simOptions() {
   const groups = data.accounts.map(a => {
-    const ls = data.lines.filter(l => l.accountId === a.id && !isCashLike(l));
+    const ls = data.lines.filter(l => l.accountId === a.id && !isCashLike(l) && isHeld(l));
     if (!ls.length) return '';
     return `<optgroup label="${esc(a.name)}">${ls.map(l => `<option value="${esc(l.id)}" ${ui.sim.lineId === l.id ? 'selected' : ''}>${esc(shortName(l))} · ${eur(lineValue(l), 0)}</option>`).join('')}</optgroup>`;
   }).join('');
@@ -288,7 +289,7 @@ function simOptions() {
 function viewSimuler() {
   if (!data.accounts.length) return `<h1 class="title">Et si vous…<em>achetiez ou vendiez, avant de le faire.</em></h1>${emptyHint()}`;
   const s = ui.sim;
-  if (!s.lineId) { const first = data.lines.filter(l => !isCashLike(l)).sort((a, b) => lineValue(b) - lineValue(a))[0]; s.lineId = first ? first.id : 'new:IE0002XZSHO1'; }
+  if (!s.lineId) { const first = heldLines(data).filter(l => !isCashLike(l)).sort((a, b) => lineValue(b) - lineValue(a))[0]; s.lineId = first ? first.id : 'new:IE0002XZSHO1'; }
   const isNew = s.lineId.startsWith('new:');
   if (isNew) s.mode = 'buy';
   const line = isNew ? null : lineById(s.lineId);
@@ -546,7 +547,7 @@ function drawLineChart(sh, l) {
 
 function openAccount(id) {
   const a = accById(id); if (!a) return;
-  const ls = data.lines.filter(l => l.accountId === id).sort((x, y) => lineValue(y) - lineValue(x));
+  const ls = data.lines.filter(l => l.accountId === id && isHeld(l)).sort((x, y) => lineValue(y) - lineValue(x));
   const v = ls.reduce((s, l) => s + lineValue(l), 0);
   openSheet(`${sheetHead(esc(a.name), esc(KINDS.find(k => k[0] === a.kind)?.[1] || ''))}
     <div class="detail-big">${eur(v)}</div>
@@ -947,7 +948,7 @@ let composing = false;
 async function autoCompositions() {
   if (PREVIEW || composing || ui.server !== 'ok') return;
   const comps = data.compositions || {};
-  const due = [...new Set(data.lines.filter(COMPOSABLE).map(l => l.isin.toUpperCase()))].filter(isin => {
+  const due = [...new Set(heldLines(data).filter(COMPOSABLE).map(l => l.isin.toUpperCase()))].filter(isin => {
     const c = comps[isin];
     return !c || (c.v || 1) < COMP_VERSION || Date.now() - Date.parse(c.at || 0) > (c.ok ? 30 : 3) * 86400000;
   });
@@ -1004,7 +1005,7 @@ async function refreshPrices() {
   ui.busy = true; progress('Connexion…');
   try {
     try { await api('api/health', 4000); ui.server = 'ok'; } catch { ui.server = 'off'; noServerSheet(); return; }
-    const targets = data.lines.filter(QUOTABLE);
+    const targets = heldLines(data).filter(QUOTABLE);
     if (!targets.length) { toast('Aucun produit coté à actualiser.'); return; }
     // 0. Symbole corrigé dans la bibliothèque depuis l'import (sauf symbole saisi à la main)
     for (const l of targets) { const t = libraryFor(l.isin)?.ticker; if (t && !l.customTicker && l.ticker !== t) { l.ticker = t; delete l.tickerAuto; } }

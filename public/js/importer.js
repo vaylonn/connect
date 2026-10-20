@@ -97,16 +97,19 @@ export function importTradeRepublic(text) {
     const p = P(acct, x);
     const q = toNum(x.shares);
     if (t === 'BUY' || t === 'SELL') {
-      const price = toNum(x.price);
+      const price = Math.abs(toNum(x.price));
       if (price) { p.price = price; p.priceDate = date; }
-      if (q > 0) {
-        p.q += q;
-        p.cost += -toNum(x.amount) - toNum(x.fee);
-        p.buyValue += q * price;
-      } else if (q < 0) {
-        if (p.q > 1e-12) { const keep = Math.max(0, p.q + q) / p.q; p.cost *= keep; p.buyValue *= keep; }
-        p.q += q;
-        if (Math.abs(p.q) < 1e-9) { p.q = 0; p.cost = 0; p.buyValue = 0; }
+      // Le type fait foi : une vente retire des parts même si l'export écrit la quantité
+      // sans signe (un achat à quantité négative reste une annulation).
+      const dq = t === 'SELL' ? -Math.abs(q) : q;
+      if (dq > 0) {
+        p.q += dq;
+        p.cost += Math.abs(toNum(x.amount)) + Math.abs(toNum(x.fee));
+        p.buyValue += dq * price;
+      } else if (dq < 0) {
+        if (p.q > 1e-12) { const keep = Math.max(0, p.q + dq) / p.q; p.cost *= keep; p.buyValue *= keep; }
+        p.q += dq;
+        if (p.q < 1e-9) { p.q = 0; p.cost = 0; p.buyValue = 0; } // tout vendu (ou plus que détenu)
       }
     } else if (t === 'SPLIT' || t === 'BONUS_ISSUE' || t === 'FREE_RECEIPT') {
       p.q += q; // la répartition ne change pas le prix de revient total
@@ -131,7 +134,8 @@ export function importTradeRepublic(text) {
     // Non coté : les versements anticipés pas encore exécutés restent « en attente »
     // (valeur des parts exécutées au prix d'achat = somme q×prix des achats)
     const pending = isPrivate ? r2(Math.max(0, p.prepaid - p.buyValue)) : 0;
-    if (Math.abs(p.q) < 1e-7 && pending < 0.005) continue;
+    // position soldée, ou reliquat d'arrondi après une vente totale (moins d'un centime)
+    if ((p.q < 1e-7 || (p.price > 0 && p.q * p.price < 0.01)) && pending < 0.005) continue;
     const lib = libraryFor(p.isin);
     const acc = p.acct;
     const envelope = acc === 'PEA' ? 'PEA' : type === 'crypto' ? 'Crypto' : 'Compte-titres';

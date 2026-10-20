@@ -24,8 +24,24 @@ export function equityShare(l) {
   return l.type === 'action' || l.type === 'etf' ? 1 : 0;
 }
 
+// Position réellement détenue : rattachée à un compte qui existe, et pas un reliquat de vente
+// (quelques millionièmes de part restés après une vente totale, ou une quantité nulle).
+// Les ventes passées restent dans l'historique (events) ; seules les positions actuelles
+// comptent dans les totaux, l'analyse, les détails et les listes.
+export function isHeld(l, accountIds) {
+  if (accountIds && !accountIds.has(l.accountId)) return false;
+  if (isCashLike(l) || +l.pending > 0.005 || l.estimateFromAmount) return true;
+  const q = +l.qty || 0;
+  if (q <= 1e-6) return false;
+  return !(+l.price > 0) || q * l.price >= 0.01;
+}
+export function heldLines(data) {
+  const ids = new Set((data.accounts || []).map(a => a.id));
+  return (data.lines || []).filter(l => isHeld(l, ids));
+}
+
 export function totals(data) {
-  const lines = data.lines || [];
+  const lines = heldLines(data);
   let total = 0, cost = 0, invested = 0, cash = 0, equity = 0, liquid = 0;
   const byAcc = new Map(), byEnv = new Map();
   for (const l of lines) {
@@ -53,7 +69,7 @@ export function totals(data) {
 
 export function staleLines(data, now = new Date(), days = 4) {
   const limit = new Date(now.getTime() - days * 86400000).toISOString().slice(0, 10);
-  return (data.lines || []).filter(l => NEEDS_PRICE(l) && (l.ticker || l.isin) && (!l.priceDate || l.priceDate < limit));
+  return heldLines(data).filter(l => NEEDS_PRICE(l) && (l.ticker || l.isin) && (!l.priceDate || l.priceDate < limit));
 }
 
 // ——— Transparence : secteurs, pays, entreprises ———
@@ -82,7 +98,7 @@ export function lookthrough(data) {
     if (via) p.via.set(via, (p.via.get(via) || 0) + v);
   };
   let base = 0, covered = 0, estimatedCompanies = 0;
-  for (const l of data.lines || []) {
+  for (const l of heldLines(data)) {
     if (isCashLike(l)) continue;
     const v = lineValue(l);
     if (v <= 0) continue;
@@ -165,7 +181,8 @@ function lastLE(arr, d, idx = 0) {
 const iso = d => d.toISOString().slice(0, 10);
 
 export function history(data, now = new Date()) {
-  const lines = data.lines || [];
+  const accIds = new Set((data.accounts || []).map(a => a.id));
+  const lines = (data.lines || []).filter(l => accIds.has(l.accountId)); // ventes passées comprises
   const ph = data.priceHistory || {};
   let start = null;
   for (const l of lines) {
