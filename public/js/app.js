@@ -161,8 +161,8 @@ function accountCard(a) {
   const on = Math.round(a.share * 20);
   return `<button class="acc" data-action="open-account" data-id="${esc(acc.id)}">
     <span class="tile c-${esc(acc.color || 'ink')}">${esc(initials(acc.name))}</span>
-    <span class="name">${esc(acc.name)}</span><span class="val">${eur(a.value, 0)}</span>
-    <span class="sub">${esc(KINDS.find(k => k[0] === acc.kind)?.[1] || 'Compte')}${a.gain && Math.abs(a.gain) >= 0.5 ? ` · <span class="${a.gain >= 0 ? 'pos' : 'neg'}">${signedEur(a.gain, 0)}</span>` : ''}</span><span class="share">${pct(a.share, 0)}</span>
+    <span class="name">${esc(KINDS.find(k => k[0] === acc.kind)?.[1] || 'Compte')}</span><span class="val">${eur(a.value, 0)}</span>
+    <span class="sub">${esc(acc.name)}${a.gain && Math.abs(a.gain) >= 0.5 ? ` · <span class="${a.gain >= 0 ? 'pos' : 'neg'}">${signedEur(a.gain, 0)}</span>` : ''}</span><span class="share">${pct(a.share, 0)}</span>
     <span class="segs" aria-hidden="true">${Array.from({ length: 20 }, (_, i) => `<i class="${i < on ? 'on c-' + esc(acc.color || 'ink') : ''}"></i>`).join('')}</span>
   </button>`;
 }
