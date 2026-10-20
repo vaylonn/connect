@@ -64,8 +64,22 @@ function normalized(obj) {
   return Object.entries(obj).map(([k, w]) => [k, w / s]);
 }
 
+// Chaque case (secteur, pays, entreprise) garde le détail de ce qui la compose (parts) :
+//   company : une entreprise, détenue via un ou plusieurs fonds (via) ou en direct
+//   rest    : le reste d'un fonds dans cette case, hors principales positions connues
+//   line    : une ligne entière (crypto, non coté, produit non ventilé)
+//   fund / direct : pour une entreprise, le fonds qui la contient ou la ligne en direct
+export const DIRECT = 'en direct';
 export function lookthrough(data) {
   const sectors = new Map(), countries = new Map(), companies = new Map();
+  const parts = { sectors: new Map(), countries: new Map(), companies: new Map() };
+  const addPart = (dim, bucket, name, kind, v, via, weight) => {
+    let b = parts[dim].get(bucket); if (!b) parts[dim].set(bucket, b = new Map());
+    const key = kind + '|' + name;
+    let p = b.get(key); if (!p) b.set(key, p = { name, kind, value: 0, via: new Map(), weight: 0 });
+    p.value += v; p.weight += weight || 0;
+    if (via) p.via.set(via, (p.via.get(via) || 0) + v);
+  };
   let base = 0, covered = 0, estimatedCompanies = 0;
   for (const l of data.lines || []) {
     if (isCashLike(l)) continue;
@@ -74,31 +88,52 @@ export function lookthrough(data) {
     base += v;
     const lib = libraryFor(l.isin);
     const custom = l.lookthrough || {};
+    const own = lib?.short || l.name;
     if (lib && lib.holdings) {
       covered += v;
-      for (const [k, w] of normalized(lib.sectors)) addTo(sectors, label(k), v * w);
-      for (const [k, w] of normalized(lib.countries)) addTo(countries, k, v * w);
-      for (const [name, w] of lib.holdings) { addTo(companies, name, v * w / 100); estimatedCompanies += v * w / 100; }
+      const sw = new Map(normalized(lib.sectors).map(([k, w]) => [label(k), w]));
+      const cw = new Map(normalized(lib.countries));
+      const named = { sectors: new Map(), countries: new Map() };
+      for (const [name, w, s, c] of lib.holdings) {
+        const a = v * w / 100;
+        addTo(companies, name, a); estimatedCompanies += a;
+        addPart('companies', name, own, 'fund', a, null, w / 100);
+        if (sw.has(label(s))) { addPart('sectors', label(s), name, 'company', a, own); addTo(named.sectors, label(s), a); }
+        if (cw.has(c)) { addPart('countries', c, name, 'company', a, own); addTo(named.countries, c, a); }
+      }
+      for (const [dim, weights, totalsMap] of [['sectors', sw, sectors], ['countries', cw, countries]]) {
+        for (const [k, w] of weights) {
+          addTo(totalsMap, k, v * w);
+          const rest = v * w - (named[dim].get(k) || 0);
+          if (rest > 0.005) addPart(dim, k, own, 'rest', rest);
+        }
+      }
     } else if (l.type === 'action' || (lib && lib.type === 'action')) {
       covered += v;
-      addTo(sectors, label(custom.sector || lib?.sector || 'other'), v);
-      addTo(countries, custom.country || lib?.country || 'Non renseigné', v);
-      addTo(companies, lib?.short || l.name, v);
-    } else if (l.type === 'crypto') {
-      covered += v;
-      addTo(sectors, label('crypto'), v);
-      addTo(countries, 'Sans pays (crypto)', v);
-    } else if (l.type === 'non-cote') {
-      addTo(sectors, label('pe'), v);
-      addTo(countries, 'Non ventilé', v);
+      const s = label(custom.sector || lib?.sector || 'other'), c = custom.country || lib?.country || 'Non renseigné';
+      addTo(sectors, s, v); addPart('sectors', s, own, 'company', v, DIRECT);
+      addTo(countries, c, v); addPart('countries', c, own, 'company', v, DIRECT);
+      addTo(companies, own, v); addPart('companies', own, l.name || own, 'direct', v);
     } else {
-      if (custom.sector || custom.country) covered += v;
-      addTo(sectors, custom.sector ? label(custom.sector) : 'Non ventilé', v);
-      addTo(countries, custom.country || 'Non ventilé', v);
+      let s, c;
+      if (l.type === 'crypto') { covered += v; s = label('crypto'); c = 'Sans pays (crypto)'; }
+      else if (l.type === 'non-cote') { s = label('pe'); c = 'Non ventilé'; }
+      else {
+        if (custom.sector || custom.country) covered += v;
+        s = custom.sector ? label(custom.sector) : 'Non ventilé'; c = custom.country || 'Non ventilé';
+      }
+      addTo(sectors, s, v); addPart('sectors', s, own, 'line', v);
+      addTo(countries, c, v); addPart('countries', c, own, 'line', v);
     }
   }
-  const list = m => [...m].map(([name, value]) => ({ name, value, pct: base > 0 ? value / base : 0 })).sort((a, b) => b.value - a.value);
-  return { base, coverage: base > 0 ? covered / base : 0, sectors: list(sectors), countries: list(countries), companies: list(companies) };
+  const order = p => (p.kind === 'rest' ? 1 : 0);
+  const list = (m, dim) => [...m].map(([name, value]) => ({
+    name, value, pct: base > 0 ? value / base : 0,
+    parts: [...(parts[dim].get(name)?.values() || [])]
+      .map(p => ({ ...p, pct: value > 0 ? p.value / value : 0, via: [...p.via].map(([n, x]) => ({ name: n, value: x })).sort((a, b) => b.value - a.value) }))
+      .sort((a, b) => order(a) - order(b) || b.value - a.value),
+  })).sort((a, b) => b.value - a.value);
+  return { base, coverage: base > 0 ? covered / base : 0, sectors: list(sectors, 'sectors'), countries: list(countries, 'countries'), companies: list(companies, 'companies') };
 }
 
 export function lineComposition(l) {

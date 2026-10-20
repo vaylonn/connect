@@ -270,6 +270,9 @@ button { cursor: pointer; }
 .seg button[aria-pressed="true"] { background: var(--surface); color: var(--ink); box-shadow: 0 1px 3px rgba(0, 0, 0, .08); }
 .bars { display: grid; gap: 12px; margin-top: 16px; }
 .barrow { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 5px 12px; align-items: baseline; }
+button.barrow { width: calc(100% + 16px); margin: -6px -8px; padding: 6px 8px; border: 0; background: none; border-radius: 10px; text-align: left; color: inherit; font: inherit; cursor: pointer; }
+button.barrow:hover { background: var(--bg-2); }
+button.barrow:hover .track { background: var(--surface); }
 .barrow .n { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
 .barrow .p { font-variant-numeric: tabular-nums; font-size: 13px; color: var(--muted); text-align: right; white-space: nowrap; }
 .barrow .p b { color: var(--ink); font-weight: 600; margin-right: 8px; }
@@ -374,6 +377,7 @@ textarea.input { height: auto; min-height: 110px; padding: 12px 14px; font-famil
 .holding .n { font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .holding .a { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
 .holding .w { grid-column: 2 / -1; font-size: 12px; color: var(--muted); }
+.holding .track { grid-column: 2 / -1; height: 5px; margin-top: 5px; }
 
 /* ——— Toast ——— */
 .toast { position: fixed; left: 50%; bottom: calc(var(--tabbar-h) + 30px + env(safe-area-inset-bottom, 0px)); transform: translate(-50%, 20px); background: var(--night); color: var(--night-ink); padding: 11px 16px; border-radius: 16px; font-size: 14px; z-index: 80; opacity: 0; pointer-events: none; transition: opacity .2s, transform .2s; max-width: calc(100vw - 32px); box-shadow: 0 12px 30px -12px rgba(0, 0, 0, .5); }

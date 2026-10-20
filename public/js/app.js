@@ -5,7 +5,7 @@ import { eur, signedEur, pct, signedPct, pts, qty as fqty, num, dateLong, dateSh
 import { load, save, clearAll, emptyData, normalize, validateBackup, encryptBackup, decryptBackup, backupPayload, storageWorks } from './store.js';
 import { syncState, saveSyncState, clearSyncState, deriveAccount, pullVault, pushVault, deleteVault, normUser, USER_RE } from './sync.js';
 import { importTradeRepublic, mergeImport } from './importer.js';
-import { totals, staleLines, lookthrough, lineComposition, history as buildHistory, lineValue, lineCost, lineGain, pru, isCashLike, NEEDS_PRICE, simulate, envelopeForAccount, ENVELOPE_ORDER } from './compute.js';
+import { totals, staleLines, lookthrough, DIRECT, lineComposition, history as buildHistory, lineValue, lineCost, lineGain, pru, isCashLike, NEEDS_PRICE, simulate, envelopeForAccount, ENVELOPE_ORDER } from './compute.js';
 import { libraryFor, libraryChoices, SECTORS, COMPOSITION_NOTE } from './library.js';
 import { lineChart, hoverText } from './chart.js';
 
@@ -232,10 +232,44 @@ function viewAnalyse() {
     <div class="section-head"><h2>Répartition</h2><span class="aside">hors espèces · ${eur(lt.base, 0)}</span></div>
     <div class="card">
       <div class="seg" role="group" aria-label="Répartition">${[['sectors', 'Secteurs'], ['countries', 'Pays'], ['companies', 'Entreprises']].map(([k, l]) => `<button data-action="analyse" data-v="${k}" aria-pressed="${ui.analyse === k}">${l}</button>`).join('')}</div>
-      <div class="bars">${list.map(x => `<div class="barrow"><span class="n">${esc(x.name)}</span><span class="p"><b>${eur(x.value, 0)}</b>${pct(x.pct)}</span><span class="track"><i style="width:${(100 * x.value / max).toFixed(1)}%"></i></span></div>`).join('') || '<p class="muted">Rien à afficher.</p>'}</div>
+      <div class="bars">${list.map((x, i) => `<button class="barrow" data-action="open-split" data-v="${i}" aria-label="${esc(x.name)} : détail"><span class="n">${esc(x.name)}</span><span class="p"><b>${eur(x.value, 0)}</b>${pct(x.pct)}</span><span class="track"><i style="width:${(100 * x.value / max).toFixed(1)}%"></i></span></button>`).join('') || '<p class="muted">Rien à afficher.</p>'}</div>
       <p class="note">${ui.analyse === 'companies' ? 'Montants détenus à travers vos ETF (principales positions de chaque fonds) et en direct. ' : ''}${pct(lt.coverage, 0)} des placements sont ventilés ; le reste (non coté, fonds inconnus) apparaît en « Non ventilé » ou « Capital-investissement ». ${COMPOSITION_NOTE}</p>
     </div>`;
 }
+// Détail d'une case de la répartition : ce qui compose le montant, du plus gros au plus petit
+const SPLIT_WORD = { sectors: 'du secteur', countries: 'du pays', companies: 'de la position' };
+function openSplit(i) {
+  const dim = ui.analyse;
+  const lt = lookthrough(data);
+  const x = lt[dim]?.[+i]; if (!x) return;
+  const of = SPLIT_WORD[dim];
+  const row = (p, r, sub) => `<div class="holding"><span class="r">${r}</span><span class="n">${esc(p.name)}</span><span class="a">${eur(p.value)}</span>
+    <span class="w">${pct(p.pct)} ${of}${sub ? ' · ' + sub : ''}</span><span class="track"><i style="width:${(100 * Math.min(1, p.pct)).toFixed(1)}%"></i></span></div>`;
+  const via = p => {
+    if (!p.via.length) return '';
+    if (p.via.length === 1) return p.via[0].name === DIRECT ? 'en direct' : 'via ' + esc(p.via[0].name);
+    return 'via ' + p.via.map(v => `${v.name === DIRECT ? 'en direct' : esc(v.name)} ${eur(v.value, 0)}`).join(', ');
+  };
+  let body;
+  if (dim === 'companies') {
+    body = `<div class="section-head" style="margin-top:22px"><h2>Détenue à travers</h2><span class="aside">${x.parts.length} ligne${x.parts.length > 1 ? 's' : ''}</span></div>
+      <div class="holdings">${x.parts.map((p, r) => row(p, r + 1, p.kind === 'direct' ? 'en direct' : `${pct(p.weight)} du fonds`)).join('')}</div>`;
+  } else {
+    const named = x.parts.filter(p => p.kind !== 'rest'), rest = x.parts.filter(p => p.kind === 'rest');
+    const restSum = rest.reduce((s, p) => s + p.value, 0);
+    body = `${named.length ? `<div class="section-head" style="margin-top:22px"><h2>${named.some(p => p.kind === 'company') ? 'Entreprises' : 'Lignes'}</h2><span class="aside">classées par montant</span></div>
+      <div class="holdings">${named.map((p, r) => row(p, r + 1, p.kind === 'line' ? 'ligne entière' : via(p))).join('')}</div>` : ''}
+      ${rest.length ? `<div class="section-head" style="margin-top:22px"><h2>Reste des fonds</h2><span class="aside">${eur(restSum, 0)} · ${pct(x.value ? restSum / x.value : 0)}</span></div>
+      <p class="note" style="margin:0 2px 6px">Autres entreprises de ces fonds ${of === 'du pays' ? 'dans ce pays' : 'dans ce secteur'}, au-delà de leurs principales positions.</p>
+      <div class="holdings">${rest.map(p => row(p, '·', 'autres positions du fonds')).join('')}</div>` : ''}`;
+  }
+  const label = { sectors: 'Secteur', countries: 'Pays', companies: 'Entreprise' }[dim];
+  openSheet(`${sheetHead(esc(x.name), `${label} · ${pct(x.pct)} des placements hors espèces`)}
+    <div class="detail-big">${eur(x.value)}</div>
+    ${body}
+    <p class="note">${COMPOSITION_NOTE}</p>`, { label: x.name });
+}
+
 function emptyHint() {
   return `<div class="card"><p class="muted" style="margin:0 0 12px">Aucune donnée pour l’instant.</p><div class="btn-row"><button class="btn primary" data-action="go" data-v="donnees">Importer ou ajouter des lignes</button></div></div>`;
 }
@@ -1040,6 +1074,7 @@ document.addEventListener('click', async e => {
     case 'range': ui.range = v; render(); break;
     case 'filter': ui.filter = v; render(); break;
     case 'analyse': ui.analyse = v; render(); break;
+    case 'open-split': openSplit(v); break;
     case 'go': go(v); break;
     case 'open-line': openLine(b.dataset.id); break;
     case 'open-account': openAccount(b.dataset.id); break;
