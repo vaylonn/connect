@@ -111,6 +111,8 @@ tests/          test de l'API de synchronisation, test de bout en bout, faux Yah
 
 **Bibliothèque ETF** (`public/js/library.js`) : symbole Yahoo, secteurs, pays et principales entreprises des fonds connus, en ordres de grandeur (mi-2026).
 
+**Historique** : l'onglet liste les opérations sur titres gardées à l'import Trade Republic (achats, ventes, divisions, attributions), avec la plus-value réalisée de chaque vente. Les mouvements d'espèces (versements, retraits, intérêts, dividendes, paiements) n'y figurent pas. Un nouvel import remplace l'historique Trade Republic.
+
 **Compositions automatiques** : chaque ETF, fonds (y compris unités de compte d'assurance-vie) et action reçoit sa composition, récupérée par le serveur (`/api/composition`, seul l'ISIN est envoyé). Source principale : Morningstar (pays et 11 secteurs complets, vus à travers l'indice même pour les ETF synthétiques du PEA, part en actions, principales positions). En secours : justETF (positions de l'indice des ETF synthétiques). Mise à jour tous les 30 jours ; la bibliothèque sert de repli quand le serveur ne trouve rien.
 Pour ajouter un fonds, ajoutez une entrée avec son ISIN. Vérifiez que le symbole correspond bien au fonds **et à la bonne part** (Acc ou Dist) : un symbole voisin peut donner un cours très différent.
 

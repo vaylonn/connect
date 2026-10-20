@@ -14,10 +14,11 @@ const VERSION = '1.2.0';
 let data = load();
 const ui = {
   tab: 'patrimoine', range: '1A', filter: 'all', analyse: 'sectors', server: PREVIEW ? 'preview' : 'unknown', busy: false, progress: '', lineRange: '1A',
+  hist: { kind: 'all', acc: 'all', q: '', limit: 150 },
   sim: { mode: 'buy', lineId: '', newIsin: '', newName: '', accountId: '', by: 'amount', amount: '1000', qty: '', price: '', fees: '1', useCash: true },
 };
 const TABS = [
-  ['patrimoine', 'Patrimoine'], ['analyse', 'Analyse'], ['simuler', 'Simuler'], ['donnees', 'Données'],
+  ['patrimoine', 'Patrimoine'], ['analyse', 'Analyse'], ['historique', 'Historique'], ['simuler', 'Simuler'], ['donnees', 'Données'],
 ];
 const COLORS = ['ink', 'orange', 'blue', 'pink', 'lilac', 'green'];
 const KINDS = [['courant', 'Compte courant'], ['livret', 'Livret d’épargne'], ['cto', 'Compte-titres'], ['pea', 'PEA'], ['av', 'Assurance-vie'], ['per', 'PER'], ['crypto', 'Crypto'], ['autre', 'Autre']];
@@ -27,6 +28,7 @@ const TYPE_LABEL = Object.fromEntries(TYPES);
 const ICONS = {
   patrimoine: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 4l9 6.5"/><path d="M5 9.5V20h14V9.5"/><path d="M9.5 20v-5.5h5V20"/></svg>',
   analyse: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 3.5V12l6 6"/></svg>',
+  historique: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 12a8.5 8.5 0 1 0 2.6-6.1"/><path d="M3.5 4.5V9H8"/><path d="M12 7.5V12l3 2"/></svg>',
   simuler: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2.2"/><circle cx="10" cy="17" r="2.2"/></svg>',
   donnees: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><ellipse cx="12" cy="6" rx="7.5" ry="2.8"/><path d="M4.5 6v6c0 1.5 3.4 2.8 7.5 2.8s7.5-1.3 7.5-2.8V6"/><path d="M4.5 12v6c0 1.5 3.4 2.8 7.5 2.8s7.5-1.3 7.5-2.8v-6"/></svg>',
   refresh: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></svg>',
@@ -72,7 +74,7 @@ function render() {
   for (const a of document.querySelectorAll('.avatar')) a.textContent = name ? name[0].toUpperCase() : 'C';
   const sideName = $('#side-name'); if (sideName) sideName.textContent = name || 'Votre profil';
   const v = $('#view');
-  const fn = { patrimoine: viewHome, analyse: viewAnalyse, simuler: viewSimuler, donnees: viewData }[ui.tab] || viewHome;
+  const fn = { patrimoine: viewHome, analyse: viewAnalyse, historique: viewHistorique, simuler: viewSimuler, donnees: viewData }[ui.tab] || viewHome;
   v.innerHTML = (data.demo ? demoBanner() : '') + fn();
   after[ui.tab]?.();
   setRefreshUI();
@@ -274,6 +276,92 @@ function openSplit(i) {
 
 function emptyHint() {
   return `<div class="card"><p class="muted" style="margin:0 0 12px">Aucune donnée pour l’instant.</p><div class="btn-row"><button class="btn primary" data-action="go" data-v="donnees">Importer ou ajouter des lignes</button></div></div>`;
+}
+
+// ——— Onglet Historique ———
+// Opérations sur titres gardées à l'import (achats, ventes, divisions…), sans les mouvements
+// d'espèces (versements, retraits, intérêts, dividendes, paiements par carte).
+const OP_LABEL = { BUY: 'Achat', SELL: 'Vente', SPLIT: 'Division', BONUS_ISSUE: 'Attribution gratuite', FREE_RECEIPT: 'Réception de titres', PRIVATE_MARKET_BUY: 'Souscription' };
+const HIST_KINDS = [['all', 'Toutes'], ['BUY', 'Achats'], ['SELL', 'Ventes'], ['other', 'Autres']];
+const MONTH = new Intl.DateTimeFormat('fr-FR', { month: 'long', year: 'numeric' });
+const isBuy = t => t.kind === 'BUY' || t.kind === 'PRIVATE_MARKET_BUY';
+const opName = t => libraryFor(t.isin)?.short || t.name || t.isin;
+
+function histFiltered() {
+  const h = ui.hist;
+  const q = h.q.trim().toLowerCase();
+  return (data.transactions || [])
+    .filter(t => h.kind === 'all' || (h.kind === 'other' ? !isBuy(t) && t.kind !== 'SELL' : h.kind === 'BUY' ? isBuy(t) : t.kind === h.kind))
+    .filter(t => h.acc === 'all' || t.accountId === h.acc)
+    .filter(t => !q || opName(t).toLowerCase().includes(q) || String(t.name || '').toLowerCase().includes(q) || String(t.isin || '').toLowerCase().includes(q))
+    .map((t, i) => [t, i]).sort((a, b) => (a[0].date < b[0].date ? 1 : a[0].date > b[0].date ? -1 : b[1] - a[1])).map(x => x[0]);
+}
+
+function viewHistorique() {
+  const title = '<h1 class="title">Vos opérations.<em>Achats et ventes, sans les mouvements d’espèces.</em></h1>';
+  const all = data.transactions || [];
+  if (!all.length) {
+    if (!data.trStats) return title + emptyHint();
+    return title + `<div class="card"><p class="muted" style="margin:0 0 12px">L’historique se remplit à l’import. Réimportez votre export Trade Republic : les imports précédents ne gardaient que les positions, pas le détail des opérations.</p>
+      <div class="btn-row"><button class="btn primary" data-action="pick-csv">${ICONS.upload}Importer le CSV</button></div></div>`;
+  }
+  const h = ui.hist;
+  const accs = [...new Set(all.map(t => t.accountId))].map(accById).filter(Boolean);
+  if (h.acc !== 'all' && !accs.some(a => a.id === h.acc)) h.acc = 'all';
+  const manual = data.lines.some(l => l.source !== 'tr' && !isCashLike(l) && isHeld(l));
+  return `${title}
+    <div class="filters" role="group" aria-label="Type d’opération">${HIST_KINDS.map(([k, l]) => `<button class="filter" data-action="hist-kind" data-v="${k}" aria-pressed="${h.kind === k}">${l}</button>`).join('')}</div>
+    ${accs.length > 1 ? `<div class="filters" role="group" aria-label="Compte"><button class="filter" data-action="hist-acc" data-v="all" aria-pressed="${h.acc === 'all'}">Tous les comptes</button>${accs.map(a => `<button class="filter" data-action="hist-acc" data-v="${esc(a.id)}" aria-pressed="${h.acc === a.id}">${esc(a.name)}</button>`).join('')}</div>` : ''}
+    <label class="hist-search"><span class="sr">Rechercher</span><input class="input" type="search" id="hist-q" data-hist="q" value="${esc(h.q)}" placeholder="Rechercher un produit ou un ISIN" autocomplete="off"></label>
+    <div id="hist-body">${histBody()}</div>
+    ${manual && !data.demo ? '<p class="note">Les lignes ajoutées à la main n’ont pas d’historique d’opérations.</p>' : ''}`;
+}
+
+function histBody() {
+  const ts = histFiltered();
+  if (!ts.length) return '<div class="card"><p class="muted" style="margin:0">Aucune opération ne correspond.</p></div>';
+  const sum = f => ts.reduce((s, t) => s + (f(t) || 0), 0);
+  const bought = sum(t => isBuy(t) ? Math.abs(t.amount) : 0), sold = sum(t => t.kind === 'SELL' ? Math.abs(t.amount) : 0);
+  const realized = sum(t => t.realized), fees = sum(t => Math.abs(t.fee || 0));
+  const nBuy = ts.filter(isBuy).length, nSell = ts.filter(t => t.kind === 'SELL').length;
+  const first = ts[ts.length - 1].date, last = ts[0].date;
+  const tiles = [
+    { k: 'Investi', v: eur(bought, 0), d: `${nBuy} achat${nBuy > 1 ? 's' : ''}` },
+    { k: 'Vendu', v: eur(sold, 0), d: `${nSell} vente${nSell > 1 ? 's' : ''}` },
+    { k: 'Plus-values réalisées', v: signedEur(realized, 0), d: nSell ? 'sur les ventes, frais déduits' : 'aucune vente', cls: realized > 0.5 ? 'pos' : realized < -0.5 ? 'neg' : '' },
+    { k: 'Frais', v: eur(fees), d: `du ${dateShort(first)} ${first.slice(0, 4)} au ${dateShort(last)} ${last.slice(0, 4)}` },
+  ];
+  const shown = ts.slice(0, ui.hist.limit);
+  const months = [];
+  for (const t of shown) { const m = t.date.slice(0, 7); if (!months.length || months[months.length - 1].m !== m) months.push({ m, ops: [] }); months[months.length - 1].ops.push(t); }
+  const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
+  return `<div class="tiles">${tiles.map(x => `<div class="tile-k"><span class="k">${x.k}</span><span class="v ${x.cls || ''}">${x.v}</span><span class="d">${x.d}</span></div>`).join('')}</div>
+    <div class="section-head"><h2>Opérations</h2><span class="aside">${ts.length} opération${ts.length > 1 ? 's' : ''}</span></div>
+    ${months.map(({ m, ops }) => {
+      const net = ops.reduce((s, t) => s + (isBuy(t) || t.kind === 'SELL' ? t.amount : 0), 0);
+      return `<div class="hist-month"><span>${cap(MONTH.format(new Date(m + '-15T12:00:00')))}</span><span>${Math.abs(net) >= 0.5 ? signedEur(net, 0) : ''}</span></div>
+        <div class="lines">${ops.map(histRow).join('')}</div>`;
+    }).join('')}
+    ${ts.length > shown.length ? `<div class="btn-row" style="margin-top:14px;justify-content:center"><button class="btn" data-action="hist-more">Afficher ${Math.min(150, ts.length - shown.length)} de plus</button></div>` : ''}`;
+}
+
+function histRow(t) {
+  const name = opName(t);
+  const acc = accById(t.accountId);
+  const line = data.lines.find(l => l.accountId === t.accountId && l.isin === t.isin && isHeld(l));
+  const label = (OP_LABEL[t.kind] || t.kind) + (/SAVING|PLAN/i.test(t.category || '') ? ' programmé' : '');
+  const n = +(+t.shares || 0).toFixed(6);
+  const shares = n ? `${fqty(n)} part${n > 1 ? 's' : ''}${t.price ? ' à ' + eur(t.price) : ''}` : '';
+  const sub = [dateShort(t.date), label, shares, acc?.name || t.envelope].filter(Boolean).map(esc).join(' · ');
+  const money = isBuy(t) || t.kind === 'SELL';
+  const value = money ? signedEur(t.amount) : n ? '+' + fqty(n) + ' part' + (n > 1 ? 's' : '') : '—';
+  const g = t.kind === 'SELL' && typeof t.realized === 'number'
+    ? `<span class="${t.realized > 0.005 ? 'pos' : t.realized < -0.005 ? 'neg' : 'muted'}" title="Plus-value réalisée">${signedEur(t.realized)}</span>`
+    : t.fee ? `<span class="muted">frais ${eur(Math.abs(t.fee))}</span>` : '';
+  const inner = `<span class="mono t-${esc(t.type || 'etf')}">${esc(initials(name))}</span>
+    <span class="n">${esc(name)}</span><span class="v ${t.kind === 'SELL' ? 'in' : ''}">${value}</span>
+    <span class="s">${sub}</span><span class="g">${g}</span>`;
+  return line ? `<button class="line" data-action="open-line" data-id="${esc(line.id)}">${inner}</button>` : `<div class="line static">${inner}</div>`;
 }
 
 // ——— Onglet Simuler ———
@@ -1094,6 +1182,21 @@ function demoData() {
     mk('d4', 'd-cto', 'BTC', 0.004, 300, 61000, { events: [['2025-02-01', 0.004, 300, 75000]] }),
     { id: 'd5', source: 'manual', accountId: 'd-liv', envelope: 'Livrets', type: 'livret', name: 'Livret A', qty: 1, amount: 4200, price: 4200, cost: 4200, priceDate: today(), equity: 0, pending: 0, events: [], since: '2025-01-01' },
   ];
+  // Historique d'exemple : achats tirés des évolutions de chaque ligne, plus un aller-retour vendu
+  d.transactions = [];
+  for (const l of d.lines) {
+    if (isCashLike(l)) continue;
+    let pq = 0, pc = 0;
+    for (const [date, q, c, p] of l.events) {
+      const dq = q - pq;
+      if (dq > 1e-9) d.transactions.push({ id: 'd-op-' + d.transactions.length, source: 'demo', date, accountId: l.accountId, envelope: l.envelope, isin: l.isin, name: l.name, type: l.type, kind: 'BUY', shares: +dq.toFixed(6), price: p, amount: -(c - pc + 1), fee: -1, tax: 0 });
+      pq = q; pc = c;
+    }
+  }
+  d.transactions.push(
+    { id: 'd-op-h1', source: 'demo', date: '2025-03-12', accountId: 'd-pea', envelope: 'PEA', isin: 'FR0000052292', name: 'Hermès', type: 'action', kind: 'BUY', shares: 1, price: 2050, amount: -2051, fee: -1, tax: 0 },
+    { id: 'd-op-h2', source: 'demo', date: '2025-11-20', accountId: 'd-pea', envelope: 'PEA', isin: 'FR0000052292', name: 'Hermès', type: 'action', kind: 'SELL', shares: 1, price: 2290, amount: 2290, fee: -1, tax: 0, realized: 238 },
+  );
   return d;
 }
 
@@ -1110,6 +1213,9 @@ document.addEventListener('click', async e => {
     case 'range': ui.range = v; render(); break;
     case 'filter': ui.filter = v; render(); break;
     case 'analyse': ui.analyse = v; render(); break;
+    case 'hist-kind': ui.hist.kind = v; ui.hist.limit = 150; render(); break;
+    case 'hist-acc': ui.hist.acc = v; ui.hist.limit = 150; render(); break;
+    case 'hist-more': { ui.hist.limit += 150; const y = window.scrollY; $('#hist-body').innerHTML = histBody(); window.scrollTo(0, y); break; }
     case 'open-split': openSplit(v); break;
     case 'go': go(v); break;
     case 'open-line': openLine(b.dataset.id); break;
@@ -1163,6 +1269,7 @@ document.addEventListener('input', e => {
     }
     const out = $('#sim-out'); if (out) out.innerHTML = simResult();
   }
+  if (el.dataset.hist === 'q') { ui.hist.q = el.value; ui.hist.limit = 150; const b = $('#hist-body'); if (b) b.innerHTML = histBody(); }
   if (el.dataset.setting === 'taxRate') { const n = parseNum(el.value); if (isFinite(n) && n >= 0 && n <= 100) { data.settings.taxRate = n; save(data); scheduleSync(); } }
 });
 document.addEventListener('change', e => { if (e.target.dataset.sim === 'useCash') { ui.sim.useCash = e.target.checked; const out = $('#sim-out'); if (out) out.innerHTML = simResult(); } });

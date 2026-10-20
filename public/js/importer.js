@@ -56,6 +56,7 @@ export function importTradeRepublic(text) {
   rows.sort((a, b) => a.datetime < b.datetime ? -1 : a.datetime > b.datetime ? 1 : 0);
 
   const pos = new Map();     // clé compte|symbole
+  const trades = [];         // opérations sur titres (hors mouvements d'espèces), pour l'historique
   const cash = new Map();    // compte -> { bal, byMonth: Map }
   const stats = { rows: rows.length, from: rows[0].date || rows[0].datetime.slice(0, 10), to: '', dividends: 0, interest: 0, fees: 0, taxes: 0, saveback: 0, unknownTypes: {} };
   const known = new Set(['BUY', 'SELL', 'SPLIT', 'BONUS_ISSUE', 'FREE_RECEIPT', 'PRIVATE_MARKET_BUY']);
@@ -96,6 +97,8 @@ export function importTradeRepublic(text) {
     if (!x.symbol || !known.has(t)) continue;
     const p = P(acct, x);
     const q = toNum(x.shares);
+    const trade = { source: 'tr', date, acct, isin: x.symbol, name: x.name || p.name, cls: x.asset_class || p.cls, kind: t, category: x.category || '', shares: Math.abs(q), price: Math.abs(toNum(x.price)), amount: toNum(x.amount), fee: toNum(x.fee), tax: toNum(x.tax) };
+    trades.push(trade);
     if (t === 'BUY' || t === 'SELL') {
       const price = Math.abs(toNum(x.price));
       if (price) { p.price = price; p.priceDate = date; }
@@ -107,6 +110,10 @@ export function importTradeRepublic(text) {
         p.cost += Math.abs(toNum(x.amount)) + Math.abs(toNum(x.fee));
         p.buyValue += dq * price;
       } else if (dq < 0) {
+        if (t === 'SELL' && p.q > 1e-12) { // plus-value réalisée : produit net moins le prix de revient des parts vendues
+          const costOut = p.cost * Math.min(1, -dq / p.q);
+          trade.realized = r2(Math.abs(toNum(x.amount)) - Math.abs(toNum(x.fee)) - costOut);
+        }
         if (p.q > 1e-12) { const keep = Math.max(0, p.q + dq) / p.q; p.cost *= keep; p.buyValue *= keep; }
         p.q += dq;
         if (p.q < 1e-9) { p.q = 0; p.cost = 0; p.buyValue = 0; } // tout vendu (ou plus que détenu)
@@ -170,10 +177,12 @@ export function importTradeRepublic(text) {
     });
   }
 
+  const transactions = trades.map((x, i) => ({ id: 'tr-op-' + i, ...x, accountId: accIds[x.acct], envelope: x.acct === 'PEA' ? 'PEA' : x.cls === 'CRYPTO' ? 'Crypto' : 'Compte-titres', type: lineType(x.cls, x.isin) }));
+
   stats.dividends = r2(stats.dividends); stats.interest = r2(stats.interest);
   stats.fees = r2(-stats.fees); stats.taxes = r2(-stats.taxes); stats.saveback = r2(stats.saveback);
   stats.cash = Object.fromEntries([...cash].map(([a, c]) => [accIds[a], r2(c.bal)]));
-  return { accounts, lines, stats };
+  return { accounts, lines, stats, transactions };
 }
 
 // Fusionne un import dans les données existantes : remplace ce qui vient de Trade Republic,
@@ -197,6 +206,7 @@ export function mergeImport(data, imp) {
     accounts: [...accounts, ...data.accounts.filter(a => a.source !== 'tr')],
     lines: [...lines, ...data.lines.filter(l => l.source !== 'tr')],
     trStats: imp.stats,
+    transactions: [...(imp.transactions || []), ...(data.transactions || []).filter(t => t.source !== 'tr')],
     imports: [...(data.imports || []), { at: new Date().toISOString(), rows: imp.stats.rows, from: imp.stats.from, to: imp.stats.to }].slice(-20),
   };
 }
