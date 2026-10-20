@@ -20,7 +20,7 @@ export function pru(l) { return l.qty ? (lineCost(l) - (+l.pending || 0)) / l.qt
 export function equityShare(l) {
   if (typeof l.equity === 'number') return l.equity;
   const lib = libraryFor(l.isin);
-  if (lib) return lib.equity ?? 0;
+  if (lib && lib.equity != null) return lib.equity; // compositions récupérées : pas de part fixée, on suit le type
   return l.type === 'action' || l.type === 'etf' ? 1 : 0;
 }
 

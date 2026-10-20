@@ -59,12 +59,43 @@ const CAC40 = {
   ],
 };
 
+// CAC 40 ESG : 40 valeurs du SBF 120 retenues sur critères ESG (pas de TotalEnergies).
+// Positions, pays et 4 premiers secteurs d'après justETF (octobre 2026), reste des secteurs estimé.
+const CAC40_ESG = {
+  index: 'CAC 40 ESG',
+  equity: 1,
+  sectors: { ind: 30.5, fin: 16.1, disc: 15.6, staples: 9.3, health: 10, mat: 7, it: 5.5, comm: 3, util: 2, re: 1 },
+  countries: { 'France': 89.5, 'Pays-Bas': 7.7, 'Suisse': 1.6, 'Luxembourg': 1.2 },
+  holdings: [
+    ['Schneider Electric', 10.2, 'ind', 'France'], ['Airbus', 7.0, 'ind', 'Pays-Bas'], ['BNP Paribas', 6.4, 'fin', 'France'],
+    ['LVMH', 6.4, 'disc', 'France'], ['Safran', 6.0, 'ind', 'France'], ['Sanofi', 5.7, 'health', 'France'],
+    ['Air Liquide', 4.9, 'mat', 'France'], ['L’Oréal', 4.8, 'staples', 'France'], ['AXA', 4.6, 'fin', 'France'],
+    ['Vinci', 3.5, 'ind', 'France'],
+  ],
+};
+
+// STOXX Europe 600 : 4 premiers pays et secteurs d'après justETF (octobre 2026), le reste estimé.
+const STOXX600 = {
+  index: 'STOXX Europe 600',
+  equity: 1,
+  sectors: { fin: 24, ind: 17, health: 12, staples: 9, it: 9.5, disc: 8, mat: 5.5, energy: 4.5, util: 4.5, comm: 4.5, re: 1.5 },
+  countries: { 'Royaume-Uni': 21.7, 'Suisse': 14.8, 'France': 13.9, 'Allemagne': 13, 'Pays-Bas': 7, 'Espagne': 5, 'Italie': 5, 'Suède': 5, 'Danemark': 3.5, 'Finlande': 1.5, 'Belgique': 1.5, 'Autres pays': 8.1 },
+  holdings: [
+    ['ASML', 4.3, 'it', 'Pays-Bas'], ['HSBC', 2.2, 'fin', 'Royaume-Uni'], ['Roche', 2.1, 'health', 'Suisse'],
+    ['Novartis', 1.9, 'health', 'Suisse'], ['AstraZeneca', 1.7, 'health', 'Royaume-Uni'], ['Shell', 1.6, 'energy', 'Royaume-Uni'],
+    ['Nestlé', 1.6, 'staples', 'Suisse'], ['Siemens', 1.5, 'ind', 'Allemagne'], ['SAP', 1.4, 'it', 'Allemagne'],
+    ['Banco Santander', 1.4, 'fin', 'Espagne'],
+  ],
+};
+
 export const LIBRARY = {
   'IE0002XZSHO1': { name: 'iShares MSCI World Swap PEA', short: 'MSCI World (PEA)', ticker: 'WPEA.PA', type: 'etf', ...MSCI_WORLD },
-  'LU1681046931': { name: 'Amundi CAC 40 UCITS ETF Acc', short: 'CAC 40', ticker: 'C40.PA', type: 'etf', ...CAC40 },
+  'LU1681046931': { name: 'Amundi CAC 40 ESG UCITS ETF Acc', short: 'CAC 40 ESG', ticker: 'C40.PA', type: 'etf', ...CAC40_ESG },
   'FR0013380607': { name: 'Amundi CAC 40 UCITS ETF (Multi Units)', short: 'CAC 40', ticker: 'CACC.PA', type: 'etf', ...CAC40 },
   'FR0011871128': { name: 'Amundi PEA S&P 500 UCITS ETF', short: 'S&P 500 (PEA)', ticker: 'PSP5.PA', type: 'etf', ...SP500 },
   'IE00B5BMR087': { name: 'iShares Core S&P 500', short: 'S&P 500', ticker: 'SXR8.DE', type: 'etf', ...SP500 },
+  'LU0908500753': { name: 'Amundi Core Stoxx Europe 600 UCITS ETF Acc', short: 'STOXX Europe 600', ticker: 'MEUD.PA', type: 'etf', ...STOXX600 },
+  'DE0002635307': { name: 'iShares STOXX Europe 600 UCITS ETF (DE)', short: 'STOXX Europe 600', ticker: 'EXSA.DE', type: 'etf', ...STOXX600 },
   'FR0013412012': {
     name: 'Amundi PEA MSCI Emerging Asia ESG Leaders', short: 'Asie émergente (PEA)', ticker: 'PAASI.PA', type: 'etf',
     index: 'MSCI EM Asia ESG Leaders', equity: 1,
@@ -129,8 +160,18 @@ export const LIBRARY = {
 
 export const COMPOSITION_NOTE = 'Composition indicative (ordre de grandeur mi-2026). Vérifiez la fiche de l’émetteur pour les chiffres exacts.';
 
+// Compositions récupérées automatiquement (justETF, via le serveur) pour les produits absents
+// de la bibliothèque. Elles sont rangées dans les données (data.compositions) et passées ici.
+let fetched = {};
+export function setFetchedLibrary(map) { fetched = map && typeof map === 'object' ? map : {}; }
+export function inLibrary(isin) { return !!(isin && LIBRARY[String(isin).toUpperCase()]); }
+
 export function libraryFor(isin) {
-  return isin ? LIBRARY[String(isin).toUpperCase()] || null : null;
+  if (!isin) return null;
+  const k = String(isin).toUpperCase();
+  if (LIBRARY[k]) return LIBRARY[k];
+  const f = fetched[k];
+  return f && f.ok ? f : null;
 }
 
 // Produits proposés dans le simulateur pour une nouvelle ligne

@@ -110,6 +110,8 @@ tests/          test de l'API de synchronisation, test de bout en bout, faux Yah
 ```
 
 **Bibliothèque ETF** (`public/js/library.js`) : symbole Yahoo, secteurs, pays et principales entreprises des fonds connus, en ordres de grandeur (mi-2026).
+
+**Nouvelles lignes** : un ETF, fonds ou action absent de la bibliothèque reçoit automatiquement sa composition, lue sur justETF par le serveur (`/api/composition`, seul l'ISIN est envoyé). justETF ne donne que les 10 premières positions et les 4 premiers pays et secteurs : le reste apparaît en « Autres ». Mise à jour tous les 30 jours.
 Pour ajouter un fonds, ajoutez une entrée avec son ISIN. Vérifiez que le symbole correspond bien au fonds **et à la bonne part** (Acc ou Dist) : un symbole voisin peut donner un cours très différent.
 
 **Yahoo Finance** : API non officielle. Elle peut changer ou limiter les appels (erreur 429 : réessayez plus tard). Les fonds non cotés, fonds en euros et parts que Yahoo ne référence pas se mettent à jour à la main (toucher la ligne → *Modifier*).

@@ -6,7 +6,7 @@ import { load, save, clearAll, emptyData, normalize, validateBackup, encryptBack
 import { syncState, saveSyncState, clearSyncState, deriveAccount, pullVault, pushVault, deleteVault, normUser, USER_RE } from './sync.js';
 import { importTradeRepublic, mergeImport } from './importer.js';
 import { totals, staleLines, lookthrough, DIRECT, lineComposition, history as buildHistory, lineValue, lineCost, lineGain, pru, isCashLike, NEEDS_PRICE, simulate, envelopeForAccount, ENVELOPE_ORDER } from './compute.js';
-import { libraryFor, libraryChoices, SECTORS, COMPOSITION_NOTE } from './library.js';
+import { libraryFor, libraryChoices, SECTORS, COMPOSITION_NOTE, setFetchedLibrary, inLibrary } from './library.js';
 import { lineChart, hoverText } from './chart.js';
 
 const PREVIEW = !!window.CARNET_PREVIEW;
@@ -45,7 +45,7 @@ const initials = s => (String(s || '?').replace(/[^\p{L}\p{N}\s&]/gu, ' ').trim(
 const shortName = l => libraryFor(l.isin)?.short || l.name;
 const isWide = () => matchMedia('(min-width: 1100px)').matches;
 const today = () => new Date().toISOString().slice(0, 10);
-function commit(msg) { data.updatedAt = new Date().toISOString(); if (!save(data) && !commit.warned) { commit.warned = true; toast('Stockage du navigateur indisponible : vos changements seront perdus en fermant la page.'); } else if (msg) toast(msg); render(); scheduleSync(); }
+function commit(msg) { data.updatedAt = new Date().toISOString(); if (!save(data) && !commit.warned) { commit.warned = true; toast('Stockage du navigateur indisponible : vos changements seront perdus en fermant la page.'); } else if (msg) toast(msg); render(); scheduleSync(); setTimeout(autoCompositions, 0); }
 
 let toastTimer;
 function toast(msg) {
@@ -65,6 +65,7 @@ function applyTheme() {
 
 // ——— Rendu principal ———
 function render() {
+  setFetchedLibrary(data.compositions);
   applyTheme();
   const name = data.profile.firstName || '';
   for (const b of document.querySelectorAll('[data-tab]')) b.setAttribute('aria-current', b.dataset.tab === ui.tab ? 'page' : 'false');
@@ -932,6 +933,38 @@ async function checkServer() {
   if (PREVIEW) return;
   try { const j = await api('api/health', 3000); ui.server = j && j.app === 'carnet' ? 'ok' : 'off'; } catch { ui.server = 'off'; }
   if (ui.tab === 'donnees') render();
+  autoCompositions();
+}
+
+// Nouvelles lignes : tout produit absent de la bibliothèque (ETF, fonds, action) reçoit
+// automatiquement sa composition (justETF, via le serveur ; seul l'ISIN est envoyé).
+// Nouvel essai après 3 jours si rien n'a été trouvé, mise à jour tous les 30 jours sinon.
+const ISIN_OK = /^[A-Z]{2}[A-Z0-9]{9}[0-9]$/;
+const COMPOSABLE = l => !isCashLike(l) && ISIN_OK.test(String(l.isin || '').toUpperCase()) && !['crypto', 'non-cote', 'autre-fixe'].includes(l.type) && !inLibrary(l.isin);
+let composing = false;
+async function autoCompositions() {
+  if (PREVIEW || composing || ui.server !== 'ok') return;
+  const comps = data.compositions || {};
+  const due = [...new Set(data.lines.filter(COMPOSABLE).map(l => l.isin.toUpperCase()))].filter(isin => {
+    const c = comps[isin];
+    return !c || Date.now() - Date.parse(c.at || 0) > (c.ok ? 30 : 3) * 86400000;
+  });
+  if (!due.length) return;
+  composing = true;
+  const found = [];
+  let stored = 0;
+  try {
+    await pool(due, 2, async isin => {
+      try {
+        const j = await api('api/composition?isin=' + isin, 45000);
+        data.compositions = { ...(data.compositions || {}), [isin]: { ...j, at: new Date().toISOString() } };
+        stored++; if (j.ok) found.push(isin);
+      } catch { /* serveur ou justETF injoignable : nouvel essai au prochain chargement */ }
+    });
+  } finally { composing = false; }
+  if (!stored) return;
+  const names = found.map(i => shortName(data.lines.find(l => String(l.isin).toUpperCase() === i)));
+  commit(names.length ? `Composition ajoutée : ${names.join(', ')}.` : '');
 }
 function noServerSheet() {
   openSheet(`${sheetHead('Actualisation indisponible', PREVIEW ? 'Cet aperçu en ligne n’a pas de serveur.' : 'Le serveur Carnet ne répond pas.')}
