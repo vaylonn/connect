@@ -3,3 +3,4 @@ node_modules
 carnet-sauvegarde*.json
 *.csv
 carnet-ajout*.json
+data/

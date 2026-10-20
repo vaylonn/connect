@@ -1,5 +1,6 @@
 // Serveur Carnet : sert l'application et relaie les demandes de cours vers Yahoo Finance.
-// Il ne stocke rien et ne reçoit jamais vos données personnelles (elles restent dans le navigateur).
+// Il ne reçoit jamais vos données en clair : la synchronisation (facultative) ne lui confie
+// que des coffres chiffrés par le navigateur, rangés dans ./data (ou CARNET_DATA_DIR).
 //   node server.mjs                      → http://localhost:8080
 //   PORT=9000 HOST=0.0.0.0 node server.mjs
 //   CARNET_PASSWORD=secret node server.mjs   → mot de passe demandé par le navigateur
@@ -9,6 +10,7 @@ import { timingSafeEqual, createHash } from 'node:crypto';
 import { extname, join, normalize, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { handleApi } from './lib/handlers.mjs';
+import { handleSync, readJson } from './lib/vault.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), 'public');
 const PORT = +(process.env.PORT || 8080);
@@ -43,6 +45,16 @@ const server = http.createServer(async (req, res) => {
   try {
     if (!authorized(req)) return send(res, 401, 'Mot de passe requis.', { 'www-authenticate': 'Basic realm="Carnet", charset="UTF-8"', 'content-type': 'text/plain; charset=utf-8' });
     const url = new URL(req.url, 'http://localhost');
+    if (url.pathname === '/api/sync') {
+      const json = { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' };
+      try {
+        const body = req.method === 'PUT' ? await readJson(req) : null;
+        const [status, out] = await handleSync(req.method, req.headers, body);
+        return send(res, status, JSON.stringify(out), json);
+      } catch (e) {
+        return send(res, e.status || 502, JSON.stringify({ error: String(e.message || e) }), json);
+      }
+    }
     if (url.pathname.startsWith('/api/')) {
       if (req.method !== 'GET') return send(res, 405, '{}', { 'content-type': 'application/json' });
       try {

@@ -18,6 +18,8 @@ jobs:
           for f in server.mjs lib/*.mjs api/*.mjs tools/*.mjs tests/*.mjs public/js/*.js public/sw.js; do
             node --check "$f"
           done
+      - name: API de synchronisation
+        run: node --test tests/sync.test.mjs
       - name: Démarrage du serveur avec faux Yahoo
         run: |
           node tests/mock-yahoo.mjs &

@@ -1,14 +1,16 @@
-// Carnet — interface. Aucune donnée ne quitte le navigateur : seul le serveur Carnet
-// (facultatif) interroge Yahoo Finance avec les symboles, jamais avec les montants.
+// Carnet — interface. Aucune donnée ne quitte le navigateur en clair : le serveur Carnet
+// (facultatif) interroge Yahoo Finance avec les symboles, jamais avec les montants, et la
+// synchronisation (facultative) ne lui envoie qu'un coffre chiffré ici (voir sync.js).
 import { eur, signedEur, pct, signedPct, pts, qty as fqty, num, dateLong, dateShort, daysAgo, esc, parseNum, bigParts } from './format.js';
-import { load, save, clearAll, emptyData, validateBackup, encryptBackup, decryptBackup, backupPayload, storageWorks } from './store.js';
+import { load, save, clearAll, emptyData, normalize, validateBackup, encryptBackup, decryptBackup, backupPayload, storageWorks } from './store.js';
+import { syncState, saveSyncState, clearSyncState, deriveAccount, pullVault, pushVault, deleteVault, normUser, USER_RE } from './sync.js';
 import { importTradeRepublic, mergeImport } from './importer.js';
 import { totals, staleLines, lookthrough, lineComposition, history as buildHistory, lineValue, lineCost, lineGain, pru, isCashLike, NEEDS_PRICE, simulate, envelopeForAccount, ENVELOPE_ORDER } from './compute.js';
 import { libraryFor, libraryChoices, SECTORS, COMPOSITION_NOTE } from './library.js';
 import { lineChart, hoverText } from './chart.js';
 
 const PREVIEW = !!window.CARNET_PREVIEW;
-const VERSION = '1.1.0';
+const VERSION = '1.2.0';
 let data = load();
 const ui = {
   tab: 'patrimoine', range: '1A', filter: 'all', analyse: 'sectors', server: PREVIEW ? 'preview' : 'unknown', busy: false, progress: '', lineRange: '1A',
@@ -43,7 +45,7 @@ const initials = s => (String(s || '?').replace(/[^\p{L}\p{N}\s&]/gu, ' ').trim(
 const shortName = l => libraryFor(l.isin)?.short || l.name;
 const isWide = () => matchMedia('(min-width: 1100px)').matches;
 const today = () => new Date().toISOString().slice(0, 10);
-function commit(msg) { data.updatedAt = new Date().toISOString(); if (!save(data) && !commit.warned) { commit.warned = true; toast('Stockage du navigateur indisponible : vos changements seront perdus en fermant la page.'); } else if (msg) toast(msg); render(); }
+function commit(msg) { data.updatedAt = new Date().toISOString(); if (!save(data) && !commit.warned) { commit.warned = true; toast('Stockage du navigateur indisponible : vos changements seront perdus en fermant la page.'); } else if (msg) toast(msg); render(); scheduleSync(); }
 
 let toastTimer;
 function toast(msg) {
@@ -322,7 +324,7 @@ function viewData() {
   const st = data.trStats;
   const server = { ok: '<span class="status ok"><i></i>Serveur Carnet joignable</span>', off: '<span class="status off"><i></i>Serveur Carnet absent : actualisation indisponible</span>', preview: '<span class="status off"><i></i>Aperçu en ligne : pas de serveur, actualisation indisponible</span>', unknown: '<span class="status"><i></i>Vérification du serveur…</span>' }[ui.server];
   const th = data.settings.theme;
-  return `<h1 class="title">Vos données, chez vous.<em>Rien ne quitte cet appareil.</em></h1>
+  return `<h1 class="title">Vos données, chez vous.<em>${syncState() ? 'Chiffrées avant de partir.' : 'Rien ne quitte cet appareil.'}</em></h1>
   <div class="data-grid">
     <div class="col">
       <section class="card"><h3>Profil</h3><p class="lead">Le prénom s’affiche dans le titre de l’accueil.</p>
@@ -354,7 +356,9 @@ function viewData() {
         <div class="btn-row" style="margin-top:12px"><button class="btn" data-action="add-account">${ICONS.plus}Ajouter un compte</button><button class="btn" data-action="add-line" ${data.accounts.length ? '' : 'disabled'}>${ICONS.plus}Ajouter une ligne</button></div>
       </section>
 
-      <section class="card"><h3>Sauvegarde</h3><p class="lead">Chaque appareil garde ses propres données. Pour passer de l’ordinateur au téléphone : exportez ici, puis restaurez le fichier sur l’autre appareil.</p>
+      ${syncCard()}
+
+      <section class="card"><h3>Sauvegarde</h3><p class="lead">Un fichier à garder de côté, ou à restaurer sur un appareil sans synchronisation.</p>
         <div class="btn-row"><button class="btn" data-action="export-plain" ${data.lines.length ? '' : 'disabled'}>${ICONS.download}Exporter en clair</button><button class="btn" data-action="export-enc" ${data.lines.length ? '' : 'disabled'}>${ICONS.lock}Exporter chiffrée</button></div>
         <div class="btn-row" style="margin-top:8px"><button class="btn primary" data-action="pick-backup">${ICONS.upload}Restaurer une sauvegarde</button></div>
         <p class="note">La sauvegarde chiffrée utilise AES-GCM 256 bits avec une clé tirée de votre phrase de passe (PBKDF2, 310 000 itérations). Sans la phrase, le fichier est illisible : rien ne permet de la retrouver.</p>
@@ -744,6 +748,141 @@ async function exportFlow(encrypted) {
   return saveFile(`carnet-sauvegarde-chiffree-${stamp}.json`, JSON.stringify(enc));
 }
 
+// ——— Synchronisation (chiffrée dans le navigateur, voir sync.js) ———
+const syncPayload = d => { const { demo, ...rest } = d; return rest; };
+const nowIso = () => new Date().toISOString();
+let syncTimer, editRev = 0;
+function scheduleSync() {
+  const st = syncState(); if (!st || data.demo || PREVIEW) return;
+  editRev++;
+  if (!st.dirty) { st.dirty = true; saveSyncState(st); }
+  clearTimeout(syncTimer); syncTimer = setTimeout(() => syncNow(), 1500);
+}
+// rev : numéro de modification envoyé. Une modification faite pendant l'envoi reste à envoyer.
+function markSynced(st, version, rev) {
+  const dirty = rev !== editRev;
+  saveSyncState({ ...st, version, dirty, at: nowIso() });
+  if (dirty) { clearTimeout(syncTimer); syncTimer = setTimeout(() => syncNow(), 1500); }
+}
+function adoptRemote(r) { data = normalize(r.data); save(data); render(); }
+
+function syncStatusHtml() {
+  const st = syncState(); if (!st) return '';
+  if (ui.syncing) return '<span class="status"><i></i>Synchronisation…</span>';
+  if (ui.syncError) return `<span class="status off"><i></i>${esc(ui.syncError)}</span>`;
+  if (st.dirty) return '<span class="status"><i></i>Changements en attente d’envoi</span>';
+  if (!st.at) return '<span class="status"><i></i>Pas encore synchronisé</span>';
+  const d = new Date(st.at), sameDay = d.toDateString() === new Date().toDateString();
+  return `<span class="status ok"><i></i>À jour (${sameDay ? 'à ' + d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : 'le ' + dateShort(st.at.slice(0, 10))})</span>`;
+}
+function setSyncUI() { const el = $('#sync-status'); if (el) el.innerHTML = syncStatusHtml(); }
+function syncCard() {
+  if (PREVIEW) return '';
+  const st = syncState();
+  if (!st) return `<section class="card"><h3>Synchronisation</h3><p class="lead">Retrouvez vos données sur l’ordinateur et le téléphone. Elles sont chiffrées dans ce navigateur avant d’être envoyées : le serveur ne garde qu’un bloc illisible.</p>
+    <div class="btn-row"><button class="btn primary" data-action="sync-create">Créer un coffre</button><button class="btn" data-action="sync-login">Se connecter</button></div>
+    <p class="note">Un identifiant et une phrase de passe, sans e-mail. La phrase n’est jamais envoyée : si vous l’oubliez, personne ne peut ouvrir le coffre, mais les données de vos appareils restent intactes.</p></section>`;
+  return `<section class="card"><h3>Synchronisation</h3><p class="lead">Cet appareil est relié au coffre <b>${esc(st.user)}</b>. Chaque modification y est envoyée chiffrée, et vos autres appareils la récupèrent en s’ouvrant.</p>
+    <p style="margin:0 0 12px" id="sync-status">${syncStatusHtml()}</p>
+    <div class="btn-row"><button class="btn" data-action="sync-now">Synchroniser</button><button class="btn" data-action="sync-logout">Déconnecter cet appareil</button></div>
+    <div class="btn-row" style="margin-top:8px"><button class="btn danger" data-action="sync-delete">Supprimer le coffre en ligne</button></div></section>`;
+}
+
+async function syncNow(manual = false) {
+  const st = syncState();
+  if (!st || ui.syncing || PREVIEW) return;
+  if (data.demo) { if (manual) toast('Effacez d’abord les données d’exemple.'); return; }
+  clearTimeout(syncTimer);
+  ui.syncing = true; ui.syncError = ''; setSyncUI();
+  const rev = editRev;
+  let ok = true;
+  try {
+    if (st.dirty) {
+      try { const r = await pushVault(st, st.version, syncPayload(data)); markSynced(st, r.version, rev); }
+      catch (e) { if (e.status !== 409) throw e; ok = await syncConflict(st, rev); }
+    } else {
+      const r = await pullVault(st);
+      if (r.version !== st.version && rev === editRev) { adoptRemote(r); if (!manual) toast('Données mises à jour depuis un autre appareil.'); }
+      markSynced(st, rev === editRev ? r.version : st.version, rev);
+    }
+    if (manual && ok) toast('Synchronisé.');
+  } catch (e) {
+    ui.syncError = e.status === 401 || e.status === 404 ? 'Coffre supprimé ou phrase de passe changée : déconnectez cet appareil.' : e.message;
+    if (manual) toast(ui.syncError);
+  } finally { ui.syncing = false; setSyncUI(); }
+}
+
+async function syncConflict(st, rev) {
+  const r = await pullVault(st);
+  const when = r.updatedAt ? new Date(r.updatedAt).toLocaleString('fr-FR', { dateStyle: 'long', timeStyle: 'short' }) : '';
+  const c = await choiceSheet({
+    title: 'Modifié sur deux appareils',
+    text: `Le coffre a été modifié depuis un autre appareil${when ? ' (le ' + esc(when) + ')' : ''}, alors que celui-ci avait aussi des changements non envoyés. Quelle version garder ?`,
+    choices: [['remote', 'Celle du coffre', 'primary'], ['local', 'Celle de cet appareil', '']],
+  });
+  if (c === 'remote') { adoptRemote(r); markSynced(st, r.version, editRev); return true; }
+  if (c === 'local') { const p = await pushVault(st, r.version, syncPayload(data)); markSynced(st, p.version, rev); return true; }
+  ui.syncError = 'Conflit non résolu : touchez « Synchroniser » pour choisir.';
+  return false;
+}
+
+function syncSheet(create) {
+  const label = create ? 'Créer et synchroniser' : 'Se connecter';
+  openSheet(`${sheetHead(create ? 'Créer un coffre' : 'Se connecter', create ? 'Les données de cet appareil y seront envoyées, chiffrées.' : 'Retrouvez les données de vos autres appareils.')}
+    <form class="form">
+      <label class="field"><span>Identifiant</span><input class="input" id="sy-user" name="username" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="40" required><small>3 à 40 caractères : lettres sans accent, chiffres, point, tiret.</small></label>
+      <label class="field"><span>Phrase de passe</span><input class="input" type="password" id="sy-pass" name="password" autocomplete="${create ? 'new-password' : 'current-password'}" required></label>
+      ${create ? `<label class="field"><span>Encore une fois</span><input class="input" type="password" id="sy-pass2" autocomplete="new-password" required></label>
+      <p class="note">Elle chiffre vos données et ne quitte jamais cet appareil. Oubliée, rien ne permet de la retrouver : rangez-la dans un gestionnaire de mots de passe.</p>` : ''}
+      <p class="small neg" id="sy-err" hidden></p>
+      <div class="btn-row"><button class="btn primary" type="submit">${label}</button><button class="btn" type="button" data-close>Annuler</button></div></form>`, {
+    label: create ? 'Créer un coffre' : 'Se connecter',
+    onMount: (sh, close) => {
+      const f = sh.querySelector('form'), err = sh.querySelector('#sy-err'), btn = f.querySelector('[type=submit]');
+      const fail = m => { err.textContent = m; err.hidden = false; btn.disabled = false; btn.textContent = label; };
+      f.addEventListener('submit', async e => {
+        e.preventDefault();
+        const user = normUser(sh.querySelector('#sy-user').value), pass = sh.querySelector('#sy-pass').value;
+        if (!USER_RE.test(user)) return fail('Identifiant : 3 à 40 caractères parmi a-z, 0-9, point, tiret et tiret bas.');
+        if (create && pass.length < 10) return fail('Phrase de passe : au moins 10 caractères.');
+        if (create && pass !== sh.querySelector('#sy-pass2').value) return fail('Les deux phrases ne sont pas identiques.');
+        if (create && data.demo) return fail('Effacez d’abord les données d’exemple.');
+        err.hidden = true; btn.disabled = true; btn.textContent = 'Calcul de la clé…';
+        try {
+          const acc = await deriveAccount(user, pass);
+          btn.textContent = 'Connexion…';
+          if (create) {
+            const r = await pushVault(acc, 0, syncPayload(data));
+            saveSyncState({ ...acc, version: r.version, at: nowIso() });
+            close(); render(); toast('Coffre créé. Connectez-vous avec le même identifiant sur vos autres appareils.');
+            return;
+          }
+          const r = await pullVault(acc);
+          const local = !data.demo && (data.accounts.length || data.lines.length);
+          let version = r.version;
+          if (local) {
+            const n = (d, k, w) => `${d[k].length} ${w}${d[k].length > 1 ? 's' : ''}`;
+            const c = await choiceSheet({
+              title: 'Cet appareil a déjà des données',
+              text: `Le coffre contient ${n(r.data, 'accounts', 'compte')} et ${n(r.data, 'lines', 'ligne')} ; cet appareil, ${n(data, 'accounts', 'compte')} et ${n(data, 'lines', 'ligne')}. Lesquelles garder ? L’autre version sera remplacée.`,
+              choices: [['remote', 'Celles du coffre', 'primary'], ['local', 'Celles de cet appareil', '']],
+            });
+            if (!c) return fail('Connexion annulée : rien n’a été modifié.');
+            if (c === 'local') version = (await pushVault(acc, r.version, syncPayload(data))).version;
+            else adoptRemote(r);
+          } else adoptRemote(r);
+          saveSyncState({ ...acc, version, at: nowIso() });
+          ui.syncError = ''; close(); render(); toast('Appareil synchronisé.');
+        } catch (e2) {
+          if (create && (e2.status === 401 || e2.status === 409)) return fail('Cet identifiant est déjà pris. Choisissez-en un autre, ou connectez-vous.');
+          if (!create && e2.status === 401) return fail('Phrase de passe incorrecte.');
+          fail(e2.message || 'Synchronisation impossible.');
+        }
+      });
+    },
+  });
+}
+
 // ——— Cours ———
 async function api(path, timeout = 4000) {
   const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), timeout);
@@ -915,8 +1054,21 @@ document.addEventListener('click', async e => {
     case 'demo': data = demoData(); commit('Données d’exemple chargées.'); break;
     case 'clear-demo': { const keep = { settings: data.settings }; data = { ...emptyData(), ...keep }; clearAll(); commit('Exemple effacé.'); break; }
     case 'wipe':
-      if (await confirmSheet({ title: 'Tout effacer ?', text: 'Comptes, lignes, historique et réglages seront supprimés de cet appareil. Cette action ne peut pas être annulée.', ok: 'Tout effacer', danger: true })) { clearAll(); data = emptyData(); commit('Données effacées.'); go('patrimoine'); }
+      if (await confirmSheet({ title: 'Tout effacer ?', text: `Comptes, lignes, historique et réglages seront supprimés de cet appareil. Cette action ne peut pas être annulée.${syncState() ? ' Cet appareil sera aussi déconnecté du coffre, qui reste intact.' : ''}`, ok: 'Tout effacer', danger: true })) { clearSyncState(); clearAll(); data = emptyData(); commit('Données effacées.'); go('patrimoine'); }
       break;
+    case 'sync-create': syncSheet(true); break;
+    case 'sync-login': syncSheet(false); break;
+    case 'sync-now': syncNow(true); break;
+    case 'sync-logout':
+      if (await confirmSheet({ title: 'Déconnecter cet appareil ?', text: 'Les données restent sur cet appareil et dans le coffre ; elles ne seront simplement plus synchronisées ici.', ok: 'Déconnecter' })) { clearSyncState(); ui.syncError = ''; render(); toast('Appareil déconnecté.'); }
+      break;
+    case 'sync-delete': {
+      const st = syncState(); if (!st) break;
+      if (!await confirmSheet({ title: 'Supprimer le coffre en ligne ?', text: `Le coffre « ${esc(st.user)} » sera effacé du serveur. Les données de cet appareil sont conservées, mais vos autres appareils ne seront plus synchronisés.`, ok: 'Supprimer le coffre', danger: true })) break;
+      try { await deleteVault(st); } catch (e2) { if (e2.status !== 404) { toast(e2.message); break; } }
+      clearSyncState(); ui.syncError = ''; render(); toast('Coffre supprimé.');
+      break;
+    }
     case 'sim-mode': ui.sim.mode = v; render(); break;
     case 'sim-by': {
       const s = ui.sim, p = parseNum(s.price);
@@ -938,7 +1090,7 @@ document.addEventListener('input', e => {
     }
     const out = $('#sim-out'); if (out) out.innerHTML = simResult();
   }
-  if (el.dataset.setting === 'taxRate') { const n = parseNum(el.value); if (isFinite(n) && n >= 0 && n <= 100) { data.settings.taxRate = n; save(data); } }
+  if (el.dataset.setting === 'taxRate') { const n = parseNum(el.value); if (isFinite(n) && n >= 0 && n <= 100) { data.settings.taxRate = n; save(data); scheduleSync(); } }
 });
 document.addEventListener('change', e => { if (e.target.dataset.sim === 'useCash') { ui.sim.useCash = e.target.checked; const out = $('#sim-out'); if (out) out.innerHTML = simResult(); } });
 document.addEventListener('submit', e => {
@@ -959,6 +1111,10 @@ window.addEventListener('storage', e => { if (e.key && e.key.startsWith('carnet:
   for (const n of document.querySelectorAll('[data-icon]')) n.innerHTML = ICONS[n.dataset.icon] || '';
   render();
   checkServer();
+  syncNow();
+  document.addEventListener('visibilitychange', () => syncNow());
+  window.addEventListener('online', () => syncNow());
+  setInterval(() => { if (document.visibilityState === 'visible') syncNow(); }, 120000);
   if (!PREVIEW && 'serviceWorker' in navigator && location.protocol.startsWith('http')) {
     navigator.serviceWorker.register('sw.js').catch(() => { /* hors ligne indisponible */ });
   }

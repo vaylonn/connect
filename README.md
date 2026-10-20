@@ -1,9 +1,10 @@
 # Carnet.
 
-Suivi de patrimoine personnel. Vos comptes, vos lignes et votre historique restent **dans votre navigateur** (stockage local). Aucun serveur ne reçoit vos données personnelles.
+Suivi de patrimoine personnel. Vos comptes, vos lignes et votre historique restent **dans votre navigateur** (stockage local). Aucun serveur ne reçoit vos données personnelles en clair.
 
 - Quatre onglets : **Patrimoine**, **Analyse**, **Simuler**, **Données**.
 - Import direct du CSV Trade Republic (« Exportation de transactions »).
+- Synchronisation facultative entre appareils, **chiffrée de bout en bout** (voir plus bas).
 - Sauvegarde en clair ou chiffrée par phrase de passe, restauration sur un autre appareil.
 - Installable sur téléphone (« Ajouter à l’écran d’accueil »), fonctionne hors ligne.
 - Mode clair, sombre ou automatique.
@@ -62,13 +63,26 @@ L’adresse est publique, mais elle ne contient **aucune donnée personnelle** :
 
 Le mot de passe n’existe pas sur Vercel : si vous ne voulez pas d’adresse publique, préférez Docker ou la protection par mot de passe payante de Vercel.
 
+**Synchronisation sur Vercel** : elle a besoin d’une base Upstash Redis (offre gratuite suffisante). Dans le projet Vercel : *Storage → Create Database → Upstash (Redis)*, reliez-la au projet pour tous les environnements, puis redéployez. Vercel ajoute seul `KV_REST_API_URL` et `KV_REST_API_TOKEN`. Sans base, la synchronisation répond « non configurée » et le reste de l’app fonctionne normalement.
+
+En local et avec Docker, rien à configurer : les coffres sont des fichiers dans `./data` (ou `CARNET_DATA_DIR`), sur le volume `carnet-data` avec Docker Compose.
+
 ---
 
 ## Vos données
 
 **Où elles sont.** Dans le stockage local du navigateur (`localStorage`), sur l’appareil utilisé. Effacer les données du site dans le navigateur les supprime. Une navigation privée ne les garde pas.
 
-**Chaque appareil a les siennes.** Pour passer de l’ordinateur au téléphone : Données → *Exporter chiffrée*, transférez le fichier (AirDrop, e-mail à vous-même…), puis Données → *Restaurer une sauvegarde* sur le téléphone.
+**Chaque appareil a les siennes**, sauf si vous activez la synchronisation.
+
+**Synchronisation.** Données → *Créer un coffre* sur un premier appareil (identifiant + phrase de passe, sans e-mail), puis *Se connecter* avec les mêmes sur les autres. Ensuite, chaque modification est envoyée quelques secondes plus tard, et chaque appareil récupère la dernière version en s’ouvrant ou en revenant au premier plan. Si deux appareils ont modifié en même temps, Carnet demande quelle version garder.
+
+- La phrase de passe ne quitte jamais l’appareil. Le navigateur en tire, par PBKDF2-SHA-256 (310 000 itérations, sel lié à l’identifiant), 512 bits : la moitié forme la clé AES-GCM 256 bits qui chiffre les données, l’autre moitié le jeton d’accès au coffre. Le serveur ne garde que l’empreinte SHA-256 de ce jeton, le bloc chiffré et un numéro de version.
+- Le serveur (et Upstash) ne voient ni montants, ni noms de comptes, ni identifiant en clair (le coffre est rangé sous une empreinte de l’identifiant).
+- **Phrase oubliée = coffre perdu.** Personne ne peut la retrouver. Les données déjà présentes sur vos appareils restent intactes : créez un nouveau coffre depuis l’un d’eux.
+- Choisissez une phrase longue : quelqu’un qui obtiendrait la base pourrait tenter de la deviner hors ligne, comme pour une sauvegarde chiffrée.
+
+**Sans synchronisation**, pour passer de l’ordinateur au téléphone : Données → *Exporter chiffrée*, transférez le fichier (AirDrop, e-mail à vous-même…), puis Données → *Restaurer une sauvegarde* sur le téléphone.
 
 **Chiffrement.** La sauvegarde chiffrée utilise AES-GCM 256 bits ; la clé est dérivée de votre phrase de passe par PBKDF2-SHA-256 (310 000 itérations), avec un sel aléatoire. Sans la phrase, le fichier est illisible, et personne ne peut la retrouver pour vous.
 
@@ -131,16 +145,20 @@ Les principales entreprises, secteurs et pays des ETF connus sont des **ordres d
 ```
 carnet/
 ├── server.mjs              serveur Node (fichiers + /api), sans dépendance
-├── lib/                    client Yahoo Finance et routes /api partagées
-├── api/                    fonctions Vercel (health, quote, search)
+├── lib/                    client Yahoo Finance, routes /api partagées, coffres de synchronisation
+├── api/                    fonctions Vercel (health, quote, search, sync)
 ├── public/                 l’application (HTML, CSS, JS, polices, icônes, PWA)
-│   └── js/                 app, import CSV, calculs, stockage, courbe, bibliothèque ETF
+│   └── js/                 app, import CSV, calculs, stockage, synchronisation, courbe, bibliothèque ETF
 ├── tools/                  conversion CSV → sauvegarde en ligne de commande
-├── tests/                  test de bout en bout (Playwright) et faux Yahoo
+├── tests/                  test de l’API de synchronisation, test de bout en bout (Playwright), faux Yahoo
 ├── Dockerfile, docker-compose.yml, vercel.json
 ```
 
 ## Tests
+
+```bash
+node --test tests/sync.test.mjs                               # API de synchronisation
+```
 
 ```bash
 node tests/mock-yahoo.mjs &                                   # faux Yahoo sur :9911

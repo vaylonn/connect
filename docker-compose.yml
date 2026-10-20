@@ -5,9 +5,14 @@ services:
     image: carnet:1.0.0
     container_name: carnet
     restart: unless-stopped
+    volumes:
+      - carnet-data:/data   # coffres de synchronisation (chiffrés)
     ports:
       - "8080:8080"
     environment:
       # Mot de passe facultatif (identifiant : carnet). Laissez vide pour le désactiver.
       CARNET_PASSWORD: ""
       CARNET_USER: "carnet"
+
+volumes:
+  carnet-data:

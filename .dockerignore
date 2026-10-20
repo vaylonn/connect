@@ -5,3 +5,4 @@ tools
 *.json
 !package.json
 .git
+data
