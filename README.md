@@ -63,7 +63,7 @@ L’adresse est publique, mais elle ne contient **aucune donnée personnelle** :
 
 Le mot de passe n’existe pas sur Vercel : si vous ne voulez pas d’adresse publique, préférez Docker ou la protection par mot de passe payante de Vercel.
 
-**Synchronisation sur Vercel** : elle a besoin d’une base Upstash Redis (offre gratuite suffisante). Dans le projet Vercel : *Storage → Create Database → Upstash (Redis)*, reliez-la au projet pour tous les environnements, puis redéployez. Vercel ajoute seul `KV_REST_API_URL` et `KV_REST_API_TOKEN`. Sans base, la synchronisation répond « non configurée » et le reste de l’app fonctionne normalement.
+**Synchronisation sur Vercel** : elle a besoin d’une base Redis (offre gratuite suffisante). Dans le projet Vercel : *Storage → Create Database → Redis* (ou Upstash), reliez-la au projet pour tous les environnements, puis redéployez. Vercel ajoute seul `REDIS_URL` (Redis classique) ou `KV_REST_API_URL` et `KV_REST_API_TOKEN` (Upstash) ; Carnet accepte les deux, même avec un préfixe. Sans base, la synchronisation répond « non configurée » et le reste de l’app fonctionne normalement.
 
 En local et avec Docker, rien à configurer : les coffres sont des fichiers dans `./data` (ou `CARNET_DATA_DIR`), sur le volume `carnet-data` avec Docker Compose.
 
