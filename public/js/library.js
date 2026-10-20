@@ -158,20 +158,32 @@ export const LIBRARY = {
   'ETH': { name: 'Ethereum', short: 'Ethereum', ticker: 'ETH-EUR', type: 'crypto', equity: 0, sector: 'crypto', country: '—' },
 };
 
-export const COMPOSITION_NOTE = 'Composition indicative (ordre de grandeur mi-2026). Vérifiez la fiche de l’émetteur pour les chiffres exacts.';
+export const COMPOSITION_NOTE = 'Pays et secteurs complets d’après Morningstar (ou justETF), principales positions seulement ; à défaut, composition indicative (ordre de grandeur mi-2026). Vérifiez la fiche de l’émetteur pour les chiffres exacts.';
 
-// Compositions récupérées automatiquement (justETF, via le serveur) pour les produits absents
-// de la bibliothèque. Elles sont rangées dans les données (data.compositions) et passées ici.
-let fetched = {};
-export function setFetchedLibrary(map) { fetched = map && typeof map === 'object' ? map : {}; }
-export function inLibrary(isin) { return !!(isin && LIBRARY[String(isin).toUpperCase()]); }
+// Compositions récupérées automatiquement (Morningstar, justETF, via le serveur), rangées dans
+// les données (data.compositions) et passées ici. Pour un fonds de la bibliothèque, elles
+// remplacent la composition indicative et gardent nom, symbole et type de la bibliothèque.
+let merged = {};
+export function setFetchedLibrary(map) {
+  merged = {};
+  for (const [k, f] of Object.entries(map && typeof map === 'object' ? map : {})) {
+    if (!f || !f.ok) continue;
+    const st = LIBRARY[k];
+    if (!st) { merged[k] = f; continue; }
+    if (!st.holdings || f.type !== 'etf' || !Object.keys(f.countries || {}).length || !Object.keys(f.sectors || {}).length) continue;
+    merged[k] = { ...st, index: st.index ? st.index + ' · ' + f.index : f.index, asOf: f.asOf, sectors: f.sectors, countries: f.countries, holdings: f.holdings?.length >= 3 ? f.holdings : st.holdings, equity: f.equity ?? st.equity };
+  }
+}
+// Produits dont la composition peut être récupérée : hors bibliothèque, ou fonds de la bibliothèque
+export function wantsComposition(isin) {
+  const st = isin && LIBRARY[String(isin).toUpperCase()];
+  return !st || !!st.holdings;
+}
 
 export function libraryFor(isin) {
   if (!isin) return null;
   const k = String(isin).toUpperCase();
-  if (LIBRARY[k]) return LIBRARY[k];
-  const f = fetched[k];
-  return f && f.ok ? f : null;
+  return merged[k] || LIBRARY[k] || null;
 }
 
 // Produits proposés dans le simulateur pour une nouvelle ligne

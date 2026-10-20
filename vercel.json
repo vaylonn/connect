@@ -3,6 +3,7 @@
   "framework": null,
   "buildCommand": "",
   "outputDirectory": "public",
+  "functions": { "api/composition.mjs": { "maxDuration": 60 } },
   "cleanUrls": false,
   "headers": [
     {

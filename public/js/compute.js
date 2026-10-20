@@ -70,6 +70,7 @@ function normalized(obj) {
 //   line    : une ligne entière (crypto, non coté, produit non ventilé)
 //   fund / direct : pour une entreprise, le fonds qui la contient ou la ligne en direct
 export const DIRECT = 'en direct';
+const OTHER_ASSETS = 'Obligations et liquidités';
 export function lookthrough(data) {
   const sectors = new Map(), countries = new Map(), companies = new Map();
   const parts = { sectors: new Map(), countries: new Map(), companies: new Map() };
@@ -91,8 +92,15 @@ export function lookthrough(data) {
     const own = lib?.short || l.name;
     if (lib && lib.holdings) {
       covered += v;
-      const sw = new Map(normalized(lib.sectors).map(([k, w]) => [label(k), w]));
-      const cw = new Map(normalized(lib.countries));
+      // fonds mixte : pays et secteurs décrivent la poche actions, le reste est à part
+      const eq = Math.min(1, Math.max(0, lib.equity ?? 1));
+      const sw = new Map(normalized(lib.sectors).map(([k, w]) => [label(k), w * eq]));
+      const cw = new Map(normalized(lib.countries).map(([k, w]) => [k, w * eq]));
+      if (eq < 1) {
+        const r = v * (1 - eq);
+        addTo(sectors, OTHER_ASSETS, r); addPart('sectors', OTHER_ASSETS, own, 'line', r);
+        addTo(countries, 'Non ventilé', r); addPart('countries', 'Non ventilé', own, 'line', r);
+      }
       const named = { sectors: new Map(), countries: new Map() };
       for (const [name, w, s, c] of lib.holdings) {
         const a = v * w / 100;

@@ -6,7 +6,7 @@ import { load, save, clearAll, emptyData, normalize, validateBackup, encryptBack
 import { syncState, saveSyncState, clearSyncState, deriveAccount, pullVault, pushVault, deleteVault, normUser, USER_RE } from './sync.js';
 import { importTradeRepublic, mergeImport } from './importer.js';
 import { totals, staleLines, lookthrough, DIRECT, lineComposition, history as buildHistory, lineValue, lineCost, lineGain, pru, isCashLike, NEEDS_PRICE, simulate, envelopeForAccount, ENVELOPE_ORDER } from './compute.js';
-import { libraryFor, libraryChoices, SECTORS, COMPOSITION_NOTE, setFetchedLibrary, inLibrary } from './library.js';
+import { libraryFor, libraryChoices, SECTORS, COMPOSITION_NOTE, setFetchedLibrary, wantsComposition } from './library.js';
 import { lineChart, hoverText } from './chart.js';
 
 const PREVIEW = !!window.CARNET_PREVIEW;
@@ -936,18 +936,20 @@ async function checkServer() {
   autoCompositions();
 }
 
-// Nouvelles lignes : tout produit absent de la bibliothèque (ETF, fonds, action) reçoit
-// automatiquement sa composition (justETF, via le serveur ; seul l'ISIN est envoyé).
-// Nouvel essai après 3 jours si rien n'a été trouvé, mise à jour tous les 30 jours sinon.
+// Nouvelles lignes : chaque fonds (ETF, OPCVM) et chaque action hors bibliothèque reçoit
+// automatiquement sa composition (Morningstar, justETF, via le serveur ; seul l'ISIN est envoyé).
+// Nouvel essai après 3 jours si rien n'a été trouvé, mise à jour tous les 30 jours sinon,
+// et tout de suite pour les compositions d'une version précédente (COMP_VERSION).
 const ISIN_OK = /^[A-Z]{2}[A-Z0-9]{9}[0-9]$/;
-const COMPOSABLE = l => !isCashLike(l) && ISIN_OK.test(String(l.isin || '').toUpperCase()) && !['crypto', 'non-cote', 'autre-fixe'].includes(l.type) && !inLibrary(l.isin);
+const COMP_VERSION = 2;
+const COMPOSABLE = l => !isCashLike(l) && ISIN_OK.test(String(l.isin || '').toUpperCase()) && !['crypto', 'non-cote', 'autre-fixe'].includes(l.type) && wantsComposition(l.isin);
 let composing = false;
 async function autoCompositions() {
   if (PREVIEW || composing || ui.server !== 'ok') return;
   const comps = data.compositions || {};
   const due = [...new Set(data.lines.filter(COMPOSABLE).map(l => l.isin.toUpperCase()))].filter(isin => {
     const c = comps[isin];
-    return !c || Date.now() - Date.parse(c.at || 0) > (c.ok ? 30 : 3) * 86400000;
+    return !c || (c.v || 1) < COMP_VERSION || Date.now() - Date.parse(c.at || 0) > (c.ok ? 30 : 3) * 86400000;
   });
   if (!due.length) return;
   composing = true;
@@ -956,15 +958,15 @@ async function autoCompositions() {
   try {
     await pool(due, 2, async isin => {
       try {
-        const j = await api('api/composition?isin=' + isin, 45000);
-        data.compositions = { ...(data.compositions || {}), [isin]: { ...j, at: new Date().toISOString() } };
+        const j = await api('api/composition?isin=' + isin, 65000);
+        data.compositions = { ...(data.compositions || {}), [isin]: { ...j, at: new Date().toISOString(), v: COMP_VERSION } };
         stored++; if (j.ok) found.push(isin);
       } catch { /* serveur ou justETF injoignable : nouvel essai au prochain chargement */ }
     });
   } finally { composing = false; }
   if (!stored) return;
   const names = found.map(i => shortName(data.lines.find(l => String(l.isin).toUpperCase() === i)));
-  commit(names.length ? `Composition ajoutée : ${names.join(', ')}.` : '');
+  commit(!names.length ? '' : names.length <= 3 ? `Composition à jour : ${names.join(', ')}.` : `Compositions à jour pour ${names.length} produits.`);
 }
 function noServerSheet() {
   openSheet(`${sheetHead('Actualisation indisponible', PREVIEW ? 'Cet aperçu en ligne n’a pas de serveur.' : 'Le serveur Carnet ne répond pas.')}
