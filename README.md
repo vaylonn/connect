@@ -1,169 +1,117 @@
 # Carnet.
 
-Suivi de patrimoine personnel. Vos comptes, vos lignes et votre historique restent **dans votre navigateur** (stockage local). Aucun serveur ne reçoit vos données personnelles en clair.
+Suivi de patrimoine personnel : PEA, compte-titres, crypto, livrets, assurance-vie.
+**Vos données restent dans votre navigateur.** Le serveur ne voit jamais rien en clair.
 
-- Quatre onglets : **Patrimoine**, **Analyse**, **Simuler**, **Données**.
-- Import direct du CSV Trade Republic (« Exportation de transactions »).
-- Synchronisation facultative entre appareils, **chiffrée de bout en bout** (voir plus bas).
-- Sauvegarde en clair ou chiffrée par phrase de passe, restauration sur un autre appareil.
-- Installable sur téléphone (« Ajouter à l’écran d’accueil »), fonctionne hors ligne.
-- Mode clair, sombre ou automatique.
-- Aucune dépendance npm, aucune requête externe depuis l’interface : polices (Lora) et icônes sont livrées avec l’app.
+👉 **https://connect-liard-three.vercel.app**
 
----
-
-## 1. En local, sur votre ordinateur
-
-Prérequis : [Node.js](https://nodejs.org) 18.17 ou plus récent (rien d’autre à installer).
-
-```bash
-cd carnet
-node server.mjs
-```
-
-Ouvrez **http://localhost:8080**. Pour arrêter : `Ctrl + C`.
-
-Par défaut le serveur n’écoute que sur votre ordinateur (`127.0.0.1`). Options :
-
-```bash
-PORT=9000 node server.mjs                         # autre port
-HOST=0.0.0.0 node server.mjs                      # accessible depuis le réseau local
-CARNET_PASSWORD="une phrase longue" HOST=0.0.0.0 node server.mjs   # avec mot de passe
-```
-
-Sous Windows (PowerShell) : `$env:PORT=9000; node server.mjs`.
-
-## 2. Chez vous, avec Docker (NAS, Raspberry Pi)
-
-```bash
-cd carnet
-docker compose up -d
-```
-
-Ouvrez **http://adresse-du-nas:8080**. L’image se construit à partir de `node:22-alpine`, disponible pour x86-64 et ARM (Raspberry Pi 3/4/5 en 64 bits).
-
-**Mot de passe (facultatif)** : dans `docker-compose.yml`, renseignez `CARNET_PASSWORD` puis relancez `docker compose up -d`. Le navigateur demandera l’identifiant `carnet` (modifiable via `CARNET_USER`) et le mot de passe. Ce mot de passe protège l’accès à l’application ; vos données, elles, restent de toute façon dans chaque navigateur.
-
-Sans Compose :
-
-```bash
-docker build -t carnet .
-docker run -d --name carnet -p 8080:8080 -e CARNET_PASSWORD="..." --restart unless-stopped carnet
-```
-
-Pour un accès depuis l’extérieur de chez vous, passez par un VPN (WireGuard, Tailscale) ou un reverse proxy HTTPS plutôt que d’ouvrir le port directement. L’installation sur l’écran d’accueil d’un iPhone exige HTTPS, sauf sur `localhost`.
-
-## 3. Sur le web, avec Vercel
-
-L’adresse est publique, mais elle ne contient **aucune donnée personnelle** : chaque visiteur voit un Carnet vide, et ce qu’il y saisit reste dans son propre navigateur.
-
-1. Créez un dépôt Git avec le contenu du dossier `carnet` (sans votre CSV ni vos sauvegardes : le `.gitignore` les exclut).
-2. Sur [vercel.com](https://vercel.com), « Add New… → Project », importez le dépôt. Framework : **Other**. Laissez les réglages par défaut : `vercel.json` indique de servir le dossier `public` et les fonctions du dossier `api` servent les cours.
-3. Ou en ligne de commande : `npx vercel` puis `npx vercel --prod`.
-
-Le mot de passe n’existe pas sur Vercel : si vous ne voulez pas d’adresse publique, préférez Docker ou la protection par mot de passe payante de Vercel.
-
-**Synchronisation sur Vercel** : elle a besoin d’une base Redis (offre gratuite suffisante). Dans le projet Vercel : *Storage → Create Database → Redis* (ou Upstash), reliez-la au projet pour tous les environnements, puis redéployez. Vercel ajoute seul `REDIS_URL` (Redis classique) ou `KV_REST_API_URL` et `KV_REST_API_TOKEN` (Upstash) ; Carnet accepte les deux, même avec un préfixe. Sans base, la synchronisation répond « non configurée » et le reste de l’app fonctionne normalement.
-
-En local et avec Docker, rien à configurer : les coffres sont des fichiers dans `./data` (ou `CARNET_DATA_DIR`), sur le volume `carnet-data` avec Docker Compose.
+- Patrimoine, analyse (secteurs, pays, entreprises), simulateur d'achat ou de vente.
+- Import du CSV Trade Republic, ajout manuel de n'importe quel compte.
+- Cours à jour via Yahoo Finance.
+- Synchronisation entre appareils, chiffrée de bout en bout (facultative).
+- Installable sur téléphone, fonctionne hors ligne, mode clair ou sombre.
 
 ---
+
+## Bien démarrer
+
+1. **Importer Trade Republic.** Dans l'app TR : *Exportation de transactions* en CSV, **depuis l'ouverture du compte**. Puis Carnet → Données → *Importer le CSV*.
+   Un export sur une période partielle donne des quantités et des espèces fausses : Carnet reconstruit tout à partir de l'historique complet.
+2. **Ajouter vos autres comptes.** Données → *Ajouter un compte* (livret, assurance-vie, PER…), puis *Ajouter une ligne*.
+3. **Actualiser les cours** avec le bouton en haut de l'écran.
+4. **Synchroniser vos appareils** (facultatif). Données → *Créer un coffre* sur le premier appareil, puis *Se connecter* avec les mêmes identifiant et phrase de passe sur les autres.
+
+Pour installer l'app sur un téléphone : menu du navigateur → *Ajouter à l'écran d'accueil*.
+
+## Lire les chiffres
+
+- **Patrimoine total** : tout compris, espèces et comptes ajoutés à la main inclus.
+  Le « Total » de Trade Republic, lui, **n'inclut pas les espèces** : comparez compte par compte.
+- **« En hausse de x % »** : plus-value latente de vos placements actuels **depuis l'achat**, soit (valeur − prix de revient) ÷ prix de revient.
+  Les espèces, livrets et fonds en euros n'entrent pas dans le pourcentage, ni les ventes passées ou les dividendes. Ce n'est pas la variation du jour affichée par TR.
+- **Prix de revient** : coût moyen pondéré, frais d'achat inclus.
+- **Non coté** (Private Markets) : parts × dernier prix connu + versements en attente d'exécution.
+- Petits écarts avec TR : normaux. TR affiche des cours en temps réel, Yahoo des cours légèrement différés.
 
 ## Vos données
 
-**Où elles sont.** Dans le stockage local du navigateur (`localStorage`), sur l’appareil utilisé. Effacer les données du site dans le navigateur les supprime. Une navigation privée ne les garde pas.
+- **Stockées dans le navigateur** (`localStorage`). Effacer les données du site les supprime ; la navigation privée ne les garde pas.
+- **Synchronisation** : la phrase de passe ne quitte jamais l'appareil. Elle sert à chiffrer les données (AES-GCM 256 bits, clé dérivée par PBKDF2, 310 000 itérations). Le serveur ne garde qu'un bloc illisible.
+  **Phrase oubliée = coffre perdu**, mais les données déjà présentes sur vos appareils restent intactes.
+- **Sauvegarde** : Données → *Exporter* (en clair ou chiffrée), puis *Restaurer* sur un autre appareil.
+- **Seule information envoyée en clair** : les symboles des titres (ex. `WPEA.PA`), pour récupérer les cours. Jamais les quantités ni les montants.
 
-**Chaque appareil a les siennes**, sauf si vous activez la synchronisation.
+---
 
-**Synchronisation.** Données → *Créer un coffre* sur un premier appareil (identifiant + phrase de passe, sans e-mail), puis *Se connecter* avec les mêmes sur les autres. Ensuite, chaque modification est envoyée quelques secondes plus tard, et chaque appareil récupère la dernière version en s’ouvrant ou en revenant au premier plan. Si deux appareils ont modifié en même temps, Carnet demande quelle version garder.
+## Héberger Carnet
 
-- La phrase de passe ne quitte jamais l’appareil. Le navigateur en tire, par PBKDF2-SHA-256 (310 000 itérations, sel lié à l’identifiant), 512 bits : la moitié forme la clé AES-GCM 256 bits qui chiffre les données, l’autre moitié le jeton d’accès au coffre. Le serveur ne garde que l’empreinte SHA-256 de ce jeton, le bloc chiffré et un numéro de version.
-- Le serveur (et Upstash) ne voient ni montants, ni noms de comptes, ni identifiant en clair (le coffre est rangé sous une empreinte de l’identifiant).
-- **Phrase oubliée = coffre perdu.** Personne ne peut la retrouver. Les données déjà présentes sur vos appareils restent intactes : créez un nouveau coffre depuis l’un d’eux.
-- Choisissez une phrase longue : quelqu’un qui obtiendrait la base pourrait tenter de la deviner hors ligne, comme pour une sauvegarde chiffrée.
+### Vercel (version en ligne)
 
-**Sans synchronisation**, pour passer de l’ordinateur au téléphone : Données → *Exporter chiffrée*, transférez le fichier (AirDrop, e-mail à vous-même…), puis Données → *Restaurer une sauvegarde* sur le téléphone.
+1. Importez le dépôt sur [vercel.com](https://vercel.com). Aucun réglage à faire : `vercel.json` fixe tout (preset « Other », dossier `public`, fonctions `api/`).
+2. Pour la synchronisation : *Storage → Create Database → Redis* (ou Upstash), reliée au projet pour **Production et Preview**, puis redéployez.
+   Carnet accepte `REDIS_URL` comme `KV_REST_API_URL` / `KV_REST_API_TOKEN`, même avec un préfixe. Sans base, l'app fonctionne, seule la synchronisation est désactivée.
 
-**Chiffrement.** La sauvegarde chiffrée utilise AES-GCM 256 bits ; la clé est dérivée de votre phrase de passe par PBKDF2-SHA-256 (310 000 itérations), avec un sel aléatoire. Sans la phrase, le fichier est illisible, et personne ne peut la retrouver pour vous.
+Les URL de preview sont protégées par la connexion Vercel (*Settings → Deployment Protection*).
 
-**Ce qui sort de votre appareil.** Uniquement pour l’actualisation des cours : le navigateur envoie la liste des **symboles** (ex. `WPEA.PA`) à votre serveur Carnet, qui interroge Yahoo Finance. Ni quantités, ni montants, ni noms de comptes. Yahoo (et Vercel si vous l’utilisez) voit donc quels titres sont demandés, depuis l’adresse IP du serveur.
+### En local
 
-## Import Trade Republic
-
-Dans Trade Republic, exportez vos transactions au format CSV (fichier « Exportation de transactions »). Puis Carnet → Données → *Importer le CSV*.
-
-Carnet recalcule :
-
-- les **quantités** (achats, ventes, plans d’épargne, Saveback, divisions d’actions, actions gratuites, transferts de titres) ;
-- le **prix de revient** au coût moyen pondéré, frais d’achat inclus (une vente retire une part proportionnelle du prix de revient) ;
-- le **PEA séparément du compte-titres** (colonne `account_type`), y compris pour un même titre détenu dans les deux ;
-- le **solde espèces** : somme de `amount + fee + tax` de toutes les opérations du compte ;
-- les fonds **non cotés** (Private Markets) : parts exécutées + versements anticipés encore en attente ;
-- le dernier **prix de transaction** connu de chaque ligne, en attendant l’actualisation.
-
-Un nouvel import remplace les lignes Trade Republic et conserve les lignes ajoutées à la main, ainsi que les noms et symboles que vous avez modifiés.
-
-En ligne de commande, on peut aussi produire directement une sauvegarde à restaurer :
+Prérequis : [Node.js](https://nodejs.org) 18.17 ou plus récent, rien d'autre.
 
 ```bash
-node tools/csv-vers-sauvegarde.mjs "Exportation de transactions.csv" sauvegarde.json Prénom
+node server.mjs
 ```
 
-## Autres comptes (banque, livrets, assurance-vie)
+Ouvrez http://localhost:8080. Les coffres de synchronisation sont rangés dans `./data`.
 
-Données → *Ajouter un compte* :
+Options : `PORT=9000`, `HOST=0.0.0.0` (accès depuis le réseau local), `CARNET_PASSWORD="…"` (mot de passe d'accès).
+Sous PowerShell : `$env:PORT=9000; node server.mjs`.
 
-- **Compte courant / Livret** : indiquez le solde, il devient une ligne d’espèces ou de livret.
-- **Assurance-vie, PER, compte-titres** : créez le compte, puis *Ajouter une ligne* : fonds en euros (montant), unité de compte ou ETF (quantité, prix de revient, cours, ISIN). Avec un ISIN, l’actualisation cherche le symbole Yahoo correspondant ; vous pouvez aussi saisir le symbole vous-même ou mettre le cours à jour à la main.
-
-## Cours (Yahoo Finance)
-
-Le bouton **Actualiser**, toujours visible en haut de l’écran, met à jour chaque produit qui a une cotation publique :
-
-1. pour une ligne sans symbole, le serveur cherche le symbole Yahoo à partir de l’ISIN (actions, ETF, OPCVM, unités de compte) ;
-2. il récupère le cours du jour et l’historique : 5 ans en hebdomadaire, puis la dernière année au jour le jour ;
-3. les cours en devise étrangère sont convertis en euros avec le taux `EUR<devise>=X`, date par date.
-
-L’historique alimente la courbe d’évolution du patrimoine et la courbe de cours dans le détail de chaque ligne (1 mois, 6 mois, 1 an, 5 ans, avec le prix de revient en pointillé). Le résultat de chaque actualisation (produits à jour, produits sans cours et pourquoi) est détaillé dans Données → Cours.
-
-Restent sans cours : les fonds non cotés (Private Equity), les fonds en euros, et les fonds que Yahoo ne référence pas (fréquent pour les parts institutionnelles « I » d’assurance-vie). Pour ceux-là, saisissez la valeur liquidative à la main (toucher la ligne → *Modifier*).
-
-Le serveur interroge `query1.finance.yahoo.com`, puis `query2` si le premier refuse. Cette API n’est pas officielle : elle peut changer ou limiter les appels (erreur 429 : réessayez quelques minutes plus tard). Sans serveur (fichiers ouverts directement, ou aperçu en ligne), l’actualisation est indisponible et l’app le dit.
-
-## Ajouter des comptes depuis un fichier
-
-Données → *Restaurer une sauvegarde* accepte aussi un fichier qui ne contient que quelques comptes (marqué `"partial": true`). Carnet propose alors **Ajouter à mes données** : les comptes du fichier s’ajoutent, ceux qui ont le même identifiant sont remplacés, le reste ne bouge pas. Pour une sauvegarde complète, vous pouvez choisir entre ajouter et tout remplacer.
-
-Une ligne d’assurance-vie peut être saisie par son **montant investi** (`"estimateFromAmount": true`) : à la première actualisation, Carnet calcule la quantité avec la valeur liquidative du jour de souscription, et l’indique comme estimée.
-
-## Composition des ETF
-
-Les principales entreprises, secteurs et pays des ETF connus sont des **ordres de grandeur** saisis dans `public/js/library.js` (mi-2026). Ils servent à donner une vue d’ensemble dans *Analyse* et dans le détail d’une ligne ; vérifiez la fiche de l’émetteur pour les chiffres exacts. Pour ajouter un produit, ajoutez une entrée avec son ISIN dans ce fichier.
-
-## Structure
-
-```
-carnet/
-├── server.mjs              serveur Node (fichiers + /api), sans dépendance
-├── lib/                    client Yahoo Finance, routes /api partagées, coffres de synchronisation
-├── api/                    fonctions Vercel (health, quote, search, sync)
-├── public/                 l’application (HTML, CSS, JS, polices, icônes, PWA)
-│   └── js/                 app, import CSV, calculs, stockage, synchronisation, courbe, bibliothèque ETF
-├── tools/                  conversion CSV → sauvegarde en ligne de commande
-├── tests/                  test de l’API de synchronisation, test de bout en bout (Playwright), faux Yahoo
-├── Dockerfile, docker-compose.yml, vercel.json
-```
-
-## Tests
+### Docker (NAS, Raspberry Pi)
 
 ```bash
-node --test tests/sync.test.mjs                               # API de synchronisation
+docker compose up -d
 ```
 
+Ouvrez http://adresse-du-nas:8080. Les coffres sont sur le volume `carnet-data`. Mot de passe facultatif : `CARNET_PASSWORD` dans `docker-compose.yml`.
+Pour un accès hors de chez vous, passez par un VPN (Tailscale, WireGuard) ou un reverse proxy HTTPS.
+
+---
+
+## Développer
+
+**Déploiement automatique.** Chaque push sur `main` met la prod à jour sur Vercel. Une autre branche ou une PR crée une URL de preview, sans toucher à la prod.
+
+**CI.** GitHub Actions, sur `main` et sur les PR : syntaxe JS, test de l'API de synchronisation, démarrage du serveur.
+
+**Tests en local**
+
 ```bash
-node tests/mock-yahoo.mjs &                                   # faux Yahoo sur :9911
+node --test tests/sync.test.mjs
+```
+
+Test de bout en bout (Playwright) avec un faux Yahoo :
+
+```bash
+node tests/mock-yahoo.mjs &
 YAHOO_BASE=http://127.0.0.1:9911 node server.mjs &
 python3 tests/e2e.py http://localhost:8080 export.csv captures/ sauvegarde.json
 ```
+
+**Structure**
+
+```
+server.mjs      serveur Node sans dépendance (fichiers + /api)
+api/            fonctions Vercel : health, quote, search, sync
+lib/            client Yahoo Finance, routes /api, coffres de synchronisation (Redis ou fichiers)
+public/         l'application (HTML, CSS, JS, polices, icônes, PWA)
+  js/           interface, import CSV, calculs, stockage, synchronisation, courbe, bibliothèque ETF
+tools/          CSV Trade Republic → sauvegarde, en ligne de commande
+tests/          test de l'API de synchronisation, test de bout en bout, faux Yahoo
+```
+
+**Bibliothèque ETF** (`public/js/library.js`) : symbole Yahoo, secteurs, pays et principales entreprises des fonds connus, en ordres de grandeur (mi-2026).
+Pour ajouter un fonds, ajoutez une entrée avec son ISIN. Vérifiez que le symbole correspond bien au fonds **et à la bonne part** (Acc ou Dist) : un symbole voisin peut donner un cours très différent.
+
+**Yahoo Finance** : API non officielle. Elle peut changer ou limiter les appels (erreur 429 : réessayez plus tard). Les fonds non cotés, fonds en euros et parts que Yahoo ne référence pas se mettent à jour à la main (toucher la ligne → *Modifier*).
 
 Licence MIT.
