@@ -62,11 +62,11 @@ const CAC40 = {
 export const LIBRARY = {
   'IE0002XZSHO1': { name: 'iShares MSCI World Swap PEA', short: 'MSCI World (PEA)', ticker: 'WPEA.PA', type: 'etf', ...MSCI_WORLD },
   'LU1681046931': { name: 'Amundi CAC 40 UCITS ETF Acc', short: 'CAC 40', ticker: 'C40.PA', type: 'etf', ...CAC40 },
-  'FR0013380607': { name: 'Amundi CAC 40 UCITS ETF (Multi Units)', short: 'CAC 40', ticker: 'CAC.PA', type: 'etf', ...CAC40 },
+  'FR0013380607': { name: 'Amundi CAC 40 UCITS ETF (Multi Units)', short: 'CAC 40', ticker: 'CACC.PA', type: 'etf', ...CAC40 },
   'FR0011871128': { name: 'Amundi PEA S&P 500 UCITS ETF', short: 'S&P 500 (PEA)', ticker: 'PSP5.PA', type: 'etf', ...SP500 },
   'IE00B5BMR087': { name: 'iShares Core S&P 500', short: 'S&P 500', ticker: 'SXR8.DE', type: 'etf', ...SP500 },
   'FR0013412012': {
-    name: 'Amundi PEA MSCI Emerging Asia ESG Leaders', short: 'Asie émergente (PEA)', ticker: 'PAEEM.PA', type: 'etf',
+    name: 'Amundi PEA MSCI Emerging Asia ESG Leaders', short: 'Asie émergente (PEA)', ticker: 'PAASI.PA', type: 'etf',
     index: 'MSCI EM Asia ESG Leaders', equity: 1,
     sectors: { it: 30, fin: 22, disc: 13, comm: 11, ind: 6, mat: 4, health: 4, staples: 4, energy: 2, util: 2, re: 2 },
     countries: { 'Chine': 32, 'Taïwan': 24, 'Inde': 23, 'Corée du Sud': 13, 'Indonésie': 2.5, 'Malaisie': 2, 'Thaïlande': 2, 'Philippines': 1.5 },
@@ -102,7 +102,7 @@ export const LIBRARY = {
     ],
   },
   'IE000YYE6WK5': {
-    name: 'VanEck Defense UCITS ETF', short: 'Défense', ticker: 'DFNS.DE', type: 'etf', index: 'MarketVector Global Defense', equity: 1,
+    name: 'VanEck Defense UCITS ETF', short: 'Défense', ticker: 'DFEN.DE', type: 'etf', index: 'MarketVector Global Defense', equity: 1,
     sectors: { ind: 82, it: 14, other: 4 },
     countries: { 'États-Unis': 55, 'France': 9, 'Allemagne': 8, 'Royaume-Uni': 8, 'Corée du Sud': 5, 'Italie': 4, 'Autres pays': 11 },
     holdings: [

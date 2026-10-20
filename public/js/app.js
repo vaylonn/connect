@@ -937,6 +937,8 @@ async function refreshPrices() {
     try { await api('api/health', 4000); ui.server = 'ok'; } catch { ui.server = 'off'; noServerSheet(); return; }
     const targets = data.lines.filter(QUOTABLE);
     if (!targets.length) { toast('Aucun produit coté à actualiser.'); return; }
+    // 0. Symbole corrigé dans la bibliothèque depuis l'import (sauf symbole saisi à la main)
+    for (const l of targets) { const t = libraryFor(l.isin)?.ticker; if (t && !l.customTicker && l.ticker !== t) { l.ticker = t; delete l.tickerAuto; } }
     // 1. Symbole Yahoo manquant : recherche par ISIN
     const missing = targets.filter(l => !l.ticker && l.isin);
     const searchErr = {};
