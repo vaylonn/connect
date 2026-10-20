@@ -1,0 +1,13 @@
+# docker compose up -d   →   http://<adresse-du-nas>:8080
+services:
+  carnet:
+    build: .
+    image: carnet:1.0.0
+    container_name: carnet
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      # Mot de passe facultatif (identifiant : carnet). Laissez vide pour le désactiver.
+      CARNET_PASSWORD: ""
+      CARNET_USER: "carnet"

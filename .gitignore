@@ -1,0 +1,5 @@
+node_modules
+*.zip
+carnet-sauvegarde*.json
+*.csv
+carnet-ajout*.json

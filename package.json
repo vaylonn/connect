@@ -1,0 +1,13 @@
+{
+  "name": "carnet",
+  "version": "1.0.0",
+  "description": "Suivi de patrimoine personnel. Les données restent dans le navigateur.",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "engines": { "node": ">=18.17" },
+  "scripts": {
+    "start": "node server.mjs",
+    "sauvegarde": "node tools/csv-vers-sauvegarde.mjs"
+  }
+}
