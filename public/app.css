@@ -333,7 +333,9 @@ textarea.input { height: auto; min-height: 110px; padding: 12px 14px; font-famil
 .callout.warn { background: color-mix(in srgb, var(--orange) 14%, var(--surface)); }
 
 /* ——— Réglages : liste des rubriques, puis une page par rubrique ——— */
-.settings { display: grid; gap: 14px; max-width: 680px; }
+/* Titre et rubriques forment une colonne centrée sur grand écran */
+.settings-page { max-width: 680px; margin-inline: auto; }
+.settings { display: grid; gap: 14px; }
 .settings .line .mono svg { width: 20px; height: 20px; }
 .settings .chev { color: var(--muted); font-size: 22px; font-weight: 400; line-height: 1; }
 .back { display: inline-block; margin: 0 0 10px; font-size: 14px; }

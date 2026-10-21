@@ -490,14 +490,14 @@ const SECTIONS = {
 
 function viewData() {
   const s = SECTIONS[ui.section];
-  if (s) return `<button class="linkish back" data-action="section-close">‹ Réglages</button>
-    <h1 class="title">${s.title}.<em>${s.sub}</em></h1><div class="settings">${s.body()}</div>`;
+  if (s) return `<div class="settings-page"><button class="linkish back" data-action="section-close">‹ Réglages</button>
+    <h1 class="title">${s.title}.<em>${s.sub}</em></h1><div class="settings">${s.body()}</div></div>`;
   const rows = Object.entries(SECTIONS).filter(([k]) => k !== 'sync' || !PREVIEW).map(([k, x]) => `<button class="line" data-action="section" data-v="${k}">
     <span class="mono">${ICONS[x.icon]}</span><span class="n">${x.title}</span><span class="v chev" aria-hidden="true">›</span><span class="s">${esc(x.summary())}</span><span class="g"></span></button>`).join('');
-  return `<h1 class="title">Vos données, chez vous.<em>${syncState() ? 'Chiffrées avant de partir.' : 'Rien ne quitte cet appareil.'}</em></h1>
+  return `<div class="settings-page"><h1 class="title">Vos données, chez vous.<em>${syncState() ? 'Chiffrées avant de partir.' : 'Rien ne quitte cet appareil.'}</em></h1>
     <div class="settings"><div class="lines">${rows}</div>
       <div><button class="btn danger" data-action="wipe">Effacer toutes les données</button>
-      <p class="note">Carnet ${VERSION}. ${storageWorks() ? 'Stockage local actif.' : 'Stockage local bloqué par le navigateur : les données ne survivront pas à la fermeture.'}</p></div></div>`;
+      <p class="note">Carnet ${VERSION}. ${storageWorks() ? 'Stockage local actif.' : 'Stockage local bloqué par le navigateur : les données ne survivront pas à la fermeture.'}</p></div></div></div>`;
 }
 
 function sectionAccounts() {
