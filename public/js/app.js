@@ -1,7 +1,7 @@
 // Carnet — interface. Aucune donnée ne quitte le navigateur en clair : le serveur Carnet
 // (facultatif) interroge Yahoo Finance avec les symboles, jamais avec les montants, et la
 // synchronisation (facultative) ne lui envoie qu'un coffre chiffré ici (voir sync.js).
-import { eur, signedEur, pct, signedPct, pts, qty as fqty, num, dateLong, dateShort, daysAgo, esc, parseNum, bigParts } from './format.js';
+import { eur, signedEur, pct, signedPct, pts, qty as fqty, qtyShort, num, dateLong, dateShort, daysAgo, esc, parseNum, bigParts } from './format.js';
 import { load, save, clearAll, emptyData, normalize, validateBackup, encryptBackup, decryptBackup, backupPayload, storageWorks } from './store.js';
 import { syncState, saveSyncState, clearSyncState, deriveAccount, pullVault, pushVault, deleteVault, normUser, USER_RE } from './sync.js';
 import { importTradeRepublic, mergeImport } from './importer.js';
@@ -210,7 +210,7 @@ function lineRow(l) {
   const acc = accById(l.accountId);
   const g = lineGain(l), c = lineCost(l);
   const stale = NEEDS_PRICE(l) && daysAgo(l.priceDate) > (data.settings.staleDays || 4);
-  const sub = isCashLike(l) ? `${esc(acc?.name || '')} · ${esc(l.envelope || '')}` : l.estimateFromAmount ? `${esc(acc?.name || '')} · ${eur(l.cost)} investis` : `${esc(acc?.name || '')} · ${fqty(+l.qty.toFixed(l.qtyEstimated ? 3 : 6))} part${l.qty > 1 ? 's' : ''}${l.qtyEstimated ? ' (estim.)' : ''}${l.pending ? ' · ' + eur(l.pending, 0) + ' en attente' : ''}`;
+  const sub = isCashLike(l) ? `${esc(acc?.name || '')} · ${esc(l.envelope || '')}` : l.estimateFromAmount ? `${esc(acc?.name || '')} · ${eur(l.cost)} investis` : `${esc(acc?.name || '')} · ${qtyShort(l.qty)} part${l.qty > 1 ? 's' : ''}${l.qtyEstimated ? ' (estim.)' : ''}${l.pending ? ' · ' + eur(l.pending, 0) + ' en attente' : ''}`;
   return `<button class="line" data-action="open-line" data-id="${esc(l.id)}">
     <span class="mono t-${esc(l.type)}">${esc(initials(shortName(l)))}</span>
     <span class="n">${esc(shortName(l))}${stale ? '<span class="badge warn">cours ancien</span>' : ''}</span><span class="v">${eur(lineValue(l))}</span>
@@ -409,24 +409,24 @@ function viewSimuler() {
   return `<h1 class="title">Et si vous…<em>achetiez ou vendiez, avant de le faire.</em></h1>
   <div class="sim-grid">
     <form class="card form" id="sim-form" autocomplete="off">
-      <div class="seg" role="group" aria-label="Opération">
+      <div class="sim-modes"><div class="seg" role="group" aria-label="Opération">
         <button type="button" data-action="sim-mode" data-v="buy" aria-pressed="${s.mode === 'buy'}">Achat</button>
         <button type="button" data-action="sim-mode" data-v="sell" aria-pressed="${s.mode === 'sell'}" ${isNew ? 'disabled' : ''}>Vente</button>
       </div>
+      <div class="seg" role="group" aria-label="Saisir"><button type="button" data-action="sim-by" data-v="amount" aria-pressed="${s.by === 'amount'}">Montant</button><button type="button" data-action="sim-by" data-v="qty" aria-pressed="${s.by === 'qty'}">Quantité</button></div></div>
       <label class="field"><span>Produit</span><select class="input" id="sim-line" data-sim="lineId">${simOptions()}</select></label>
       ${isNew ? `
         ${s.lineId === 'new:custom' ? `<div class="row2"><label class="field"><span>Nom</span><input class="input" id="sim-newname" data-sim="newName" value="${esc(s.newName)}" placeholder="ex. Fonds Linxea"></label>
         <label class="field"><span>ISIN</span><input class="input" id="sim-newisin" data-sim="newIsin" value="${esc(s.newIsin)}" placeholder="facultatif"></label></div>` : ''}
         <label class="field"><span>Sur le compte</span><select class="input" id="sim-acc" data-sim="accountId">${data.accounts.map(a => `<option value="${esc(a.id)}" ${s.accountId === a.id ? 'selected' : ''}>${esc(a.name)}</option>`).join('')}</select></label>` : ''}
-      <div class="seg" role="group" aria-label="Saisir"><button type="button" data-action="sim-by" data-v="amount" aria-pressed="${s.by === 'amount'}">Montant</button><button type="button" data-action="sim-by" data-v="qty" aria-pressed="${s.by === 'qty'}">Quantité</button></div>
-      <div class="row2">
+      <div class="row3">
         ${s.by === 'amount' ? `<label class="field"><span>Montant (€)</span><input class="input" id="sim-amount" inputmode="decimal" data-sim="amount" value="${esc(s.amount)}"></label>`
           : `<label class="field"><span>Quantité</span><input class="input" id="sim-qty" inputmode="decimal" data-sim="qty" value="${esc(s.qty)}"></label>`}
-        <label class="field"><span>Prix unitaire (€)</span><input class="input" id="sim-price" inputmode="decimal" data-sim="price" value="${esc(s.price)}" placeholder="cours"></label>
+        <label class="field"><span>Prix (€)</span><input class="input" id="sim-price" inputmode="decimal" data-sim="price" value="${esc(s.price)}" placeholder="cours"></label>
+        <label class="field"><span>Frais (€)</span><input class="input" id="sim-fees" inputmode="decimal" data-sim="fees" value="${esc(s.fees)}"></label>
       </div>
-      <div class="row2"><label class="field"><span>Frais (€)</span><input class="input" id="sim-fees" inputmode="decimal" data-sim="fees" value="${esc(s.fees)}"></label><span></span></div>
       <label class="check"><input type="checkbox" id="sim-cash" data-sim="useCash" ${s.useCash ? 'checked' : ''}><span>${s.mode === 'buy' ? 'Payer avec les espèces du compte' : 'Garder le produit de la vente en espèces sur le compte'}</span></label>
-      ${line ? `<p class="small muted" style="margin:0">Vous détenez ${fqty(line.qty)} parts, prix de revient ${eur(pru(line))}, cours ${eur(line.price)} (${dateShort(line.priceDate)}).</p>` : ''}
+      ${line ? `<p class="small muted" style="margin:0">Vous détenez ${qtyShort(line.qty)} parts, prix de revient ${eur(pru(line))}, cours ${eur(line.price)} (${dateShort(line.priceDate)}).</p>` : ''}
     </form>
     <div id="sim-out">${simResult()}</div>
   </div>`;
@@ -448,12 +448,12 @@ function simResult() {
   const deltas = r.deltas.sectors.filter(d => Math.abs(d.delta) >= 0.001).slice(0, 4);
   const cdeltas = r.deltas.countries.filter(d => Math.abs(d.delta) >= 0.001).slice(0, 4);
   return `<div class="card">
-    <div class="eyebrow">${p.mode === 'buy' ? 'Achat' : 'Vente'} de ${fqty(p.qty)} part${p.qty > 1 ? 's' : ''} · ${eur(p.qty * p.price)}</div>
+    <div class="eyebrow">${p.mode === 'buy' ? 'Achat' : 'Vente'} de ${ui.sim.by === 'amount' ? '≈ ' : ''}${qtyShort(p.qty)} part${p.qty > 1 ? 's' : ''} · ${eur(p.qty * p.price)}</div>
     <div class="compare" style="margin-top:6px">
       ${row('Patrimoine total', eur(b.total, 0), eur(a.total, 0), p.useCash || p.mode === 'sell' ? '' : 'L’achat est compté comme un nouvel apport.')}
       ${row('Part en actions', pct(b.equityPct), pct(a.equityPct), pts(a.equityPct - b.equityPct))}
       ${row('Poids de la ligne', pct(r.weightBefore), pct(r.weightAfter))}
-      ${p.mode === 'buy' ? row('Prix de revient unitaire', r.line.prevQty ? eur(r.line.prevPru) : '—', eur(r.line.pru)) : row('Parts restantes', fqty(r.line.prevQty), fqty(r.line.qty))}
+      ${p.mode === 'buy' ? row('Prix de revient unitaire', r.line.prevQty ? eur(r.line.prevPru) : '—', eur(r.line.pru)) : row('Parts restantes', qtyShort(r.line.prevQty), qtyShort(r.line.qty))}
       ${row('Espèces', eur(b.cash, 0), eur(a.cash, 0))}
       ${p.mode === 'sell' ? `<div class="cmp"><span class="k">Plus-value réalisée</span><span class="v ${r.realized >= 0 ? 'pos' : 'neg'}">${signedEur(r.realized)}</span></div>
         <div class="cmp"><span class="k">Impôt estimé</span><span class="v">${eur(r.tax)}</span><span class="x">${esc(r.taxNote)}</span></div>` : ''}
@@ -461,8 +461,8 @@ function simResult() {
     ${r.warnings.map(w => `<div class="callout warn" style="margin-top:10px">${esc(w)}</div>`).join('')}
   </div>
   ${deltas.length || cdeltas.length ? `<div class="card" style="margin-top:14px"><h3>Ce qui bouge</h3>
-    ${deltas.length ? `<div class="eyebrow" style="margin-top:12px">Secteurs</div><div class="compare">${deltas.map(d => row(esc(d.name), pct(d.before), pct(d.after), pts(d.delta))).join('')}</div>` : ''}
-    ${cdeltas.length ? `<div class="eyebrow" style="margin-top:12px">Pays</div><div class="compare">${cdeltas.map(d => row(esc(d.name), pct(d.before), pct(d.after), pts(d.delta))).join('')}</div>` : ''}
+    ${deltas.length ? `<div class="eyebrow" style="margin-top:12px">Secteurs</div><div class="compare tight">${deltas.map(d => row(esc(d.name), pct(d.before), pct(d.after), pts(d.delta))).join('')}</div>` : ''}
+    ${cdeltas.length ? `<div class="eyebrow" style="margin-top:12px">Pays</div><div class="compare tight">${cdeltas.map(d => row(esc(d.name), pct(d.before), pct(d.after), pts(d.delta))).join('')}</div>` : ''}
     <p class="note">Parts calculées hors espèces, avec la composition indicative des fonds.</p></div>` : ''}`;
 }
 

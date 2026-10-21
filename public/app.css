@@ -293,6 +293,8 @@ textarea.input { height: auto; min-height: 110px; padding: 12px 14px; font-famil
 .input:focus { outline: 2px solid var(--orange); outline-offset: 0; border-color: transparent; }
 .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 @media (max-width: 380px) { .row2 { grid-template-columns: 1fr; } }
+.row3 { display: grid; grid-template-columns: 1fr 1fr 0.65fr; gap: 10px; }
+@media (max-width: 340px) { .row3 { grid-template-columns: 1fr 1fr; } }
 .check { display: flex; gap: 10px; align-items: flex-start; font-size: 14px; }
 .check input { width: 20px; height: 20px; accent-color: var(--orange); margin: 1px 0 0; flex: none; }
 .swatches { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -304,6 +306,8 @@ textarea.input { height: auto; min-height: 110px; padding: 12px 14px; font-famil
 
 /* ——— Simulation ——— */
 .sim-grid { display: grid; gap: 14px; }
+.sim-modes { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; }
+.sim-modes .seg button { padding: 8px 11px; }
 @media (min-width: 1000px) { .sim-grid { grid-template-columns: minmax(0, 420px) minmax(0, 1fr); align-items: start; gap: 22px; } }
 .compare { display: grid; gap: 10px; }
 .cmp { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 12px; padding: 12px 0; border-top: 1px solid var(--line); align-items: baseline; }
@@ -312,6 +316,11 @@ textarea.input { height: auto; min-height: 110px; padding: 12px 14px; font-famil
 .cmp .v { font-variant-numeric: tabular-nums; font-weight: 600; text-align: right; white-space: nowrap; }
 .cmp .v .from { color: var(--muted); font-weight: 400; margin-right: 6px; }
 .cmp .x { grid-column: 1 / -1; font-size: 12.5px; color: var(--muted); }
+/* Ce qui bouge : l’écart sur la même ligne que le nom */
+.compare.tight { gap: 0; }
+.compare.tight .cmp { grid-template-columns: minmax(0, 1fr) auto auto; padding: 9px 0; }
+.compare.tight .cmp .x { grid-column: 2; grid-row: 1; text-align: right; }
+@media (max-width: 360px) { .compare.tight .cmp { grid-template-columns: minmax(0, 1fr) auto; } .compare.tight .cmp .x { grid-column: 1 / -1; grid-row: auto; text-align: left; } }
 .callout { border-radius: var(--r-md); padding: 14px 16px; background: var(--bg-2); font-size: 13.5px; }
 .callout.warn { background: color-mix(in srgb, var(--orange) 14%, var(--surface)); }
 
