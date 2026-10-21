@@ -13,7 +13,7 @@ const PREVIEW = !!window.CARNET_PREVIEW;
 const VERSION = '1.2.0';
 let data = load();
 const ui = {
-  tab: 'patrimoine', range: '1A', filter: 'all', analyse: 'sectors', server: PREVIEW ? 'preview' : 'unknown', busy: false, progress: '', lineRange: '1A',
+  tab: 'patrimoine', range: '1A', filter: 'all', group: 'accounts', analyse: 'sectors', server: PREVIEW ? 'preview' : 'unknown', busy: false, progress: '', lineRange: '1A',
   hist: { kind: 'all', acc: 'all', q: '', limit: 150 },
   sim: { mode: 'buy', lineId: '', newIsin: '', newName: '', accountId: '', by: 'amount', amount: '1000', qty: '', price: '', fees: '1', useCash: true },
 };
@@ -122,7 +122,7 @@ function viewHome() {
       <span class="pill">${pct(t.equityPct, 0)} en actions</span>
       ${t.liquid > 0 ? `<span class="pill">${eur(t.liquid, 0)} d’espèces</span>` : ''}
     </div>
-    <div class="meta">${t.cost > 0 ? `Plus-value latente de ${signedPct(t.gainPct)} sur ${eur(t.cost, 0)} investis.` : 'Ajoutez des placements pour suivre leur plus-value.'}</div>
+    <div class="meta">${t.cost > 0 ? `Depuis l’achat, sur ${eur(t.cost, 0)} investis.` : 'Ajoutez des placements pour suivre leur plus-value.'}</div>
   </section>`;
   const stale = staleCard();
   const chart = `<section class="card chart-card" aria-label="Évolution">
@@ -134,19 +134,16 @@ function viewHome() {
     <div class="legend"><span><i></i>Valeur</span><span><i class="dash"></i>Montant investi</span></div>
     ${Object.keys(data.priceHistory || {}).length ? '' : '<div class="chart-note">Courbe reconstruite à partir des prix de vos transactions. Actualisez les cours pour un historique complet.</div>'}
   </section>`;
-  const accounts = `<div><div class="section-head"><h2>Comptes</h2><span class="aside">${t.accounts.length} compte${t.accounts.length > 1 ? 's' : ''}</span></div>
-    <div class="accounts">${t.accounts.map(accountCard).join('') || '<p class="muted">Aucun compte.</p>'}</div></div>`;
-  const envs = t.envelopes.filter(e => e.value > 0);
-  const maxEnv = Math.max(...envs.map(e => e.value), 1);
-  const envelopes = `<div><div class="section-head"><h2>Enveloppes</h2><span class="aside">part du total</span></div>
-    <div class="card"><div class="env-chart">${envs.map((e, i) => `<div class="env ${i === 0 ? 'top' : ''}" title="${esc(e.name)} : ${eur(e.value)}">
-      <span class="v">${pct(e.share, 0)}</span><span class="b" style="height:${Math.max(4, 100 * e.value / maxEnv * 0.78)}%"></span><span class="l">${esc(e.name)}</span></div>`).join('')}</div>
-      <dl class="kv">${envs.map(e => `<dt>${esc(e.name)}</dt><dd>${eur(e.value, 0)}</dd>`).join('')}</dl></div></div>`;
+  // Comptes et enveloppes se partagent la même place : un sélecteur passe de l’un à l’autre.
+  const groups = ui.group === 'envelopes' ? t.envelopes.filter(e => e.value > 0).map(envelopeCard) : t.accounts.map(accountCard);
+  const accounts = `<div><div class="section-head mid"><h2>Répartition</h2>
+      <div class="chips" role="group" aria-label="Regrouper par">${[['accounts', 'Comptes'], ['envelopes', 'Enveloppes']].map(([k, l]) => `<button class="chip" data-action="group" data-v="${k}" aria-pressed="${ui.group === k}">${l}</button>`).join('')}</div></div>
+    <div class="accounts">${groups.join('') || `<p class="muted">${ui.group === 'envelopes' ? 'Aucune ligne.' : 'Aucun compte.'}</p>`}</div></div>`;
   const lines = linesSection();
-  if (isWide()) return `<h1 class="title">${headline(t)}<em>Ce que vous détenez, vraiment.</em></h1>
-    <div class="grid-home"><div class="col">${hero}${chart}${lines}</div><div class="col">${stale}${accounts}${envelopes}</div></div>`;
-  return `<h1 class="title">${headline(t)}<em>Ce que vous détenez, vraiment.</em></h1>
-    <div class="grid-home">${hero}${stale}${chart}${accounts}${envelopes}${lines}</div>`;
+  if (isWide()) return `<h1 class="title">${headline(t)}</h1>
+    <div class="grid-home"><div class="col">${hero}${chart}${lines}</div><div class="col">${stale}${accounts}</div></div>`;
+  return `<h1 class="title">${headline(t)}</h1>
+    <div class="grid-home">${hero}${stale}${chart}${lines}${accounts}</div>`;
 }
 after.patrimoine = () => {
   const host = $('#chart-host'); if (!host) return;
@@ -184,12 +181,24 @@ function accountCard(a) {
   </button>`;
 }
 
+// Toucher une enveloppe filtre les lignes sur elle.
+function envelopeCard(e) {
+  const n = heldLines(data).filter(l => (l.envelope || 'Autre') === e.name).length;
+  const on = Math.round(e.share * 20);
+  return `<button class="acc" data-action="env-lines" data-v="${esc(e.name)}">
+    <span class="tile c-ink">${esc(initials(e.name))}</span>
+    <span class="name">${esc(e.name)}</span><span class="val">${eur(e.value, 0)}</span>
+    <span class="sub">${n} ligne${n > 1 ? 's' : ''}</span><span class="share">${pct(e.share, 0)}</span>
+    <span class="segs" aria-hidden="true">${Array.from({ length: 20 }, (_, i) => `<i class="${i < on ? 'on c-ink' : ''}"></i>`).join('')}</span>
+  </button>`;
+}
+
 function linesSection() {
   const held = heldLines(data);
   const envs = [...new Set(held.map(l => l.envelope || 'Autre'))].sort((a, b) => ENVELOPE_ORDER.indexOf(a) - ENVELOPE_ORDER.indexOf(b));
   if (ui.filter !== 'all' && !envs.includes(ui.filter)) ui.filter = 'all';
   const ls = held.filter(l => ui.filter === 'all' || (l.envelope || 'Autre') === ui.filter).sort((a, b) => lineValue(b) - lineValue(a));
-  return `<div><div class="section-head"><h2>Lignes</h2><button class="linkish" data-action="add-line">Ajouter</button></div>
+  return `<div id="lines"><div class="section-head"><h2>Lignes</h2><button class="linkish" data-action="add-line">Ajouter</button></div>
     <div class="filters" role="group" aria-label="Filtrer par enveloppe">
       <button class="filter" data-action="filter" data-v="all" aria-pressed="${ui.filter === 'all'}">Toutes</button>
       ${envs.map(e => `<button class="filter" data-action="filter" data-v="${esc(e)}" aria-pressed="${ui.filter === e}">${esc(e)}</button>`).join('')}
@@ -1274,6 +1283,8 @@ document.addEventListener('click', async e => {
   switch (a) {
     case 'range': ui.range = v; render(); break;
     case 'filter': ui.filter = v; render(); break;
+    case 'group': ui.group = v; render(); break;
+    case 'env-lines': ui.filter = v; render(); $('#lines')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); break;
     case 'analyse': ui.analyse = v; render(); break;
     case 'hist-kind': ui.hist.kind = v; ui.hist.limit = 150; render(); break;
     case 'hist-acc': ui.hist.acc = v; ui.hist.limit = 150; render(); break;
