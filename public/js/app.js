@@ -702,7 +702,8 @@ function accountForm(id) {
       sh.querySelector('[data-act="del"]')?.addEventListener('click', async () => {
         const n = data.lines.filter(l => l.accountId === a.id && isHeld(l)).length;
         if (await confirmSheet({ title: 'Supprimer ce compte ?', text: `${esc(a.name)} et ses ${n} ligne${n > 1 ? 's' : ''} seront retirés de cet appareil.`, ok: 'Supprimer', danger: true })) {
-          data.accounts = data.accounts.filter(x => x.id !== a.id); data.lines = data.lines.filter(l => l.accountId !== a.id); close(); commit('Compte supprimé.');
+          data.accounts = data.accounts.filter(x => x.id !== a.id); data.lines = data.lines.filter(l => l.accountId !== a.id);
+          data.transactions = (data.transactions || []).filter(t => t.accountId !== a.id); close(); commit('Compte supprimé.');
         }
       });
     },
