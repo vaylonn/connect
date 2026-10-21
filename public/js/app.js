@@ -906,7 +906,7 @@ function adoptRemote(r) { data = normalize(r.data); save(data); render(); }
 function syncStatusHtml() {
   const st = syncState(); if (!st) return '';
   if (ui.syncing) return '<span class="status"><i></i>Synchronisation…</span>';
-  if (ui.syncError) return `<span class="status off"><i></i>${esc(ui.syncError)}</span>`;
+  if (ui.syncError) return `<span class="status off"><i></i>${esc(ui.syncError)}</span>${ui.syncLost ? '<br><button class="btn sm" style="margin-top:10px" data-action="sync-recreate">Recréer le coffre avec les données de cet appareil</button>' : ''}`;
   if (st.dirty) return '<span class="status"><i></i>Changements en attente d’envoi</span>';
   if (!st.at) return '<span class="status"><i></i>Pas encore synchronisé</span>';
   const d = new Date(st.at), sameDay = d.toDateString() === new Date().toDateString();
@@ -930,7 +930,7 @@ async function syncNow(manual = false) {
   if (!st || ui.syncing || PREVIEW) return;
   if (data.demo) { if (manual) toast('Effacez d’abord les données d’exemple.'); return; }
   clearTimeout(syncTimer);
-  ui.syncing = true; ui.syncError = ''; setSyncUI();
+  ui.syncing = true; ui.syncError = ''; ui.syncLost = false; setSyncUI();
   const rev = editRev;
   let ok = true;
   try {
@@ -944,7 +944,9 @@ async function syncNow(manual = false) {
     }
     if (manual && ok) toast('Synchronisé.');
   } catch (e) {
-    ui.syncError = e.status === 401 || e.status === 404 ? 'Coffre supprimé ou phrase de passe changée : déconnectez cet appareil.' : e.message;
+    ui.syncLost = e.status === 404;
+    ui.syncError = ui.syncLost ? 'Le coffre n’existe plus sur le serveur (supprimé depuis un autre appareil, ou base vidée).'
+      : e.status === 401 ? 'Coffre supprimé ou phrase de passe changée : déconnectez cet appareil.' : e.message;
     if (manual) toast(ui.syncError);
   } finally { ui.syncing = false; setSyncUI(); }
 }
@@ -961,6 +963,21 @@ async function syncConflict(st, rev) {
   if (c === 'local') { const p = await pushVault(st, r.version, syncPayload(data)); markSynced(st, p.version, rev); return true; }
   ui.syncError = 'Conflit non résolu : touchez « Synchroniser » pour choisir.';
   return false;
+}
+
+// Coffre disparu du serveur : cet appareil a déjà les clés, il le recrée avec ses données.
+// Les autres appareils connectés le retrouvent à leur prochain relevé.
+async function recreateVault() {
+  const st = syncState(); if (!st || ui.syncing || data.demo) return;
+  ui.syncing = true; setSyncUI();
+  const rev = editRev;
+  let taken = false;
+  try {
+    const r = await pushVault(st, 0, syncPayload(data));
+    markSynced(st, r.version, rev); ui.syncError = ''; ui.syncLost = false; toast('Coffre recréé.');
+  } catch (e) { if (e.status === 409) taken = true; else toast(e.message); }
+  finally { ui.syncing = false; setSyncUI(); }
+  if (taken) syncNow(true); // déjà recréé depuis un autre appareil : synchronisation habituelle
 }
 
 function syncSheet(create) {
@@ -1251,6 +1268,7 @@ document.addEventListener('click', async e => {
     case 'sync-create': syncSheet(true); break;
     case 'sync-login': syncSheet(false); break;
     case 'sync-now': syncNow(true); break;
+    case 'sync-recreate': recreateVault(); break;
     case 'sync-logout':
       if (await confirmSheet({ title: 'Déconnecter cet appareil ?', text: 'Les données restent sur cet appareil et dans le coffre ; elles ne seront simplement plus synchronisées ici.', ok: 'Déconnecter' })) { clearSyncState(); ui.syncError = ''; render(); toast('Appareil déconnecté.'); }
       break;
