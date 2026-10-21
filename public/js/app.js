@@ -333,9 +333,11 @@ function viewHistorique() {
   if (h.acc !== 'all' && !accs.some(a => a.id === h.acc)) h.acc = 'all';
   const manual = data.lines.some(l => l.source !== 'tr' && !isCashLike(l) && isHeld(l));
   return `${title}
+    <div class="hist-tools">
+      <label class="hist-search"><span class="sr">Rechercher</span><input class="input" type="search" id="hist-q" data-hist="q" value="${esc(h.q)}" placeholder="Produit ou ISIN" autocomplete="off"></label>
+      ${accs.length > 1 ? `<label class="hist-acc"><span class="sr">Compte</span><select class="input" id="hist-acc" data-hist="acc"><option value="all">Tous les comptes</option>${accs.map(a => `<option value="${esc(a.id)}" ${h.acc === a.id ? 'selected' : ''}>${esc(a.name)}</option>`).join('')}</select></label>` : ''}
+    </div>
     <div class="filters" role="group" aria-label="Type d’opération">${HIST_KINDS.map(([k, l]) => `<button class="filter" data-action="hist-kind" data-v="${k}" aria-pressed="${h.kind === k}">${l}</button>`).join('')}</div>
-    ${accs.length > 1 ? `<div class="filters" role="group" aria-label="Compte"><button class="filter" data-action="hist-acc" data-v="all" aria-pressed="${h.acc === 'all'}">Tous les comptes</button>${accs.map(a => `<button class="filter" data-action="hist-acc" data-v="${esc(a.id)}" aria-pressed="${h.acc === a.id}">${esc(a.name)}</button>`).join('')}</div>` : ''}
-    <label class="hist-search"><span class="sr">Rechercher</span><input class="input" type="search" id="hist-q" data-hist="q" value="${esc(h.q)}" placeholder="Rechercher un produit ou un ISIN" autocomplete="off"></label>
     <div id="hist-body">${histBody()}</div>
     ${manual && !data.demo ? '<p class="note">Les lignes ajoutées à la main n’ont pas d’historique d’opérations.</p>' : ''}`;
 }
@@ -348,36 +350,39 @@ function histBody() {
   const realized = sum(t => t.realized), fees = sum(t => Math.abs(t.fee || 0));
   const nBuy = ts.filter(isBuy).length, nSell = ts.filter(t => t.kind === 'SELL').length;
   const first = ts[ts.length - 1].date, last = ts[0].date;
-  const tiles = [
+  const sums = [
     { k: 'Investi', v: eur(bought, 0), d: `${nBuy} achat${nBuy > 1 ? 's' : ''}` },
     { k: 'Vendu', v: eur(sold, 0), d: `${nSell} vente${nSell > 1 ? 's' : ''}` },
-    { k: 'Plus-values réalisées', v: signedEur(realized, 0), d: nSell ? 'sur les ventes, frais déduits' : 'aucune vente', cls: realized > 0.5 ? 'pos' : realized < -0.5 ? 'neg' : '' },
-    { k: 'Frais', v: eur(fees), d: `du ${dateLong(first)} au ${dateLong(last)}` },
+    { k: 'Plus-values', v: signedEur(realized, 0), d: nSell ? 'réalisées, frais déduits' : 'aucune vente', cls: realized > 0.5 ? 'pos' : realized < -0.5 ? 'neg' : '' },
+    { k: 'Frais', v: eur(fees), d: 'achats et ventes' },
   ];
   const shown = ts.slice(0, ui.hist.limit);
   const months = [];
   for (const t of shown) { const m = t.date.slice(0, 7); if (!months.length || months[months.length - 1].m !== m) months.push({ m, ops: [] }); months[months.length - 1].ops.push(t); }
   const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
-  return `<div class="tiles">${tiles.map(x => `<div class="tile-k"><span class="k">${x.k}</span><span class="v ${x.cls || ''}">${x.v}</span><span class="d">${x.d}</span></div>`).join('')}</div>
-    <div class="section-head"><h2>Opérations</h2><span class="aside">${ts.length} opération${ts.length > 1 ? 's' : ''}</span></div>
-    ${months.map(({ m, ops }) => {
+  // Le compte n’apparaît sur chaque opération que s’il y en a plusieurs, qu’aucun n’est choisi et que l’écran est assez large.
+  const showAcc = ui.hist.acc === 'all' && new Set(ts.map(t => t.accountId)).size > 1;
+  return `<div class="card hist-sum">${sums.map(x => `<div><span class="k">${x.k}</span><span class="v ${x.cls || ''}">${x.v}</span><span class="d">${x.d}</span></div>`).join('')}</div>
+    <p class="hist-count">${ts.length} opération${ts.length > 1 ? 's' : ''}, ${first === last ? 'le ' + dateLong(first) : `du ${dateLong(first)} au ${dateLong(last)}`}</p>
+    <div class="lines hist-list">${months.map(({ m, ops }) => {
       const net = ops.reduce((s, t) => s + (isBuy(t) || t.kind === 'SELL' ? t.amount : 0), 0);
       return `<div class="hist-month"><span>${cap(MONTH.format(new Date(m + '-15T12:00:00')))}</span><span>${Math.abs(net) >= 0.5 ? signedEur(net, 0) : ''}</span></div>
-        <div class="lines">${ops.map(histRow).join('')}</div>`;
-    }).join('')}
+        ${ops.map(t => histRow(t, showAcc)).join('')}`;
+    }).join('')}</div>
     ${ts.length > shown.length ? `<div class="btn-row" style="margin-top:14px;justify-content:center"><button class="btn" data-action="hist-more">Afficher ${Math.min(150, ts.length - shown.length)} de plus</button></div>` : ''}`;
 }
 
-function histRow(t) {
+function histRow(t, showAcc) {
   const name = opName(t);
   const acc = accById(t.accountId);
   const line = data.lines.find(l => l.accountId === t.accountId && l.isin === t.isin && isHeld(l));
   const label = (OP_LABEL[t.kind] || t.kind) + (/SAVING|PLAN/i.test(t.category || '') ? ' programmé' : '');
   const n = +(+t.shares || 0).toFixed(6);
-  const shares = n ? `${fqty(n)} part${n > 1 ? 's' : ''}${t.price ? ' à ' + eur(t.price) : ''}` : '';
-  const sub = [dateShort(t.date), label, shares, acc?.name || t.envelope].filter(Boolean).map(esc).join(' · ');
+  const shares = n ? (t.price ? `${qtyShort(n)} × ${eur(t.price)}` : `${qtyShort(n)} part${n > 1 ? 's' : ''}`) : '';
+  const where = showAcc && (acc?.name || t.envelope);
+  const sub = [dateShort(t.date), label, shares].filter(Boolean).map(esc).join(' · ') + (where ? `<span class="where"> · ${esc(where)}</span>` : '');
   const money = isBuy(t) || t.kind === 'SELL';
-  const value = money ? signedEur(t.amount) : n ? '+' + fqty(n) + ' part' + (n > 1 ? 's' : '') : '—';
+  const value = money ? signedEur(t.amount) : n ? '+' + qtyShort(n) + ' part' + (n > 1 ? 's' : '') : '—';
   const g = t.kind === 'SELL' && typeof t.realized === 'number'
     ? `<span class="${t.realized > 0.005 ? 'pos' : t.realized < -0.005 ? 'neg' : 'muted'}" title="Plus-value réalisée">${signedEur(t.realized)}</span>`
     : t.fee ? `<span class="muted">frais ${eur(Math.abs(t.fee))}</span>` : '';
@@ -1287,7 +1292,6 @@ document.addEventListener('click', async e => {
     case 'env-lines': ui.filter = v; render(); $('#lines')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); break;
     case 'analyse': ui.analyse = v; render(); break;
     case 'hist-kind': ui.hist.kind = v; ui.hist.limit = 150; render(); break;
-    case 'hist-acc': ui.hist.acc = v; ui.hist.limit = 150; render(); break;
     case 'hist-more': { ui.hist.limit += 150; const y = window.scrollY; $('#hist-body').innerHTML = histBody(); window.scrollTo(0, y); break; }
     case 'open-split': openSplit(v); break;
     case 'go': go(v); break;
@@ -1345,7 +1349,7 @@ document.addEventListener('input', e => {
     }
     const out = $('#sim-out'); if (out) out.innerHTML = simResult();
   }
-  if (el.dataset.hist === 'q') { ui.hist.q = el.value; ui.hist.limit = 150; const b = $('#hist-body'); if (b) b.innerHTML = histBody(); }
+  if (el.dataset.hist) { ui.hist[el.dataset.hist] = el.value; ui.hist.limit = 150; const b = $('#hist-body'); if (b) b.innerHTML = histBody(); }
   if (el.dataset.setting === 'taxRate') { const n = parseNum(el.value); if (isFinite(n) && n >= 0 && n <= 100) { data.settings.taxRate = n; save(data); scheduleSync(); } }
 });
 document.addEventListener('change', e => { if (e.target.dataset.sim === 'useCash') { ui.sim.useCash = e.target.checked; const out = $('#sim-out'); if (out) out.innerHTML = simResult(); } });

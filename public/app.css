@@ -250,11 +250,25 @@ button { cursor: pointer; }
 .badge.warn { background: color-mix(in srgb, var(--orange) 18%, var(--surface)); color: var(--orange); }
 
 /* ——— Historique ——— */
-.hist-search { display: block; margin: 0 0 18px; }
-.hist-search .input { max-width: 420px; }
+.hist-tools { display: flex; gap: 8px; margin: 0 0 10px; max-width: 640px; }
+.hist-search { flex: 1 1 140px; min-width: 0; }
+.hist-acc { flex: 0 1 auto; min-width: 0; max-width: 55%; }
+.hist-acc .input { width: auto; max-width: 100%; }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-.hist-month { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin: 22px 4px 8px; font-size: 13px; font-weight: 700; color: var(--ink-2); }
+.hist-sum { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 16px; padding: 14px 16px; margin-top: 6px; }
+@media (min-width: 640px) { .hist-sum { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.hist-sum > div { display: grid; gap: 1px; min-width: 0; }
+.hist-sum .k { font-size: 12px; font-weight: 600; color: var(--muted); }
+.hist-sum .v { font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.hist-sum .d { font-size: 12px; color: var(--muted); }
+.hist-count { margin: 18px 4px 8px; font-size: 13px; color: var(--muted); }
+/* Une seule liste : les mois en intertitres, le détail peut passer à la ligne plutôt qu’être coupé. */
+.hist-month { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 9px 16px 7px; background: var(--bg-2); border-top: 1px solid var(--line); font-size: 13px; font-weight: 700; color: var(--ink-2); }
+.hist-month:first-child { border-top: 0; }
+.hist-month + .line { border-top: 0; }
 .hist-month span:last-child { font-weight: 600; color: var(--muted); font-variant-numeric: tabular-nums; }
+.hist-list .line .s { white-space: normal; }
+@media (max-width: 699px) { .hist-list .where { display: none; } }
 .line.static:hover { background: none; }
 .line .v.in { color: var(--pos); }
 
