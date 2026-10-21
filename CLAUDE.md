@@ -44,6 +44,6 @@ No dependencies and no build step: plain Node (≥ 18.17; CI uses 22) and browse
 ## Things that must change together
 
 - A new persisted key in `data` → add it to `backupPayload()` in `store.js` (exports are a whitelist) and to the « Ajouter » restore merge in `app.js`. Sync already sends everything except `demo`.
-- A new module in `public/js/` → add it to `order` in `tools/build-preview.mjs` and to `SHELL` in `public/sw.js`.
+- A new module in `public/js/` → add it to `SHELL` in `public/sw.js` (the preview build follows the imports on its own).
 - The version string lives in `package.json`, `lib/handlers.mjs`, `public/js/app.js` (`VERSION`) and `public/sw.js` (`CACHE`).
 - Every value interpolated into HTML goes through `esc()` or a number/date formatter from `format.js`: backups, vaults, CSV files and upstream APIs are untrusted, and the CSP (`script-src 'self'`) forbids inline scripts and event handlers.

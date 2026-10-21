@@ -3,11 +3,16 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 const P = p => new URL('../public/' + p, import.meta.url);
 const out = process.argv[2] || 'carnet-apercu.html';
-const order = ['library', 'format', 'store', 'importer', 'compute', 'chart', 'sync', 'app'];
+const IMPORT = /^import\s*\{([^}]+)\}\s*from\s*'\.\/(\w+)\.js';\s*$/gm;
+const source = m => readFileSync(P(`js/${m}.js`), 'utf8');
+// Modules dans l'ordre de leurs dépendances, en partant de app.js
+const order = [], seen = new Set();
+const visit = m => { if (seen.has(m)) return; seen.add(m); for (const [, , dep] of source(m).matchAll(IMPORT)) visit(dep); order.push(m); };
+visit('app');
 let js = 'const __M = {};\n';
 for (const m of order) {
-  let src = readFileSync(P(`js/${m}.js`), 'utf8');
-  src = src.replace(/^import\s*\{([^}]+)\}\s*from\s*'\.\/(\w+)\.js';\s*$/gm, (_, names, mod) => `const {${names.replace(/(\w+)\s+as\s+(\w+)/g, '$1: $2')}} = __M.${mod};`);
+  let src = source(m);
+  src = src.replace(IMPORT, (_, names, mod) => `const {${names.replace(/(\w+)\s+as\s+(\w+)/g, '$1: $2')}} = __M.${mod};`);
   const names = [...src.matchAll(/^export\s+(?:async\s+)?(?:function|const|let)\s+(\w+)/gm)].map(x => x[1]);
   src = src.replace(/^export\s+/gm, '');
   if (/^\s*import\s/m.test(src)) throw new Error('import non transformé dans ' + m);
