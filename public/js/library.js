@@ -1,6 +1,6 @@
-// Bibliothèque de produits connus : symbole Yahoo, composition indicative.
-// Les compositions sont des approximations (ordre de grandeur, mi-2026) destinées
-// à donner une vue d'ensemble. Elles ne remplacent pas la fiche de l'émetteur.
+// Library of known products: Yahoo symbol, indicative composition.
+// Compositions are approximations (order of magnitude, mid-2026) meant
+// to give an overview. They do not replace the issuer's factsheet.
 
 export const SECTORS = {
   it: 'Technologies de l’information',
@@ -59,8 +59,8 @@ const CAC40 = {
   ],
 };
 
-// CAC 40 ESG : 40 valeurs du SBF 120 retenues sur critères ESG (pas de TotalEnergies).
-// Positions, pays et 4 premiers secteurs d'après justETF (octobre 2026), reste des secteurs estimé.
+// CAC 40 ESG: 40 SBF 120 stocks selected on ESG criteria (no TotalEnergies).
+// Holdings, countries and top 4 sectors from justETF (October 2026), remaining sectors estimated.
 const CAC40_ESG = {
   index: 'CAC 40 ESG',
   equity: 1,
@@ -74,7 +74,7 @@ const CAC40_ESG = {
   ],
 };
 
-// STOXX Europe 600 : 4 premiers pays et secteurs d'après justETF (octobre 2026), le reste estimé.
+// STOXX Europe 600: top 4 countries and sectors from justETF (October 2026), the rest estimated.
 const STOXX600 = {
   index: 'STOXX Europe 600',
   equity: 1,
@@ -147,22 +147,22 @@ export const LIBRARY = {
     countries: { 'Chine': 27, 'Taïwan': 20, 'Inde': 18, 'Corée du Sud': 11, 'Brésil': 4.5, 'Arabie saoudite': 3.5, 'Afrique du Sud': 3.2, 'Autres pays': 12.8 },
     holdings: [['TSMC', 11, 'it', 'Taïwan'], ['Tencent', 5, 'comm', 'Chine'], ['Samsung Electronics', 3.5, 'it', 'Corée du Sud'], ['Alibaba', 3, 'disc', 'Chine']],
   },
-  // Actions individuelles
+  // Individual stocks
   'FR0014003TT8': { name: 'Dassault Systèmes', short: 'Dassault Systèmes', ticker: 'DSY.PA', type: 'action', equity: 1, sector: 'it', country: 'France' },
   'FR0000120073': { name: 'Air Liquide', short: 'Air Liquide', ticker: 'AI.PA', type: 'action', equity: 1, sector: 'mat', country: 'France' },
   'FR0000052292': { name: 'Hermès', short: 'Hermès', ticker: 'RMS.PA', type: 'action', equity: 1, sector: 'disc', country: 'France' },
   'US0378331005': { name: 'Apple', short: 'Apple', ticker: 'AAPL', type: 'action', equity: 1, sector: 'it', country: 'États-Unis' },
   'US02079K3059': { name: 'Alphabet (A)', short: 'Alphabet', ticker: 'GOOGL', type: 'action', equity: 1, sector: 'comm', country: 'États-Unis' },
-  // Crypto (symboles Trade Republic)
+  // Crypto (Trade Republic symbols)
   'BTC': { name: 'Bitcoin', short: 'Bitcoin', ticker: 'BTC-EUR', type: 'crypto', equity: 0, sector: 'crypto', country: '—' },
   'ETH': { name: 'Ethereum', short: 'Ethereum', ticker: 'ETH-EUR', type: 'crypto', equity: 0, sector: 'crypto', country: '—' },
 };
 
 export const COMPOSITION_NOTE = 'Pays et secteurs complets d’après Morningstar (ou justETF), principales positions seulement ; à défaut, composition indicative (ordre de grandeur mi-2026). Vérifiez la fiche de l’émetteur pour les chiffres exacts.';
 
-// Compositions récupérées automatiquement (Morningstar, justETF, via le serveur), rangées dans
-// les données (data.compositions) et passées ici. Pour un fonds de la bibliothèque, elles
-// remplacent la composition indicative et gardent nom, symbole et type de la bibliothèque.
+// Compositions fetched automatically (Morningstar, justETF, through the server), stored in
+// the data (data.compositions) and passed here. For a library fund, they
+// replace the indicative composition and keep the library's name, symbol and type.
 let merged = {};
 export function setFetchedLibrary(map) {
   merged = {};
@@ -174,7 +174,7 @@ export function setFetchedLibrary(map) {
     merged[k] = { ...st, index: st.index ? st.index + ' · ' + f.index : f.index, asOf: f.asOf, sectors: f.sectors, countries: f.countries, holdings: f.holdings?.length >= 3 ? f.holdings : st.holdings, equity: f.equity ?? st.equity };
   }
 }
-// Produits dont la composition peut être récupérée : hors bibliothèque, ou fonds de la bibliothèque
+// Products whose composition can be fetched: not in the library, or library funds
 export function wantsComposition(isin) {
   const st = isin && LIBRARY[String(isin).toUpperCase()];
   return !st || !!st.holdings;
@@ -186,7 +186,7 @@ export function libraryFor(isin) {
   return merged[k] || LIBRARY[k] || null;
 }
 
-// Produits proposés dans le simulateur pour une nouvelle ligne
+// Products offered in the simulator for a new line
 export function libraryChoices() {
   const seen = new Set();
   return Object.entries(LIBRARY)

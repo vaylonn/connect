@@ -1,4 +1,4 @@
-// Courbe d'évolution en SVG, sans dépendance.
+// Value-over-time chart in SVG, no dependencies.
 import { eur, dateLong, monthShort } from './format.js';
 
 const NS = 'http://www.w3.org/2000/svg';
@@ -40,7 +40,7 @@ export function lineChart(host, points, { onHover } = {}) {
     svg.append(el('line', { x1: pad.l, x2: W - pad.r, y1: y(v), y2: y(v), class: 'grid' }));
     const tx = el('text', { x: W - pad.r + 6, y: y(v) + 4, class: 'axis' }); tx.textContent = compact(v); svg.append(tx);
   }
-  // repères de dates
+  // date markers
   const nLabels = W < 420 ? 3 : 5;
   for (let i = 0; i < nLabels; i++) {
     const p = points[Math.round(i * (points.length - 1) / (nLabels - 1))];

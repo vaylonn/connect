@@ -1,5 +1,5 @@
-// Import du CSV « Exportation de transactions » de Trade Republic.
-// Module pur (sans DOM) : utilisable dans le navigateur comme dans Node.
+// Import of Trade Republic's « Exportation de transactions » CSV.
+// Pure module (no DOM): usable in the browser as well as in Node.
 import { libraryFor } from './library.js';
 
 export function parseCSV(text) {
@@ -55,9 +55,9 @@ export function importTradeRepublic(text) {
   if (missing.length) throw new Error('Ce fichier ne ressemble pas à un export Trade Republic (colonnes manquantes : ' + missing.join(', ') + ').');
   rows.sort((a, b) => a.datetime < b.datetime ? -1 : a.datetime > b.datetime ? 1 : 0);
 
-  const pos = new Map();     // clé compte|symbole
-  const trades = [];         // opérations sur titres (hors mouvements d'espèces), pour l'historique
-  const cash = new Map();    // compte -> { bal, byDay: Map } : solde à la fin de chaque jour de mouvement
+  const pos = new Map();     // key account|symbol
+  const trades = [];         // securities trades (excluding cash movements), for the history
+  const cash = new Map();    // account -> { bal, byDay: Map }: balance at the end of each day with movements
   const stats = { rows: rows.length, from: rows[0].date || rows[0].datetime.slice(0, 10), to: '', dividends: 0, interest: 0, fees: 0, taxes: 0, saveback: 0, unknownTypes: {} };
   const known = new Set(['BUY', 'SELL', 'SPLIT', 'BONUS_ISSUE', 'FREE_RECEIPT', 'PRIVATE_MARKET_BUY']);
 
@@ -80,7 +80,7 @@ export function importTradeRepublic(text) {
     const acct = x.account_type || 'DEFAULT';
     const date = x.date || x.datetime.slice(0, 10);
     stats.to = date > stats.to ? date : stats.to;
-    // Espèces : montant + frais + taxes de chaque mouvement
+    // Cash: amount + fees + taxes of each movement
     const delta = toNum(x.amount) + toNum(x.fee) + toNum(x.tax);
     if (!cash.has(acct)) cash.set(acct, { bal: 0, byDay: new Map() });
     const c = cash.get(acct);
@@ -102,24 +102,24 @@ export function importTradeRepublic(text) {
     if (t === 'BUY' || t === 'SELL') {
       const price = Math.abs(toNum(x.price));
       if (price) { p.price = price; p.priceDate = date; }
-      // Le type fait foi : une vente retire des parts même si l'export écrit la quantité
-      // sans signe (un achat à quantité négative reste une annulation).
+      // The type is authoritative: a sale removes shares even if the export writes the quantity
+      // unsigned (a buy with a negative quantity is still a cancellation).
       const dq = t === 'SELL' ? -Math.abs(q) : q;
       if (dq > 0) {
         p.q += dq;
         p.cost += Math.abs(toNum(x.amount)) + Math.abs(toNum(x.fee));
         p.buyValue += dq * price;
       } else if (dq < 0) {
-        if (t === 'SELL' && p.q > 1e-12) { // plus-value réalisée : produit net moins le prix de revient des parts vendues
+        if (t === 'SELL' && p.q > 1e-12) { // realized gain: net proceeds minus the cost basis of the shares sold
           const costOut = p.cost * Math.min(1, -dq / p.q);
           trade.realized = r2(Math.abs(toNum(x.amount)) - Math.abs(toNum(x.fee)) - costOut);
         }
         if (p.q > 1e-12) { const keep = Math.max(0, p.q + dq) / p.q; p.cost *= keep; p.buyValue *= keep; }
         p.q += dq;
-        if (p.q < 1e-9) { p.q = 0; p.cost = 0; p.buyValue = 0; } // tout vendu (ou plus que détenu)
+        if (p.q < 1e-9) { p.q = 0; p.cost = 0; p.buyValue = 0; } // all sold (or more than held)
       }
     } else if (t === 'SPLIT' || t === 'BONUS_ISSUE' || t === 'FREE_RECEIPT') {
-      p.q += q; // la répartition ne change pas le prix de revient total
+      p.q += q; // the split does not change the total cost basis
     } else if (t === 'PRIVATE_MARKET_BUY') {
       p.prepaid += -toNum(x.amount);
     }
@@ -138,10 +138,10 @@ export function importTradeRepublic(text) {
   for (const p of pos.values()) {
     const type = lineType(p.cls, p.isin);
     const isPrivate = type === 'non-cote';
-    // Non coté : les versements anticipés pas encore exécutés restent « en attente »
-    // (valeur des parts exécutées au prix d'achat = somme q×prix des achats)
+    // Unlisted: advance payments not yet executed stay « en attente » (pending)
+    // (value of executed shares at purchase price = sum of q×price over buys)
     const pending = isPrivate ? r2(Math.max(0, p.prepaid - p.buyValue)) : 0;
-    // Positions soldées comprises : la courbe d'évolution en a besoin, l'affichage les écarte (isHeld)
+    // Closed positions included: the value chart needs them, the display filters them out (isHeld)
     const lib = libraryFor(p.isin);
     const acc = p.acct;
     const envelope = acc === 'PEA' ? 'PEA' : type === 'crypto' ? 'Crypto' : 'Compte-titres';
@@ -168,7 +168,7 @@ export function importTradeRepublic(text) {
   for (const [acct, c] of cash) {
     const bal = r2(c.bal);
     const events = [...c.byDay];
-    if (Math.abs(bal) < 0.005) continue; // compte espèces vide : pas de ligne
+    if (Math.abs(bal) < 0.005) continue; // empty cash account: no line
     lines.push({
       id: 'tr-' + acct.toLowerCase() + '-cash', source: 'tr', accountId: accIds[acct], envelope: 'Espèces', type: 'especes',
       name: 'Espèces', isin: '', ticker: '', qty: 1, cost: bal, price: bal, amount: bal, priceDate: stats.to, priceSource: 'transaction',
@@ -184,8 +184,8 @@ export function importTradeRepublic(text) {
   return { accounts, lines, stats, transactions };
 }
 
-// Fusionne un import dans les données existantes : remplace ce qui vient de Trade Republic,
-// garde les lignes saisies à la main et les réglages faits sur les lignes (nom, symbole, cours plus récent).
+// Merges an import into existing data: replaces what came from Trade Republic,
+// keeps manually entered lines and per-line settings (name, symbol, more recent price).
 export function mergeImport(data, imp) {
   const old = new Map(data.lines.filter(l => l.source === 'tr').map(l => [l.id, l]));
   const lines = imp.lines.map(l => {

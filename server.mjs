@@ -1,6 +1,6 @@
-// Serveur Carnet : sert l'application et relaie les demandes de cours vers Yahoo Finance.
-// Il ne reçoit jamais vos données en clair : la synchronisation (facultative) ne lui confie
-// que des coffres chiffrés par le navigateur, rangés dans ./data (ou CARNET_DATA_DIR).
+// Carnet server: serves the app and relays price requests to Yahoo Finance.
+// It never receives your data in clear text: the (optional) sync only hands it
+// vaults encrypted by the browser, stored in ./data (or CARNET_DATA_DIR).
 //   node server.mjs                      → http://localhost:8080
 //   PORT=9000 HOST=0.0.0.0 node server.mjs
 import http from 'node:http';
@@ -52,7 +52,7 @@ const server = http.createServer(async (req, res) => {
     let path = decodeURIComponent(url.pathname);
     if (path.endsWith('/')) path += 'index.html';
     const file = normalize(join(ROOT, path));
-    if (!file.startsWith(ROOT + sep)) return send(res, 403, 'Interdit'); // pas un dossier voisin comme « public2 »
+    if (!file.startsWith(ROOT + sep)) return send(res, 403, 'Interdit'); // not a sibling folder such as « public2 »
     let st;
     try { st = await stat(file); } catch { return send(res, 404, 'Introuvable', { 'content-type': 'text/plain; charset=utf-8' }); }
     if (!st.isFile()) return send(res, 404, 'Introuvable');
@@ -67,5 +67,5 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(PORT, HOST, () => {
   const shown = HOST === '0.0.0.0' ? 'localhost' : HOST;
-  console.log(`Carnet est prêt : http://${shown}:${PORT}`);
+  console.log(`Carnet is ready: http://${shown}:${PORT}`);
 });

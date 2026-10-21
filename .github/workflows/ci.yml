@@ -16,14 +16,14 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Syntaxe JavaScript
+      - name: JavaScript syntax
         run: |
           for f in server.mjs lib/*.mjs api/*.mjs tools/*.mjs tests/*.mjs public/js/*.js public/sw.js; do
             node --check "$f"
           done
-      - name: Calculs et API de synchronisation
+      - name: Calculations and sync API
         run: node --test tests/*.test.mjs
-      - name: Démarrage du serveur avec faux Yahoo
+      - name: Server startup with fake Yahoo
         run: |
           node tests/mock-yahoo.mjs &
           YAHOO_BASE=http://127.0.0.1:9911 node server.mjs &

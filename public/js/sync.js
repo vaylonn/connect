@@ -1,8 +1,8 @@
-// Synchronisation entre appareils, chiffrée de bout en bout.
-// Identifiant + phrase de passe → PBKDF2 (310 000 itérations) → 512 bits :
-//   - 256 bits pour la clé AES-GCM, qui ne quitte jamais le navigateur ;
-//   - 256 bits pour le jeton d'accès, dont le serveur ne garde que l'empreinte.
-// Le serveur ne reçoit qu'un bloc chiffré (compressé avant chiffrement) et un numéro de version.
+// Sync between devices, end-to-end encrypted.
+// Username + passphrase → PBKDF2 (310,000 iterations) → 512 bits:
+//   - 256 bits for the AES-GCM key, which never leaves the browser;
+//   - 256 bits for the access token, of which the server keeps only the hash.
+// The server only receives an encrypted blob (compressed before encryption) and a version number.
 const STATE = 'carnet:sync:v1';
 const ITER = 310000;
 const enc = new TextEncoder();
@@ -15,12 +15,12 @@ const hex = buf => [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, 
 export const USER_RE = /^[a-z0-9._-]{3,40}$/;
 export const normUser = u => String(u || '').normalize('NFC').trim().toLowerCase();
 
-// ——— État local de la synchronisation (clé dérivée, jamais la phrase) ———
+// ——— Local sync state (derived key, never the passphrase) ———
 export function syncState() {
   try { const s = JSON.parse(localStorage.getItem(STATE) || 'null'); return s && s.id && s.token && s.key ? s : null; } catch { return null; }
 }
-export function saveSyncState(s) { try { localStorage.setItem(STATE, JSON.stringify(s)); } catch { /* stockage indisponible */ } }
-export function clearSyncState() { try { localStorage.removeItem(STATE); } catch { /* rien */ } }
+export function saveSyncState(s) { try { localStorage.setItem(STATE, JSON.stringify(s)); } catch { /* storage unavailable */ } }
+export function clearSyncState() { try { localStorage.removeItem(STATE); } catch { /* nothing */ } }
 
 export async function deriveAccount(userInput, pass) {
   const user = normUser(userInput);
@@ -30,7 +30,7 @@ export async function deriveAccount(userInput, pass) {
   return { user, id, key: b64(bits.slice(0, 32)), token: b64url(bits.slice(32)), version: 0, dirty: false, at: '' };
 }
 
-// ——— Chiffrement du contenu ———
+// ——— Content encryption ———
 const aesKey = acc => crypto.subtle.importKey('raw', unb64(acc.key), 'AES-GCM', false, ['encrypt', 'decrypt']);
 const canZip = typeof CompressionStream === 'function';
 const pipe = (bytes, stream) => new Response(new Blob([bytes]).stream().pipeThrough(stream)).arrayBuffer();
@@ -54,7 +54,7 @@ async function open(acc, blob) {
   return JSON.parse(new TextDecoder().decode(pt));
 }
 
-// ——— Appels au serveur ———
+// ——— Server calls ———
 async function call(acc, method, body, headers = {}) {
   const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 20000);
   let r, j;
@@ -72,12 +72,12 @@ async function call(acc, method, body, headers = {}) {
   return j;
 }
 
-// → { version, data, updatedAt } ; data vaut null si le coffre est encore à la version known
+// → { version, data, updatedAt }; data is null if the vault is still at version known
 export async function pullVault(acc, known = 0) {
   const j = await call(acc, 'GET', null, known ? { 'x-carnet-version': String(known) } : {});
   return { version: j.version, data: j.blob ? await open(acc, j.blob) : null, updatedAt: j.updatedAt };
 }
-// base : version sur laquelle s'appuient les changements (0 pour créer). → { version }
+// base: version the changes are based on (0 to create). → { version }
 export async function pushVault(acc, base, data) {
   return call(acc, 'PUT', { base, blob: await seal(acc, data) });
 }

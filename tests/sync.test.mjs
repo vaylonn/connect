@@ -1,4 +1,4 @@
-// Test de l'API /api/sync contre le stockage par fichiers, et des limites par adresse : node --test tests/*.test.mjs
+// Tests of the /api/sync API against file storage, and of per-address limits: node --test tests/*.test.mjs
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
@@ -14,7 +14,7 @@ const ID = 'a'.repeat(64), TOKEN = 'T'.repeat(43), OTHER = 'U'.repeat(43);
 const servers = [];
 let dir, base;
 
-// Lance un serveur Carnet (coffres dans un dossier temporaire) → { url, dir }
+// Starts a Carnet server (vaults in a temporary folder) → { url, dir }
 async function start(port, env = {}) {
   const d = await mkdtemp(join(tmpdir(), 'carnet-sync-'));
   const srv = spawn(process.execPath, [SERVER], { env: { ...process.env, PORT: String(port), HOST: '127.0.0.1', CARNET_DATA_DIR: d, KV_REST_API_URL: '', UPSTASH_REDIS_REST_URL: '', REDIS_URL: '', ...env }, stdio: 'ignore' });
@@ -29,12 +29,12 @@ const req = (method, { token = TOKEN, id = ID, body, url = base, headers = {} } 
   method, headers: { 'x-carnet-vault': id, 'x-carnet-token': token, ...headers, ...(body ? { 'content-type': 'application/json' } : {}) }, body: body ? JSON.stringify(body) : undefined,
 }).then(async r => ({ status: r.status, json: await r.json() }));
 
-test('cycle complet d’un coffre', async () => {
+test('full vault lifecycle', async () => {
   assert.equal((await req('GET')).status, 404);
-  assert.equal((await req('PUT', { body: { base: 3, blob: 'x' } })).status, 404, 'mise à jour d’un coffre absent');
+  assert.equal((await req('PUT', { body: { base: 3, blob: 'x' } })).status, 404, 'update of a missing vault');
   assert.deepEqual((await req('PUT', { body: { base: 0, blob: 'v1' } })).json, { version: 1 });
-  assert.equal((await req('PUT', { body: { base: 0, blob: 'v1bis' } })).status, 409, 'création en double');
-  assert.equal((await req('PUT', { token: OTHER, body: { base: 0, blob: 'pirate' } })).status, 401, 'identifiant déjà pris');
+  assert.equal((await req('PUT', { body: { base: 0, blob: 'v1bis' } })).status, 409, 'duplicate creation');
+  assert.equal((await req('PUT', { token: OTHER, body: { base: 0, blob: 'pirate' } })).status, 401, 'username already taken');
   assert.equal((await req('GET', { token: OTHER })).status, 401);
 
   const g = await req('GET');
@@ -45,7 +45,7 @@ test('cycle complet d’un coffre', async () => {
   assert.equal(stale.status, 409); assert.equal(stale.json.version, 2);
   assert.equal((await req('GET')).json.blob, 'v2');
 
-  // le serveur ne garde jamais le jeton lui-même
+  // the server never stores the token itself
   const [file] = await readdir(dir);
   assert.ok(!(await readFile(join(dir, file), 'utf8')).includes(TOKEN));
 
@@ -54,39 +54,39 @@ test('cycle complet d’un coffre', async () => {
   assert.equal((await req('GET')).status, 404);
 });
 
-test('requêtes invalides', async () => {
+test('invalid requests', async () => {
   assert.equal((await req('GET', { id: 'nope' })).status, 400);
   assert.equal((await req('GET', { token: 'court' })).status, 400);
   assert.equal((await req('PUT', { body: { base: -1, blob: 'x' } })).status, 400);
   assert.equal((await req('PUT', { body: { base: 0, blob: '' } })).status, 400);
 });
 
-test('relevé sans changement : le coffre n’est pas renvoyé', async () => {
+test('poll without change: the vault is not sent back', async () => {
   const { url } = await start(8128);
   assert.equal((await req('PUT', { url, body: { base: 0, blob: 'v1' } })).status, 200);
   assert.deepEqual((await req('GET', { url, headers: { 'x-carnet-version': '1' } })).json, { version: 1 });
-  assert.equal((await req('GET', { url, headers: { 'x-carnet-version': '7' } })).json.blob, 'v1', 'version différente');
-  assert.equal((await req('GET', { url })).json.blob, 'v1', 'sans version connue');
-  assert.equal((await req('GET', { url, token: OTHER, headers: { 'x-carnet-version': '1' } })).status, 401, 'le jeton reste vérifié');
+  assert.equal((await req('GET', { url, headers: { 'x-carnet-version': '7' } })).json.blob, 'v1', 'different version');
+  assert.equal((await req('GET', { url })).json.blob, 'v1', 'no known version');
+  assert.equal((await req('GET', { url, token: OTHER, headers: { 'x-carnet-version': '1' } })).status, 401, 'the token is still checked');
 });
 
-test('5 créations de coffre par heure et par adresse', async () => {
+test('5 vault creations per hour and per address', async () => {
   const { url } = await start(8124);
   const statuses = [];
   for (let i = 0; i < 7; i++) statuses.push((await req('PUT', { url, id: randomBytes(32).toString('hex'), body: { base: 0, blob: 'x' } })).status);
   assert.deepEqual(statuses, [200, 200, 200, 200, 200, 429, 429]);
 });
 
-test('20 essais refusés bloquent l’adresse, même avec le bon jeton', async () => {
+test('20 rejected attempts block the address, even with the right token', async () => {
   const { url } = await start(8125);
   assert.equal((await req('PUT', { url, body: { base: 0, blob: 'v1' } })).status, 200);
   for (let i = 0; i < 20; i++) assert.equal((await req('GET', { url, token: OTHER })).status, 401);
   const blocked = await req('GET', { url, token: OTHER });
   assert.equal(blocked.status, 429); assert.match(blocked.json.error, /quart d’heure/);
-  assert.equal((await req('GET', { url })).status, 429, 'plus aucun essai pendant le blocage');
+  assert.equal((await req('GET', { url })).status, 429, 'no attempts at all while blocked');
 });
 
-test('adresse du client ramenée à son préfixe /64 en IPv6', () => {
+test('client address reduced to its /64 prefix for IPv6', () => {
   assert.equal(clientKey('203.0.113.7'), '203.0.113.7');
   assert.equal(clientKey('::ffff:203.0.113.7'), '203.0.113.7');
   assert.equal(clientKey('2001:db8:aa:bb:1:2:3:4'), '2001:db8:aa:bb::/64');

@@ -1,4 +1,4 @@
-// Stockage local (localStorage), sauvegardes en clair ou chiffrées.
+// Local storage (localStorage), plain or encrypted backups.
 const KEY = 'carnet:data:v1';
 export const SCHEMA = 1;
 
@@ -12,12 +12,12 @@ export function emptyData() {
   };
 }
 
-let memory = null; // repli si le stockage est bloqué
+let memory = null; // fallback if storage is blocked
 export function load() {
   try {
     const raw = localStorage.getItem(KEY);
     if (raw) return normalize(JSON.parse(raw));
-  } catch { /* stockage indisponible */ }
+  } catch { /* storage unavailable */ }
   return memory ? normalize(memory) : emptyData();
 }
 export function save(data) {
@@ -27,7 +27,7 @@ export function save(data) {
 }
 export function clearAll() {
   memory = null;
-  try { localStorage.removeItem(KEY); } catch { /* rien */ }
+  try { localStorage.removeItem(KEY); } catch { /* nothing */ }
 }
 export function storageWorks() {
   try { localStorage.setItem('carnet:probe', '1'); localStorage.removeItem('carnet:probe'); return true; } catch { return false; }
@@ -52,7 +52,7 @@ export function validateBackup(obj) {
   return out;
 }
 
-// ——— Chiffrement : PBKDF2-SHA-256 (310 000 itérations) + AES-GCM 256 bits ———
+// ——— Encryption: PBKDF2-SHA-256 (310,000 iterations) + 256-bit AES-GCM ———
 const b64 = buf => { let s = ''; const a = new Uint8Array(buf); for (let i = 0; i < a.length; i += 0x8000) s += String.fromCharCode(...a.subarray(i, i + 0x8000)); return btoa(s); };
 const unb64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
 const ITER = 310000;

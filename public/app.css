@@ -1,6 +1,6 @@
-/* Carnet — feuille de style
-   Mise en page : colonne unique sur téléphone (barre d'onglets flottante),
-   barre latérale + grille deux colonnes sur ordinateur. */
+/* Carnet — stylesheet
+   Layout: single column on phones (floating tab bar),
+   sidebar + two-column grid on desktop. */
 
 @font-face { font-family: 'Lora'; src: url('fonts/Lora-Variable.woff') format('woff'); font-weight: 400 700; font-style: normal; font-display: swap; }
 @font-face { font-family: 'Lora'; src: url('fonts/Lora-Italic-Variable.woff') format('woff'); font-weight: 400 700; font-style: italic; font-display: swap; }
@@ -61,7 +61,7 @@ button { cursor: pointer; }
 .num, .tab-num { font-variant-numeric: tabular-nums; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
-/* ——— Structure ——— */
+/* ——— Layout ——— */
 .app { display: flex; min-height: 100vh; min-height: 100dvh; }
 .main {
   flex: 1; min-width: 0; max-width: 1180px; margin: 0 auto;
@@ -113,7 +113,7 @@ button { cursor: pointer; }
   .main { padding-bottom: 48px; padding-left: 40px; padding-right: max(40px, env(safe-area-inset-right, 0px)); padding-top: calc(24px + env(safe-area-inset-top, 0px)); }
 }
 
-/* ——— Barre d'onglets flottante ——— */
+/* ——— Floating tab bar ——— */
 .tabbar {
   position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(14px + env(safe-area-inset-bottom, 0px)); z-index: 40;
   display: flex; gap: 4px; padding: 6px; border-radius: 999px; background: var(--night); color: var(--night-muted);
@@ -128,7 +128,7 @@ button { cursor: pointer; }
 .tab[aria-current="page"] .lbl { display: inline; }
 @media (max-width: 359px) { .tab { padding: 0 11px; } .tab[aria-current="page"] .lbl { display: none; } }
 
-/* ——— Titres ——— */
+/* ——— Headings ——— */
 .title { font-family: var(--serif); font-weight: 500; font-size: clamp(29px, 7.6vw, 46px); line-height: 1.1; letter-spacing: -.015em; margin: 0 0 22px; text-wrap: balance; max-width: 22ch; }
 .title em { display: block; font-style: italic; color: var(--muted); font-weight: 400; }
 .title .hl { color: var(--orange); white-space: nowrap; }
@@ -139,11 +139,11 @@ button { cursor: pointer; }
 .section-head.mid { align-items: center; }
 .eyebrow { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
 
-/* ——— Grilles ——— */
+/* ——— Grids ——— */
 .grid-home { display: grid; gap: 14px; grid-template-columns: minmax(0, 1fr); }
 .grid-home > *, .col > * { min-width: 0; }
 .col { display: grid; gap: 14px; align-content: start; min-width: 0; }
-.col > :first-child > .section-head:first-child { margin-top: 0; } /* aligne le haut des deux colonnes */
+.col > :first-child > .section-head:first-child { margin-top: 0; } /* aligns the top of both columns */
 @media (min-width: 1100px) { .grid-home { grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr); gap: 22px; align-items: start; } }
 
 .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); padding: 20px; min-width: 0; }
@@ -153,7 +153,7 @@ button { cursor: pointer; }
 .small { font-size: 13px; }
 .pos { color: var(--pos); } .neg { color: var(--neg); }
 
-/* ——— Carte principale (dégradé) ——— */
+/* ——— Main card (gradient) ——— */
 .hero { background: var(--hero); color: var(--hero-ink); border-radius: 32px; padding: 22px 22px 20px; position: relative; overflow: hidden; box-shadow: var(--shadow); }
 .hero::after { content: ""; position: absolute; width: 220px; height: 220px; right: -70px; top: -90px; border-radius: 50%; background: radial-gradient(circle, var(--glow), transparent 70%); pointer-events: none; }
 .hero .eyebrow { color: inherit; opacity: .7; }
@@ -165,7 +165,7 @@ button { cursor: pointer; }
 .pill .dotc { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
 .hero .meta { margin-top: 14px; font-size: 12px; opacity: .7; }
 
-/* ——— Carte sombre : cours anciens ——— */
+/* ——— Dark card: stale prices ——— */
 .night { background: var(--night); color: var(--night-ink); border-radius: var(--r-lg); padding: 18px 18px 16px; display: grid; gap: 12px; }
 .night p { margin: 0; }
 .night .lead { font-family: var(--serif); font-size: 19px; line-height: 1.25; }
@@ -176,7 +176,7 @@ button { cursor: pointer; }
 .btn-pill.ghost { background: var(--night-2); color: var(--night-ink); }
 .btn-pill svg { width: 17px; height: 17px; }
 
-/* ——— Boutons ——— */
+/* ——— Buttons ——— */
 .btn { border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 999px; height: 44px; padding: 0 18px; font-weight: 600; font-size: 14px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; text-decoration: none; }
 .btn:hover { border-color: var(--muted); }
 .btn.primary { background: var(--ink); color: var(--bg); border-color: var(--ink); }
@@ -189,7 +189,7 @@ button { cursor: pointer; }
 .btn-row { display: flex; flex-wrap: wrap; gap: 8px; }
 .linkish { border: 0; background: none; padding: 0; color: var(--orange); font-weight: 600; font-size: 13px; }
 
-/* ——— Courbe ——— */
+/* ——— Chart ——— */
 .chart-card { padding: 18px 16px 12px; }
 .chart-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding: 0 4px; }
 .chips { display: flex; gap: 4px; background: var(--bg-2); border-radius: 999px; padding: 3px; }
@@ -210,7 +210,7 @@ button { cursor: pointer; }
 .legend i.dash { border-top: 2px dashed var(--muted); }
 .chart-note { font-size: 12px; color: var(--muted); padding: 6px 4px 0; }
 
-/* ——— Comptes ——— */
+/* ——— Accounts ——— */
 .accounts { display: grid; gap: 10px; }
 @media (min-width: 640px) and (max-width: 1099px) { .accounts { grid-template-columns: 1fr 1fr; } }
 .acc { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; gap: 4px 12px; align-items: center; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); padding: 14px; text-align: left; width: 100%; }
@@ -227,7 +227,7 @@ button { cursor: pointer; }
 .segs i.on.c-ink { background: var(--ink); } .segs i.on.c-orange { background: var(--orange); } .segs i.on.c-blue { background: var(--blue); }
 .segs i.on.c-pink { background: var(--pink); } .segs i.on.c-lilac { background: var(--lilac); } .segs i.on.c-green { background: var(--green); }
 
-/* ——— Lignes ——— */
+/* ——— Lines ——— */
 .filters { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; margin: 0 -2px 10px; }
 .filters::-webkit-scrollbar { display: none; }
 .filter { flex: none; border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 7px 13px; font-size: 13px; font-weight: 600; color: var(--ink-2); }
@@ -249,14 +249,14 @@ button { cursor: pointer; }
 .badge { display: inline-block; font-size: 10.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; padding: 2px 6px; border-radius: 6px; background: var(--bg-2); color: var(--muted); vertical-align: 1px; margin-left: 6px; }
 .badge.warn { background: color-mix(in srgb, var(--orange) 18%, var(--surface)); color: var(--orange); }
 
-/* ——— Historique ——— */
+/* ——— History ——— */
 .hist-tools { display: flex; gap: 8px; margin: 0 0 10px; max-width: 640px; }
 .hist-search { flex: 1 1 140px; min-width: 0; }
 .hist-acc { flex: 0 1 auto; min-width: 0; max-width: 55%; }
 .hist-acc .input { width: auto; max-width: 100%; }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .hist-count { margin: 18px 4px 8px; font-size: 13px; color: var(--muted); }
-/* Une seule liste : les mois en intertitres, le détail peut passer à la ligne plutôt qu’être coupé. */
+/* A single list: months as subheadings, details may wrap rather than be truncated. */
 .hist-month { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 9px 16px 7px; background: var(--bg-2); border-top: 1px solid var(--line); font-size: 13px; font-weight: 700; color: var(--ink-2); }
 .hist-month:first-child { border-top: 0; }
 .hist-month + .line { border-top: 0; }
@@ -266,7 +266,7 @@ button { cursor: pointer; }
 .line.static:hover { background: none; }
 .line .v.in { color: var(--pos); }
 
-/* ——— Chiffres clés (Analyse, Historique) : deux colonnes sur téléphone, une par chiffre au-delà ——— */
+/* ——— Key figures (Analyse, Historique): two columns on phones, one per figure on wider screens ——— */
 .sums { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 16px; padding: 14px 16px; }
 @media (min-width: 640px) { .sums { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); } }
 .sums > div { display: grid; gap: 1px; min-width: 0; align-content: start; }
@@ -274,7 +274,7 @@ button { cursor: pointer; }
 .sums .v { font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .sums .d { font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
 
-/* ——— Analyse ——— */
+/* ——— Analysis ——— */
 .seg { display: inline-flex; gap: 4px; background: var(--bg-2); border-radius: 999px; padding: 4px; max-width: 100%; overflow-x: auto; }
 .seg button { border: 0; background: none; border-radius: 999px; padding: 8px 14px; font-weight: 600; font-size: 13.5px; color: var(--muted); white-space: nowrap; }
 .seg button[aria-pressed="true"] { background: var(--surface); color: var(--ink); box-shadow: 0 1px 3px rgba(0, 0, 0, .08); }
@@ -291,7 +291,7 @@ button.barrow:hover .track { background: var(--surface); }
 .barrow:first-child .track i { background: var(--orange); }
 .note { font-size: 12.5px; color: var(--muted); margin: 14px 2px 0; line-height: 1.5; }
 
-/* ——— Formulaires ——— */
+/* ——— Forms ——— */
 .form { display: grid; gap: 14px; }
 .field { display: grid; gap: 6px; min-width: 0; }
 .field > span, .field > label { font-size: 13px; font-weight: 600; color: var(--ink-2); }
@@ -324,7 +324,7 @@ textarea.input { height: auto; min-height: 110px; padding: 12px 14px; font-famil
 .cmp .v { font-variant-numeric: tabular-nums; font-weight: 600; text-align: right; white-space: nowrap; }
 .cmp .v .from { color: var(--muted); font-weight: 400; margin-right: 6px; }
 .cmp .x { grid-column: 1 / -1; font-size: 12.5px; color: var(--muted); }
-/* Ce qui bouge : l’écart sur la même ligne que le nom */
+/* What moves: the change on the same line as the name */
 .compare.tight { gap: 0; }
 .compare.tight .cmp { grid-template-columns: minmax(0, 1fr) auto auto; padding: 9px 0; }
 .compare.tight .cmp .x { grid-column: 2; grid-row: 1; text-align: right; }
@@ -332,8 +332,8 @@ textarea.input { height: auto; min-height: 110px; padding: 12px 14px; font-famil
 .callout { border-radius: var(--r-md); padding: 14px 16px; background: var(--bg-2); font-size: 13.5px; }
 .callout.warn { background: color-mix(in srgb, var(--orange) 14%, var(--surface)); }
 
-/* ——— Réglages : liste des rubriques, puis une page par rubrique ——— */
-/* Titre et rubriques forment une colonne centrée sur grand écran */
+/* ——— Settings: list of sections, then one page per section ——— */
+/* Title and sections form a centered column on large screens */
 .settings-page { max-width: 680px; margin-inline: auto; }
 .settings { display: grid; gap: 14px; }
 .settings .line .mono svg { width: 20px; height: 20px; }
@@ -352,7 +352,7 @@ textarea.input { height: auto; min-height: 110px; padding: 12px 14px; font-famil
 .status i { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
 .status.ok i { background: var(--pos); } .status.off i { background: var(--orange); }
 
-/* ——— Écran vide ——— */
+/* ——— Empty screen ——— */
 .empty { display: grid; justify-items: center; text-align: center; padding: 10px 0 30px; gap: 10px; }
 .orb { position: relative; width: min(230px, 60vw); aspect-ratio: 1; max-width: 100%; margin: 6px auto 4px; }
 .orb > i { position: absolute; border-radius: 50%; }
@@ -368,7 +368,7 @@ textarea.input { height: auto; min-height: 110px; padding: 12px 14px; font-famil
 .empty .btn-row { justify-content: center; margin-top: 12px; }
 .demo-banner { display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; background: var(--night); color: var(--night-ink); border-radius: 18px; padding: 10px 12px 10px 16px; font-size: 13px; margin-bottom: 14px; }
 
-/* ——— Fenêtres du bas ——— */
+/* ——— Bottom sheets ——— */
 .scrim { position: fixed; inset: 0; background: var(--scrim); z-index: 60; opacity: 0; transition: opacity .25s; }
 .scrim.open { opacity: 1; }
 .sheet {

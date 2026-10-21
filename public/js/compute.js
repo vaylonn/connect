@@ -1,4 +1,4 @@
-// Calculs du patrimoine. Module pur (sans DOM).
+// Net-worth calculations. Pure module (no DOM).
 import { libraryFor, SECTORS } from './library.js';
 
 export const CASH_TYPES = new Set(['especes', 'livret', 'fonds-euros']);
@@ -20,14 +20,14 @@ export function pru(l) { return l.qty ? (lineCost(l) - (+l.pending || 0)) / l.qt
 export function equityShare(l) {
   if (typeof l.equity === 'number') return l.equity;
   const lib = libraryFor(l.isin);
-  if (lib && lib.equity != null) return lib.equity; // compositions récupérées : pas de part fixée, on suit le type
+  if (lib && lib.equity != null) return lib.equity; // fetched compositions: no fixed share, follow the type
   return l.type === 'action' || l.type === 'etf' ? 1 : 0;
 }
 
-// Position réellement détenue : rattachée à un compte qui existe, et pas un reliquat de vente
-// (quelques millionièmes de part restés après une vente totale, ou une quantité nulle).
-// Les ventes passées restent dans l'historique (events) ; seules les positions actuelles
-// comptent dans les totaux, l'analyse, les détails et les listes.
+// Position actually held: attached to an existing account, and not a leftover from a sale
+// (a few millionths of a share left after a full sale, or a zero quantity).
+// Past sales stay in the history (events); only current positions
+// count in totals, analysis, details and lists.
 export function isHeld(l, accountIds) {
   if (accountIds && !accountIds.has(l.accountId)) return false;
   if (isCashLike(l) || +l.pending > 0.005 || l.estimateFromAmount) return true;
@@ -72,7 +72,7 @@ export function staleLines(data, now = new Date(), days = 4) {
   return heldLines(data).filter(l => NEEDS_PRICE(l) && (l.ticker || l.isin) && (!l.priceDate || l.priceDate < limit));
 }
 
-// ——— Transparence : secteurs, pays, entreprises ———
+// ——— Look-through: sectors, countries, companies ———
 const label = k => SECTORS[k] || k;
 function addTo(map, key, v) { map.set(key, (map.get(key) || 0) + v); }
 function normalized(obj) {
@@ -80,11 +80,11 @@ function normalized(obj) {
   return Object.entries(obj).map(([k, w]) => [k, w / s]);
 }
 
-// Chaque case (secteur, pays, entreprise) garde le détail de ce qui la compose (parts) :
-//   company : une entreprise, détenue via un ou plusieurs fonds (via) ou en direct
-//   rest    : le reste d'un fonds dans cette case, hors principales positions connues
-//   line    : une ligne entière (crypto, non coté, produit non ventilé)
-//   fund / direct : pour une entreprise, le fonds qui la contient ou la ligne en direct
+// Each bucket (sector, country, company) keeps the breakdown of what makes it up (parts):
+//   company: a company, held through one or more funds (via) or directly
+//   rest   : the rest of a fund in this bucket, excluding its known top holdings
+//   line   : a whole line (crypto, unlisted, product without breakdown)
+//   fund / direct: for a company, the fund that holds it or the direct line
 export const DIRECT = 'en direct';
 const OTHER_ASSETS = 'Obligations et liquidités';
 export function lookthrough(data) {
@@ -108,7 +108,7 @@ export function lookthrough(data) {
     const own = lib?.short || l.name;
     if (lib && lib.holdings) {
       covered += v;
-      // fonds mixte : pays et secteurs décrivent la poche actions, le reste est à part
+      // mixed fund: countries and sectors describe the equity part, the rest is kept separate
       const eq = Math.min(1, Math.max(0, lib.equity ?? 1));
       const sw = new Map(normalized(lib.sectors).map(([k, w]) => [label(k), w * eq]));
       const cw = new Map(normalized(lib.countries).map(([k, w]) => [k, w * eq]));
@@ -172,7 +172,7 @@ export function lineComposition(l) {
   };
 }
 
-// ——— Historique ———
+// ——— History ———
 function lastLE(arr, d, idx = 0) {
   let lo = 0, hi = arr.length - 1, ans = -1;
   while (lo <= hi) { const m = (lo + hi) >> 1; if (arr[m][idx] <= d) { ans = m; lo = m + 1; } else hi = m - 1; }
@@ -182,7 +182,7 @@ const iso = d => d.toISOString().slice(0, 10);
 
 export function history(data, now = new Date()) {
   const accIds = new Set((data.accounts || []).map(a => a.id));
-  const lines = (data.lines || []).filter(l => accIds.has(l.accountId)); // ventes passées comprises
+  const lines = (data.lines || []).filter(l => accIds.has(l.accountId)); // past sales included
   const ph = data.priceHistory || {};
   let start = null;
   for (const l of lines) {
@@ -216,7 +216,7 @@ export function history(data, now = new Date()) {
       }
       invested += c;
       if (l.type === 'non-cote') { value += d >= today ? lineValue(l) : c; continue; }
-      // cours le plus récent connu à la date d : historique Yahoo, prix de transaction ou cours actuel
+      // latest known price at date d: Yahoo history, transaction price or current price
       let p = 0, pd = '';
       const h = l.ticker && ph[l.ticker] ? lastLE(ph[l.ticker], d) : null;
       if (h) { p = h[1]; pd = h[0]; }
@@ -227,7 +227,7 @@ export function history(data, now = new Date()) {
     }
     points.push({ d, value, invested });
   }
-  // dernier point = valeur exacte du moment
+  // last point = exact current value
   const t = totals(data);
   if (points.length) { points[points.length - 1].value = t.total; }
   return points;

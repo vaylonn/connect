@@ -7,7 +7,8 @@ Carnet is a personal net-worth tracker (PEA, brokerage, crypto, savings, life in
 ## Language
 
 - **Commit messages are written in English** (owner's rule): short imperative subject, blank line, then bullets saying what changed and why.
-- Everything else stays in French: UI strings, code comments, README, test names. UI text uses typographic apostrophes and guillemets (’, « »).
+- Code comments, README, test names and developer output are in English.
+- The UI's source language is French (typographic apostrophes and guillemets: ’, « »); French strings are also the keys of the English translations (see `i18n.js`).
 
 ## Commands
 

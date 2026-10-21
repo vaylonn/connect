@@ -1,5 +1,5 @@
-// Service worker de Carnet : met l'application en cache pour l'usage hors ligne.
-// Les appels /api (cours, synchronisation) passent toujours par le réseau. Aucune donnée personnelle ici.
+// Carnet service worker: caches the app for offline use.
+// /api calls (prices, sync) always go to the network. No personal data here.
 const CACHE = 'carnet-v1.2.0';
 const SHELL = [
   './', 'index.html', 'app.css', 'manifest.webmanifest',
@@ -16,7 +16,7 @@ self.addEventListener('activate', e => {
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
   if (e.request.method !== 'GET' || url.origin !== location.origin || url.pathname.includes('/api/')) return;
-  // réseau d'abord (pour recevoir les mises à jour), cache en secours
+  // network first (to receive updates), cache as fallback
   e.respondWith(
     fetch(e.request).then(r => {
       if (r.ok) { const copy = r.clone(); caches.open(CACHE).then(c => c.put(e.request, copy)); }
