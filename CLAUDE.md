@@ -17,8 +17,7 @@ No dependencies and no build step: plain Node (≥ 18.17; CI uses 22) and browse
 - Tests (as in CI): `node --test tests/*.test.mjs`; a single test: `node --test --test-name-pattern="courbe" tests/calculs.test.mjs`.
 - Syntax check (as in CI): `for f in server.mjs lib/*.mjs api/*.mjs tools/*.mjs tests/*.mjs public/js/*.js public/sw.js; do node --check "$f"; done`
 - Offline upstreams: `node tests/mock-yahoo.mjs &` then `YAHOO_BASE=http://127.0.0.1:9911 node server.mjs`; `MORNINGSTAR_BASE` and `JUSTETF_BASE` redirect the composition sources the same way.
-- Standalone preview page (no server, no CSP): `node tools/build-preview.mjs out.html`. Trade Republic CSV → backup file: `npm run sauvegarde -- export.csv out.json`.
-- `tests/e2e*.py` are Python Playwright scripts that need the owner's real Trade Republic export and backups (personal data: `.gitignore` excludes `*.csv`, backup files and `data/`).
+- Trade Republic CSV → backup file: `npm run sauvegarde -- export.csv out.json`. Personal data never goes in the repo: `.gitignore` excludes `*.csv`, backup files and `data/`.
 
 ## Deployment
 
@@ -27,7 +26,7 @@ No dependencies and no build step: plain Node (≥ 18.17; CI uses 22) and browse
 
 ## Architecture
 
-**Two server runtimes, one shared `lib/`.** `server.mjs` (local and Docker) serves `public/` and `/api/*`, with optional basic auth (`CARNET_PASSWORD`). On Vercel, `api/health|quote|search|composition.mjs` are one-line `vercelRoute()` wrappers around the same `handleApi` (`lib/handlers.mjs`), and `api/sync.mjs` calls `handleSync` (`lib/vault.mjs`). Security headers are declared twice, in `SECURITY` (`server.mjs`) and in `vercel.json`: keep them in sync.
+**Two server runtimes, one shared `lib/`.** `server.mjs` (local development and CI) serves `public/` and `/api/*`. On Vercel, `api/health|quote|search|composition.mjs` are one-line `vercelRoute()` wrappers around the same `handleApi` (`lib/handlers.mjs`), and `api/sync.mjs` calls `handleSync` (`lib/vault.mjs`). Security headers are declared twice, in `SECURITY` (`server.mjs`) and in `vercel.json`: keep them in sync.
 
 **Upstream data.** `lib/yahoo.mjs` fetches prices and history converted to EUR; `lib/composition.mjs` builds a fund or stock composition from an ISIN (Morningstar first, justETF as fallback). Only symbols and ISINs leave the server, never amounts. Values returned by these sources are untrusted: validate them before reusing them in URLs.
 
@@ -45,6 +44,6 @@ No dependencies and no build step: plain Node (≥ 18.17; CI uses 22) and browse
 ## Things that must change together
 
 - A new persisted key in `data` → add it to `backupPayload()` in `store.js` (exports are a whitelist) and to the « Ajouter » restore merge in `app.js`. Sync already sends everything except `demo`.
-- A new module in `public/js/` → add it to `SHELL` in `public/sw.js` (the preview build follows the imports on its own).
+- A new module in `public/js/` → add it to `SHELL` in `public/sw.js`.
 - The version string lives in `package.json`, `lib/handlers.mjs`, `public/js/app.js` (`VERSION`) and `public/sw.js` (`CACHE`).
 - Every value interpolated into HTML goes through `esc()` or a number/date formatter from `format.js`: backups, vaults, CSV files and upstream APIs are untrusted, and the CSP (`script-src 'self'`) forbids inline scripts and event handlers.

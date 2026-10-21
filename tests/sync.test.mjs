@@ -17,7 +17,7 @@ let dir, base;
 // Lance un serveur Carnet (coffres dans un dossier temporaire) → { url, dir }
 async function start(port, env = {}) {
   const d = await mkdtemp(join(tmpdir(), 'carnet-sync-'));
-  const srv = spawn(process.execPath, [SERVER], { env: { ...process.env, PORT: String(port), HOST: '127.0.0.1', CARNET_DATA_DIR: d, KV_REST_API_URL: '', UPSTASH_REDIS_REST_URL: '', REDIS_URL: '', CARNET_PASSWORD: '', ...env }, stdio: 'ignore' });
+  const srv = spawn(process.execPath, [SERVER], { env: { ...process.env, PORT: String(port), HOST: '127.0.0.1', CARNET_DATA_DIR: d, KV_REST_API_URL: '', UPSTASH_REDIS_REST_URL: '', REDIS_URL: '', ...env }, stdio: 'ignore' });
   servers.push({ srv, dir: d });
   for (let i = 0; i < 50; i++) { try { await fetch(`http://127.0.0.1:${port}/api/health`); return { url: `http://127.0.0.1:${port}`, dir: d }; } catch { await new Promise(r => setTimeout(r, 100)); } }
   throw new Error('serveur non démarré');
@@ -84,16 +84,6 @@ test('20 essais refusés bloquent l’adresse, même avec le bon jeton', async (
   const blocked = await req('GET', { url, token: OTHER });
   assert.equal(blocked.status, 429); assert.match(blocked.json.error, /quart d’heure/);
   assert.equal((await req('GET', { url })).status, 429, 'plus aucun essai pendant le blocage');
-});
-
-test('mot de passe du serveur : 20 essais ratés bloquent l’adresse', async () => {
-  const { url } = await start(8127, { CARNET_PASSWORD: 'secret-de-test' });
-  const health = pass => fetch(url + '/api/health', pass === undefined ? {} : { headers: { authorization: 'Basic ' + Buffer.from('carnet:' + pass).toString('base64') } }).then(r => r.status);
-  assert.equal(await health('secret-de-test'), 200);
-  for (let i = 0; i < 3; i++) assert.equal(await health(), 401, 'une visite sans mot de passe ne compte pas');
-  for (let i = 0; i < 20; i++) assert.equal(await health('mauvais'), 401);
-  assert.equal(await health('mauvais'), 429);
-  assert.equal(await health('secret-de-test'), 429);
 });
 
 test('adresse du client ramenée à son préfixe /64 en IPv6', () => {

@@ -64,17 +64,8 @@ node server.mjs
 
 Ouvrez http://localhost:8080. Les coffres de synchronisation sont rangés dans `./data`.
 
-Options : `PORT=9000`, `HOST=0.0.0.0` (accès depuis le réseau local), `CARNET_PASSWORD="…"` (mot de passe d'accès, 20 essais ratés bloquent l'adresse un quart d'heure).
+Options : `PORT=9000`, `HOST=0.0.0.0` (accès depuis le réseau local).
 Sous PowerShell : `$env:PORT=9000; node server.mjs`.
-
-### Docker (NAS, Raspberry Pi)
-
-```bash
-docker compose up -d
-```
-
-Ouvrez http://adresse-du-nas:8080. Les coffres sont sur le volume `carnet-data`. Mot de passe facultatif : `CARNET_PASSWORD` dans `docker-compose.yml`.
-Pour un accès hors de chez vous, passez par un VPN (Tailscale, WireGuard) ou un reverse proxy HTTPS.
 
 ---
 
@@ -90,14 +81,6 @@ Pour un accès hors de chez vous, passez par un VPN (Tailscale, WireGuard) ou un
 node --test tests/*.test.mjs
 ```
 
-Test de bout en bout (Playwright) avec un faux Yahoo :
-
-```bash
-node tests/mock-yahoo.mjs &
-YAHOO_BASE=http://127.0.0.1:9911 node server.mjs &
-python3 tests/e2e.py http://localhost:8080 export.csv captures/ sauvegarde.json
-```
-
 **Structure**
 
 ```
@@ -108,7 +91,7 @@ lib/            client Yahoo Finance, compositions (Morningstar, justETF), route
 public/         l'application (HTML, CSS, JS, polices, icônes, PWA)
   js/           interface, import CSV, calculs, stockage, synchronisation, courbe, bibliothèque ETF
 tools/          CSV Trade Republic → sauvegarde, en ligne de commande
-tests/          tests des calculs et de l'API de synchronisation, test de bout en bout, faux Yahoo
+tests/          tests des calculs et de l'API de synchronisation, faux Yahoo
 ```
 
 **Bibliothèque ETF** (`public/js/library.js`) : symbole Yahoo, secteurs, pays et principales entreprises des fonds connus, en ordres de grandeur (mi-2026).

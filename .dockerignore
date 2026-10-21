@@ -1,8 +1,0 @@
-node_modules
-tests
-tools
-*.zip
-*.json
-!package.json
-.git
-data

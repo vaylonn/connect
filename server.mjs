@@ -3,21 +3,16 @@
 // que des coffres chiffrés par le navigateur, rangés dans ./data (ou CARNET_DATA_DIR).
 //   node server.mjs                      → http://localhost:8080
 //   PORT=9000 HOST=0.0.0.0 node server.mjs
-//   CARNET_PASSWORD=secret node server.mjs   → mot de passe demandé par le navigateur
 import http from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
-import { timingSafeEqual, createHash } from 'node:crypto';
 import { extname, join, normalize, dirname, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { handleApi } from './lib/handlers.mjs';
 import { handleSync, readJson } from './lib/vault.mjs';
-import { clientKey, memoryCounter } from './lib/limits.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), 'public');
 const PORT = +(process.env.PORT || 8080);
 const HOST = process.env.HOST || '127.0.0.1';
-const PASSWORD = process.env.CARNET_PASSWORD || '';
-const USER = process.env.CARNET_USER || 'carnet';
 const TYPES = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8', '.json': 'application/json; charset=utf-8', '.webmanifest': 'application/manifest+json; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.woff': 'font/woff', '.woff2': 'font/woff2', '.ico': 'image/x-icon', '.txt': 'text/plain; charset=utf-8' };
 const SECURITY = {
   'content-security-policy': "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; frame-ancestors 'none'",
@@ -26,18 +21,6 @@ const SECURITY = {
   'permissions-policy': 'camera=(), microphone=(), geolocation=(), interest-cohort=()',
   'cross-origin-opener-policy': 'same-origin',
 };
-const digest = s => createHash('sha256').update(s).digest();
-const authFails = memoryCounter(); // mots de passe refusés, par adresse : 20 en 15 minutes bloquent l'accès
-
-function authorized(req) {
-  if (!PASSWORD) return true;
-  const h = req.headers.authorization || '';
-  if (!h.startsWith('Basic ')) return false;
-  const [u, ...rest] = Buffer.from(h.slice(6), 'base64').toString('utf8').split(':');
-  const p = rest.join(':');
-  return timingSafeEqual(digest(u), digest(USER)) & timingSafeEqual(digest(p), digest(PASSWORD));
-}
-
 function send(res, status, body, headers = {}) {
   res.writeHead(status, { ...SECURITY, ...headers });
   res.end(body);
@@ -45,12 +28,6 @@ function send(res, status, body, headers = {}) {
 
 const server = http.createServer(async (req, res) => {
   try {
-    const who = clientKey(req.socket.remoteAddress);
-    if (PASSWORD && await authFails.count(who) >= 20) return send(res, 429, 'Trop d’essais : réessayez dans un quart d’heure.', { 'content-type': 'text/plain; charset=utf-8' });
-    if (!authorized(req)) {
-      if (req.headers.authorization) await authFails.hit(who, 15 * 60);
-      return send(res, 401, 'Mot de passe requis.', { 'www-authenticate': 'Basic realm="Carnet", charset="UTF-8"', 'content-type': 'text/plain; charset=utf-8' });
-    }
     const url = new URL(req.url, 'http://localhost');
     if (url.pathname === '/api/sync') {
       const json = { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' };
@@ -90,5 +67,5 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(PORT, HOST, () => {
   const shown = HOST === '0.0.0.0' ? 'localhost' : HOST;
-  console.log(`Carnet est prêt : http://${shown}:${PORT}${PASSWORD ? '  (mot de passe activé, identifiant « ' + USER + ' »)' : ''}`);
+  console.log(`Carnet est prêt : http://${shown}:${PORT}`);
 });

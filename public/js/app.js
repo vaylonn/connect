@@ -9,11 +9,10 @@ import { totals, staleLines, lookthrough, DIRECT, heldLines, isHeld, lineComposi
 import { libraryFor, libraryChoices, SECTORS, COMPOSITION_NOTE, setFetchedLibrary, wantsComposition } from './library.js';
 import { lineChart, hoverText } from './chart.js';
 
-const PREVIEW = !!window.CARNET_PREVIEW;
 const VERSION = '1.2.0';
 let data = load();
 const ui = {
-  tab: 'patrimoine', range: '1A', filter: 'all', group: 'accounts', analyse: 'sectors', server: PREVIEW ? 'preview' : 'unknown', busy: false, progress: '', lineRange: '1A',
+  tab: 'patrimoine', range: '1A', filter: 'all', group: 'accounts', analyse: 'sectors', server: 'unknown', busy: false, progress: '', lineRange: '1A',
   hist: { kind: 'all', acc: 'all', q: '', limit: 150 },
   sim: { mode: 'buy', lineId: '', newIsin: '', newName: '', accountId: '', by: 'amount', amount: '1000', qty: '', price: '', fees: '1', useCash: true },
 };
@@ -492,7 +491,7 @@ function viewData() {
   const s = SECTIONS[ui.section];
   if (s) return `<div class="settings-page"><button class="linkish back" data-action="section-close">‹ Réglages</button>
     <h1 class="title">${s.title}.<em>${s.sub}</em></h1><div class="settings">${s.body()}</div></div>`;
-  const rows = Object.entries(SECTIONS).filter(([k]) => k !== 'sync' || !PREVIEW).map(([k, x]) => `<button class="line" data-action="section" data-v="${k}">
+  const rows = Object.entries(SECTIONS).map(([k, x]) => `<button class="line" data-action="section" data-v="${k}">
     <span class="mono">${ICONS[x.icon]}</span><span class="n">${x.title}</span><span class="v chev" aria-hidden="true">›</span><span class="s">${esc(x.summary())}</span><span class="g"></span></button>`).join('');
   return `<div class="settings-page"><h1 class="title">Vos données, chez vous.<em>${syncState() ? 'Chiffrées avant de partir.' : 'Rien ne quitte cet appareil.'}</em></h1>
     <div class="settings"><div class="lines">${rows}</div>
@@ -524,7 +523,7 @@ function sectionImport() {
 }
 
 function sectionPrices() {
-  const server = { ok: '<span class="status ok"><i></i>Serveur Carnet joignable</span>', off: '<span class="status off"><i></i>Serveur Carnet absent : actualisation indisponible</span>', preview: '<span class="status off"><i></i>Aperçu en ligne : pas de serveur, actualisation indisponible</span>', unknown: '<span class="status"><i></i>Vérification du serveur…</span>' }[ui.server];
+  const server = { ok: '<span class="status ok"><i></i>Serveur Carnet joignable</span>', off: '<span class="status off"><i></i>Serveur Carnet absent : actualisation indisponible</span>', unknown: '<span class="status"><i></i>Vérification du serveur…</span>' }[ui.server];
   return `<section class="card"><p class="lead">L’actualisation récupère sur Yahoo Finance, via le serveur Carnet, le cours du jour et l’historique (5 ans) de chaque produit coté. Seuls les symboles sont envoyés, jamais vos quantités ni vos montants.</p>
     <p style="margin:0 0 12px">${server}</p>
     <div class="btn-row"><button class="btn refresh-btn" data-action="refresh" ${ui.busy ? 'disabled' : ''}><span class="ic">${ICONS.refresh}</span><span class="r-long">Actualiser les cours</span></button></div>
@@ -926,7 +925,7 @@ const syncPayload = d => { const { demo, ...rest } = d; return rest; };
 const nowIso = () => new Date().toISOString();
 let syncTimer, editRev = 0;
 function scheduleSync() {
-  const st = syncState(); if (!st || data.demo || PREVIEW) return;
+  const st = syncState(); if (!st || data.demo) return;
   editRev++;
   if (!st.dirty) { st.dirty = true; saveSyncState(st); }
   clearTimeout(syncTimer); syncTimer = setTimeout(() => syncNow(), 1500);
@@ -950,7 +949,6 @@ function syncStatusHtml() {
 }
 function setSyncUI() { const el = $('#sync-status'); if (el) el.innerHTML = syncStatusHtml(); }
 function syncCard() {
-  if (PREVIEW) return '';
   const st = syncState();
   if (!st) return `<section class="card"><p class="lead">Retrouvez vos données sur l’ordinateur et le téléphone. Elles sont chiffrées dans ce navigateur avant d’être envoyées : le serveur ne garde qu’un bloc illisible.</p>
     <div class="btn-row"><button class="btn primary" data-action="sync-create">Créer un coffre</button><button class="btn" data-action="sync-login">Se connecter</button></div>
@@ -963,7 +961,7 @@ function syncCard() {
 
 async function syncNow(manual = false) {
   const st = syncState();
-  if (!st || ui.syncing || PREVIEW) return;
+  if (!st || ui.syncing) return;
   if (data.demo) { if (manual) toast('Effacez d’abord les données d’exemple.'); return; }
   clearTimeout(syncTimer);
   ui.syncing = true; ui.syncError = ''; ui.syncLost = false; setSyncUI();
@@ -1085,7 +1083,6 @@ async function api(path, timeout = 4000) {
   } finally { clearTimeout(t); }
 }
 async function checkServer() {
-  if (PREVIEW) return;
   try { const j = await api('api/health', 3000); ui.server = j && j.app === 'carnet' ? 'ok' : 'off'; } catch { ui.server = 'off'; }
   if (ui.tab === 'donnees') render();
   autoCompositions();
@@ -1100,7 +1097,7 @@ const COMP_VERSION = 2;
 const COMPOSABLE = l => !isCashLike(l) && ISIN_OK.test(String(l.isin || '').toUpperCase()) && !['crypto', 'non-cote', 'autre-fixe'].includes(l.type) && wantsComposition(l.isin);
 let composing = false;
 async function autoCompositions() {
-  if (PREVIEW || composing || ui.server !== 'ok') return;
+  if (composing || ui.server !== 'ok') return;
   const comps = data.compositions || {};
   const due = [...new Set(heldLines(data).filter(COMPOSABLE).map(l => l.isin.toUpperCase()))].filter(isin => {
     const c = comps[isin];
@@ -1124,8 +1121,8 @@ async function autoCompositions() {
   commit(!names.length ? '' : names.length <= 3 ? `Composition à jour : ${names.join(', ')}.` : `Compositions à jour pour ${names.length} produits.`);
 }
 function noServerSheet() {
-  openSheet(`${sheetHead('Actualisation indisponible', PREVIEW ? 'Cet aperçu en ligne n’a pas de serveur.' : 'Le serveur Carnet ne répond pas.')}
-    <p class="muted" style="margin-top:0">Les cours sont récupérés par le petit serveur livré avec Carnet, qui interroge Yahoo Finance. Lancez Carnet avec <code>node server.mjs</code>, avec Docker, ou déployez-le sur Vercel (voir le README).</p>
+  openSheet(`${sheetHead('Actualisation indisponible', 'Le serveur Carnet ne répond pas.')}
+    <p class="muted" style="margin-top:0">Les cours sont récupérés par le petit serveur livré avec Carnet, qui interroge Yahoo Finance. Lancez Carnet avec <code>node server.mjs</code> ou déployez-le sur Vercel (voir le README).</p>
     <p class="muted">En attendant, vous pouvez saisir un cours à la main : touchez une ligne, puis « Modifier ».</p>
     <div class="btn-row"><button class="btn primary" data-close>Compris</button></div>`, { label: 'Actualisation' });
 }
@@ -1155,7 +1152,6 @@ function progress(msg) { ui.progress = msg; setRefreshUI(); }
 
 async function refreshPrices() {
   if (ui.busy) return;
-  if (PREVIEW) { noServerSheet(); return; }
   ui.busy = true; progress('Connexion…');
   try {
     try { await api('api/health', 4000); ui.server = 'ok'; } catch { ui.server = 'off'; noServerSheet(); return; }
@@ -1375,7 +1371,7 @@ window.addEventListener('storage', e => { if (e.key && e.key.startsWith('carnet:
   document.addEventListener('visibilitychange', () => syncNow());
   window.addEventListener('online', () => syncNow());
   setInterval(() => { if (document.visibilityState === 'visible') syncNow(); }, 120000);
-  if (!PREVIEW && 'serviceWorker' in navigator && location.protocol.startsWith('http')) {
+  if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
     navigator.serviceWorker.register('sw.js').catch(() => { /* hors ligne indisponible */ });
   }
 })();
