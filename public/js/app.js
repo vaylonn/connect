@@ -67,19 +67,28 @@ function applyTheme() {
 
 // ——— Rendu principal ———
 function render() {
-  setFetchedLibrary(data.compositions);
-  applyTheme();
-  const name = data.profile.firstName || '';
-  for (const b of document.querySelectorAll('[data-tab]')) b.setAttribute('aria-current', b.dataset.tab === ui.tab ? 'page' : 'false');
-  for (const a of document.querySelectorAll('.avatar')) a.textContent = name ? name[0].toUpperCase() : 'C';
-  const sideName = $('#side-name'); if (sideName) sideName.textContent = name || 'Votre profil';
   const v = $('#view');
-  const fn = { patrimoine: viewHome, analyse: viewAnalyse, historique: viewHistorique, simuler: viewSimuler, donnees: viewData }[ui.tab] || viewHome;
-  v.innerHTML = (data.demo ? demoBanner() : '') + fn();
-  after[ui.tab]?.();
-  setRefreshUI();
+  try {
+    setFetchedLibrary(data.compositions);
+    applyTheme();
+    const name = data.profile.firstName || '';
+    for (const b of document.querySelectorAll('[data-tab]')) b.setAttribute('aria-current', b.dataset.tab === ui.tab ? 'page' : 'false');
+    for (const a of document.querySelectorAll('.avatar')) a.textContent = name ? name[0].toUpperCase() : 'C';
+    const sideName = $('#side-name'); if (sideName) sideName.textContent = name || 'Votre profil';
+    const fn = { patrimoine: viewHome, analyse: viewAnalyse, historique: viewHistorique, simuler: viewSimuler, donnees: viewData }[ui.tab] || viewHome;
+    v.innerHTML = (data.demo ? demoBanner() : '') + fn();
+    after[ui.tab]?.();
+    setRefreshUI();
+  } catch (e) { console.error(e); v.innerHTML = brokenView(e); }
 }
 const after = {};
+
+// Donnée illisible (sauvegarde abîmée ou modifiée à la main) : de quoi l'exporter, puis tout effacer
+function brokenView(e) {
+  return `<div class="card"><h3>Affichage impossible</h3>
+    <p class="lead">Une donnée enregistrée sur cet appareil est illisible (${esc(e?.message)}). Exportez-la pour la garder, puis effacez les données de cet appareil.</p>
+    <div class="btn-row"><button class="btn" data-action="export-plain">${ICONS.download}Exporter en clair</button><button class="btn danger" data-action="wipe">Effacer toutes les données</button></div></div>`;
+}
 
 function demoBanner() {
   return `<div class="demo-banner"><span>Données d’exemple. Rien ici ne vous appartient.</span><button class="btn-pill light" data-action="clear-demo">Effacer l’exemple</button></div>`;
@@ -227,7 +236,7 @@ function viewAnalyse() {
     { k: 'Première entreprise', v: first ? esc(first.name) : '—', d: first ? `${eur(first.value, 0)} · ${pct(t.total ? first.value / t.total : 0)} du total` : '' },
     { k: '10 premières entreprises', v: pct(t.total ? top10 / t.total : 0), d: eur(top10, 0) + ' au total' },
     { k: 'Dividendes reçus', v: st ? eur(st.dividends) : '—', d: st ? 'Trade Republic, nets de retenue' : 'Après un import Trade Republic' },
-    { k: 'Frais payés', v: st ? eur(st.fees) : '—', d: st ? `Trade Republic, depuis ${dateShort(st.from)} ${st.from.slice(0, 4)}` : 'Après un import Trade Republic' },
+    { k: 'Frais payés', v: st ? eur(st.fees) : '—', d: st ? `Trade Republic, depuis ${dateLong(st.from)}` : 'Après un import Trade Republic' },
   ];
   const list = { sectors: lt.sectors, countries: lt.countries, companies: lt.companies.slice(0, 15) }[ui.analyse];
   const max = Math.max(...list.map(x => x.value), 1);
@@ -329,7 +338,7 @@ function histBody() {
     { k: 'Investi', v: eur(bought, 0), d: `${nBuy} achat${nBuy > 1 ? 's' : ''}` },
     { k: 'Vendu', v: eur(sold, 0), d: `${nSell} vente${nSell > 1 ? 's' : ''}` },
     { k: 'Plus-values réalisées', v: signedEur(realized, 0), d: nSell ? 'sur les ventes, frais déduits' : 'aucune vente', cls: realized > 0.5 ? 'pos' : realized < -0.5 ? 'neg' : '' },
-    { k: 'Frais', v: eur(fees), d: `du ${dateShort(first)} ${first.slice(0, 4)} au ${dateShort(last)} ${last.slice(0, 4)}` },
+    { k: 'Frais', v: eur(fees), d: `du ${dateLong(first)} au ${dateLong(last)}` },
   ];
   const shown = ts.slice(0, ui.hist.limit);
   const months = [];
@@ -462,7 +471,7 @@ function viewData() {
         <p class="lead">Exportez vos transactions depuis Trade Republic au format CSV (« Exportation de transactions »), puis importez le fichier ici. Un nouvel import remplace les lignes Trade Republic et garde vos lignes manuelles.</p>
         <div class="btn-row"><button class="btn primary" data-action="pick-csv">${ICONS.upload}Importer le CSV</button></div>
         ${st ? `<dl class="kv"><dt>Dernier import</dt><dd>${dateLong(data.imports?.[data.imports.length - 1]?.at?.slice(0, 10))}</dd>
-          <dt>Opérations lues</dt><dd>${num(st.rows, 0)}</dd><dt>Période</dt><dd>${dateShort(st.from)} ${st.from.slice(0, 4)} → ${dateShort(st.to)} ${st.to.slice(0, 4)}</dd>
+          <dt>Opérations lues</dt><dd>${num(st.rows, 0)}</dd><dt>Période</dt><dd>${dateLong(st.from)} → ${dateLong(st.to)}</dd>
           ${Object.entries(st.cash || {}).map(([id, v]) => `<dt>Espèces ${esc(accById(id)?.name || id)}</dt><dd>${eur(v)}</dd>`).join('')}</dl>
           <p class="note">Le solde espèces est recalculé à partir de toutes les opérations (montant + frais + taxes). Comparez-le avec le solde affiché dans l’app Trade Republic.</p>` : ''}
       </section>
@@ -1161,7 +1170,7 @@ function refreshReport() {
   if (!lr) return '<p class="small muted" style="margin:12px 0 0">Aucune actualisation pour l’instant.</p>';
   const ok = lr.results.filter(r => r.ok), ko = lr.results.filter(r => !r.ok).sort((a, b) => /non coté|Aucun symbole/.test(a.error) - /non coté|Aucun symbole/.test(b.error));
   return `<p class="small muted" style="margin:14px 0 6px">Dernière actualisation : ${dateLong(lr.at.slice(0, 10))} à ${new Date(lr.at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} · ${ok.length} à jour, ${ko.length} sans cours.</p>
-    <div class="holdings">${[...ko, ...ok].map(r => `<div class="holding"><span class="r">${r.ok ? '<span class="pos">●</span>' : /non coté|Aucun symbole/.test(r.error) ? '<span class="muted">●</span>' : '<span class="neg">●</span>'}</span><span class="n">${esc(r.name)}</span><span class="a">${r.ok ? eur(r.price) : '—'}</span><span class="w">${r.ok ? `${esc(r.symbol)} · cours du ${dateShort(r.date)} · ${r.points} points d’historique${r.note ? ' · ' + esc(r.note) : ''}` : esc(r.error)}</span></div>`).join('')}</div>`;
+    <div class="holdings">${[...ko, ...ok].map(r => `<div class="holding"><span class="r">${r.ok ? '<span class="pos">●</span>' : /non coté|Aucun symbole/.test(r.error) ? '<span class="muted">●</span>' : '<span class="neg">●</span>'}</span><span class="n">${esc(r.name)}</span><span class="a">${r.ok ? eur(r.price) : '—'}</span><span class="w">${r.ok ? `${esc(r.symbol)} · cours du ${dateShort(r.date)} · ${+r.points || 0} points d’historique${r.note ? ' · ' + esc(r.note) : ''}` : esc(r.error)}</span></div>`).join('')}</div>`;
 }
 
 // ——— Exemple ———
