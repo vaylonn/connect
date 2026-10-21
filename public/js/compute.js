@@ -233,18 +233,6 @@ export function history(data, now = new Date()) {
   return points;
 }
 
-export function changeOver(points, days) {
-  if (points.length < 2) return null;
-  const last = points[points.length - 1];
-  const target = iso(new Date(new Date(last.d).getTime() - days * 86400000));
-  const p = lastLE(points.map(x => [x.d, x]), target);
-  if (!p) return null;
-  const a = p[1];
-  const flows = (last.invested - a.invested);
-  const delta = last.value - a.value - flows;
-  return { delta, pct: a.value > 0 ? delta / a.value : 0 };
-}
-
 // ——— Simulation ———
 export function simulate(data, sim) {
   const clone = JSON.parse(JSON.stringify({ accounts: data.accounts, lines: data.lines }));

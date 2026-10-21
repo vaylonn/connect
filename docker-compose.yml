@@ -2,7 +2,7 @@
 services:
   carnet:
     build: .
-    image: carnet:1.0.0
+    image: carnet
     container_name: carnet
     restart: unless-stopped
     volumes:

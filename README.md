@@ -103,8 +103,9 @@ python3 tests/e2e.py http://localhost:8080 export.csv captures/ sauvegarde.json
 
 ```
 server.mjs      serveur Node sans dépendance (fichiers + /api)
-api/            fonctions Vercel : health, quote, search, sync
-lib/            client Yahoo Finance, routes /api, coffres de synchronisation (Redis ou fichiers)
+api/            fonctions Vercel : health, quote, search, composition, sync
+lib/            client Yahoo Finance, compositions (Morningstar, justETF), routes /api,
+                coffres de synchronisation (Redis ou fichiers), limites par adresse
 public/         l'application (HTML, CSS, JS, polices, icônes, PWA)
   js/           interface, import CSV, calculs, stockage, synchronisation, courbe, bibliothèque ETF
 tools/          CSV Trade Republic → sauvegarde, en ligne de commande

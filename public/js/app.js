@@ -639,7 +639,7 @@ function drawLineChart(sh, l) {
   const hover = sh.querySelector('[data-lhover]');
   const base = pts_.length > 1 ? `${signedPct(pts_[pts_.length - 1].value / pts_[0].value - 1)} sur la période · ${eur(pts_[pts_.length - 1].value)}` : '';
   hover.textContent = base;
-  requestAnimationFrame(() => lineChart(host, pts_, { decimals: true, onHover: p => { hover.textContent = p ? `${dateLong(p.d)} · ${eur(p.value)}` : base; } }));
+  requestAnimationFrame(() => lineChart(host, pts_, { onHover: p => { hover.textContent = p ? `${dateLong(p.d)} · ${eur(p.value)}` : base; } }));
 }
 
 function openAccount(id) {
