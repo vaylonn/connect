@@ -27,7 +27,7 @@ No dependencies and no build step: plain Node (≥ 18.17; CI uses 22) and browse
 
 ## Architecture
 
-**Two server runtimes, one shared `lib/`.** `server.mjs` (local and Docker) serves `public/` and `/api/*`, with optional basic auth (`CARNET_PASSWORD`). On Vercel each `api/*.mjs` is a thin wrapper around the same `handleApi` (`lib/handlers.mjs`: health, quote, search, composition) or `handleSync` (`lib/vault.mjs`). Security headers are declared twice, in `SECURITY` (`server.mjs`) and in `vercel.json`: keep them in sync.
+**Two server runtimes, one shared `lib/`.** `server.mjs` (local and Docker) serves `public/` and `/api/*`, with optional basic auth (`CARNET_PASSWORD`). On Vercel, `api/health|quote|search|composition.mjs` are one-line `vercelRoute()` wrappers around the same `handleApi` (`lib/handlers.mjs`), and `api/sync.mjs` calls `handleSync` (`lib/vault.mjs`). Security headers are declared twice, in `SECURITY` (`server.mjs`) and in `vercel.json`: keep them in sync.
 
 **Upstream data.** `lib/yahoo.mjs` fetches prices and history converted to EUR; `lib/composition.mjs` builds a fund or stock composition from an ISIN (Morningstar first, justETF as fallback). Only symbols and ISINs leave the server, never amounts. Values returned by these sources are untrusted: validate them before reusing them in URLs.
 
