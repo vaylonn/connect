@@ -26,8 +26,8 @@ async function start(port, env = {}) {
 before(async () => { ({ url: base, dir } = await start(8123)); });
 after(async () => { for (const s of servers) { s.srv.kill(); await rm(s.dir, { recursive: true, force: true }); } });
 
-const req = (method, { token = TOKEN, id = ID, body, url = base } = {}) => fetch(url + '/api/sync', {
-  method, headers: { 'x-carnet-vault': id, 'x-carnet-token': token, ...(body ? { 'content-type': 'application/json' } : {}) }, body: body ? JSON.stringify(body) : undefined,
+const req = (method, { token = TOKEN, id = ID, body, url = base, headers = {} } = {}) => fetch(url + '/api/sync', {
+  method, headers: { 'x-carnet-vault': id, 'x-carnet-token': token, ...headers, ...(body ? { 'content-type': 'application/json' } : {}) }, body: body ? JSON.stringify(body) : undefined,
 }).then(async r => ({ status: r.status, json: await r.json() }));
 
 test('cycle complet d’un coffre', async () => {
@@ -60,6 +60,15 @@ test('requêtes invalides', async () => {
   assert.equal((await req('GET', { token: 'court' })).status, 400);
   assert.equal((await req('PUT', { body: { base: -1, blob: 'x' } })).status, 400);
   assert.equal((await req('PUT', { body: { base: 0, blob: '' } })).status, 400);
+});
+
+test('relevé sans changement : le coffre n’est pas renvoyé', async () => {
+  const { url } = await start(8128);
+  assert.equal((await req('PUT', { url, body: { base: 0, blob: 'v1' } })).status, 200);
+  assert.deepEqual((await req('GET', { url, headers: { 'x-carnet-version': '1' } })).json, { version: 1 });
+  assert.equal((await req('GET', { url, headers: { 'x-carnet-version': '7' } })).json.blob, 'v1', 'version différente');
+  assert.equal((await req('GET', { url })).json.blob, 'v1', 'sans version connue');
+  assert.equal((await req('GET', { url, token: OTHER, headers: { 'x-carnet-version': '1' } })).status, 401, 'le jeton reste vérifié');
 });
 
 test('5 créations de coffre par heure et par adresse', async () => {

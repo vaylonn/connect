@@ -938,7 +938,7 @@ async function syncNow(manual = false) {
       try { const r = await pushVault(st, st.version, syncPayload(data)); markSynced(st, r.version, rev); }
       catch (e) { if (e.status !== 409) throw e; ok = await syncConflict(st, rev); }
     } else {
-      const r = await pullVault(st);
+      const r = await pullVault(st, st.version);
       if (r.version !== st.version && rev === editRev) { adoptRemote(r); if (!manual) toast('Données mises à jour depuis un autre appareil.'); }
       markSynced(st, rev === editRev ? r.version : st.version, rev);
     }

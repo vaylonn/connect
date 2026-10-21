@@ -55,13 +55,13 @@ async function open(acc, blob) {
 }
 
 // ——— Appels au serveur ———
-async function call(acc, method, body) {
+async function call(acc, method, body, headers = {}) {
   const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 20000);
   let r, j;
   try {
     r = await fetch('api/sync', {
       method, cache: 'no-store', signal: ctl.signal,
-      headers: { accept: 'application/json', 'x-carnet-vault': acc.id, 'x-carnet-token': acc.token, ...(body ? { 'content-type': 'application/json' } : {}) },
+      headers: { accept: 'application/json', 'x-carnet-vault': acc.id, 'x-carnet-token': acc.token, ...headers, ...(body ? { 'content-type': 'application/json' } : {}) },
       body: body ? JSON.stringify(body) : undefined,
     });
     j = await r.json().catch(() => ({}));
@@ -72,10 +72,10 @@ async function call(acc, method, body) {
   return j;
 }
 
-// → { version, data, updatedAt }
-export async function pullVault(acc) {
-  const j = await call(acc, 'GET');
-  return { version: j.version, data: await open(acc, j.blob), updatedAt: j.updatedAt };
+// → { version, data, updatedAt } ; data vaut null si le coffre est encore à la version known
+export async function pullVault(acc, known = 0) {
+  const j = await call(acc, 'GET', null, known ? { 'x-carnet-version': String(known) } : {});
+  return { version: j.version, data: j.blob ? await open(acc, j.blob) : null, updatedAt: j.updatedAt };
 }
 // base : version sur laquelle s'appuient les changements (0 pour créer). → { version }
 export async function pushVault(acc, base, data) {
