@@ -854,6 +854,8 @@ async function restoreFlow() {
       const accIds = new Set(nd.accounts.map(a => a.id)), lineIds = new Set(nd.lines.map(l => l.id));
       data.accounts = [...data.accounts.filter(a => !accIds.has(a.id)), ...nd.accounts];
       data.lines = [...data.lines.filter(l => !lineIds.has(l.id) && !accIds.has(l.accountId)), ...nd.lines];
+      // opérations des comptes restaurés ; une sauvegarde sans historique garde celui de l'appareil
+      if (Array.isArray(nd.transactions)) data.transactions = [...(data.transactions || []).filter(t => !accIds.has(t.accountId)), ...nd.transactions];
       data.priceHistory = { ...(data.priceHistory || {}), ...(nd.priceHistory || {}) };
       if (!data.profile.firstName && nd.profile.firstName) data.profile.firstName = nd.profile.firstName;
       if (!data.trStats && nd.trStats) data.trStats = nd.trStats;

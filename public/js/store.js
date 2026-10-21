@@ -77,6 +77,6 @@ export async function decryptBackup(obj, pass) {
 }
 
 export function backupPayload(data) {
-  const { app, schema, profile, settings, accounts, lines, priceHistory, trStats, imports } = data;
-  return { app, schema, exportedAt: new Date().toISOString(), profile, settings: { ...settings, snoozeUntil: '' }, accounts, lines, priceHistory, trStats, imports };
+  const { app, schema, profile, settings, accounts, lines, priceHistory, trStats, imports, transactions } = data;
+  return { app, schema, exportedAt: new Date().toISOString(), profile, settings: { ...settings, snoozeUntil: '' }, accounts, lines, priceHistory, trStats, imports, transactions };
 }
