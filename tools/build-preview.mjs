@@ -3,7 +3,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 const P = p => new URL('../public/' + p, import.meta.url);
 const out = process.argv[2] || 'carnet-apercu.html';
-const order = ['library', 'format', 'store', 'importer', 'compute', 'chart', 'app'];
+const order = ['library', 'format', 'store', 'importer', 'compute', 'chart', 'sync', 'app'];
 let js = 'const __M = {};\n';
 for (const m of order) {
   let src = readFileSync(P(`js/${m}.js`), 'utf8');
