@@ -57,7 +57,7 @@ export function importTradeRepublic(text) {
 
   const pos = new Map();     // clé compte|symbole
   const trades = [];         // opérations sur titres (hors mouvements d'espèces), pour l'historique
-  const cash = new Map();    // compte -> { bal, byMonth: Map }
+  const cash = new Map();    // compte -> { bal, byDay: Map } : solde à la fin de chaque jour de mouvement
   const stats = { rows: rows.length, from: rows[0].date || rows[0].datetime.slice(0, 10), to: '', dividends: 0, interest: 0, fees: 0, taxes: 0, saveback: 0, unknownTypes: {} };
   const known = new Set(['BUY', 'SELL', 'SPLIT', 'BONUS_ISSUE', 'FREE_RECEIPT', 'PRIVATE_MARKET_BUY']);
 
@@ -82,10 +82,10 @@ export function importTradeRepublic(text) {
     stats.to = date > stats.to ? date : stats.to;
     // Espèces : montant + frais + taxes de chaque mouvement
     const delta = toNum(x.amount) + toNum(x.fee) + toNum(x.tax);
-    if (!cash.has(acct)) cash.set(acct, { bal: 0, byMonth: new Map() });
+    if (!cash.has(acct)) cash.set(acct, { bal: 0, byDay: new Map() });
     const c = cash.get(acct);
     c.bal += delta;
-    c.byMonth.set(date.slice(0, 7), [date, r2(c.bal)]);
+    c.byDay.set(date, r2(c.bal));
 
     if (x.type === 'DIVIDEND') stats.dividends += toNum(x.amount) + toNum(x.tax);
     if (x.type === 'INTEREST_PAYMENT') stats.interest += toNum(x.amount) + toNum(x.tax);
@@ -141,8 +141,7 @@ export function importTradeRepublic(text) {
     // Non coté : les versements anticipés pas encore exécutés restent « en attente »
     // (valeur des parts exécutées au prix d'achat = somme q×prix des achats)
     const pending = isPrivate ? r2(Math.max(0, p.prepaid - p.buyValue)) : 0;
-    // position soldée, ou reliquat d'arrondi après une vente totale (moins d'un centime)
-    if ((p.q < 1e-7 || (p.price > 0 && p.q * p.price < 0.01)) && pending < 0.005) continue;
+    // Positions soldées comprises : la courbe d'évolution en a besoin, l'affichage les écarte (isHeld)
     const lib = libraryFor(p.isin);
     const acc = p.acct;
     const envelope = acc === 'PEA' ? 'PEA' : type === 'crypto' ? 'Crypto' : 'Compte-titres';
@@ -168,7 +167,7 @@ export function importTradeRepublic(text) {
 
   for (const [acct, c] of cash) {
     const bal = r2(c.bal);
-    const events = [...c.byMonth.values()];
+    const events = [...c.byDay];
     if (Math.abs(bal) < 0.005) continue; // compte espèces vide : pas de ligne
     lines.push({
       id: 'tr-' + acct.toLowerCase() + '-cash', source: 'tr', accountId: accIds[acct], envelope: 'Espèces', type: 'especes',

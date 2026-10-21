@@ -83,12 +83,12 @@ Pour un accès hors de chez vous, passez par un VPN (Tailscale, WireGuard) ou un
 
 **Déploiement automatique.** Chaque push sur `main` met la prod à jour sur Vercel. Une autre branche ou une PR crée une URL de preview, sans toucher à la prod.
 
-**CI.** GitHub Actions, sur `main` et sur les PR : syntaxe JS, test de l'API de synchronisation, démarrage du serveur.
+**CI.** GitHub Actions, sur `main` et sur les PR : syntaxe JS, tests des calculs et de l'API de synchronisation, démarrage du serveur.
 
 **Tests en local**
 
 ```bash
-node --test tests/sync.test.mjs
+node --test tests/*.test.mjs
 ```
 
 Test de bout en bout (Playwright) avec un faux Yahoo :
@@ -108,7 +108,7 @@ lib/            client Yahoo Finance, routes /api, coffres de synchronisation (R
 public/         l'application (HTML, CSS, JS, polices, icônes, PWA)
   js/           interface, import CSV, calculs, stockage, synchronisation, courbe, bibliothèque ETF
 tools/          CSV Trade Republic → sauvegarde, en ligne de commande
-tests/          test de l'API de synchronisation, test de bout en bout, faux Yahoo
+tests/          tests des calculs et de l'API de synchronisation, test de bout en bout, faux Yahoo
 ```
 
 **Bibliothèque ETF** (`public/js/library.js`) : symbole Yahoo, secteurs, pays et principales entreprises des fonds connus, en ordres de grandeur (mi-2026).

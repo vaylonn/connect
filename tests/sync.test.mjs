@@ -1,4 +1,4 @@
-// Test de l'API /api/sync contre le stockage par fichiers, et des limites par adresse : node --test tests/
+// Test de l'API /api/sync contre le stockage par fichiers, et des limites par adresse : node --test tests/*.test.mjs
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';

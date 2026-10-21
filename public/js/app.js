@@ -700,7 +700,7 @@ function accountForm(id) {
         close(); commit(a ? 'Compte mis à jour.' : 'Compte créé.');
       });
       sh.querySelector('[data-act="del"]')?.addEventListener('click', async () => {
-        const n = data.lines.filter(l => l.accountId === a.id).length;
+        const n = data.lines.filter(l => l.accountId === a.id && isHeld(l)).length;
         if (await confirmSheet({ title: 'Supprimer ce compte ?', text: `${esc(a.name)} et ses ${n} ligne${n > 1 ? 's' : ''} seront retirés de cet appareil.`, ok: 'Supprimer', danger: true })) {
           data.accounts = data.accounts.filter(x => x.id !== a.id); data.lines = data.lines.filter(l => l.accountId !== a.id); close(); commit('Compte supprimé.');
         }
@@ -818,7 +818,8 @@ async function importCsvFlow() {
   let imp;
   try { imp = importTradeRepublic(await readText(f)); } catch (e) { toast(e.message); return; }
   const st = imp.stats;
-  const byAcc = id => imp.lines.filter(l => l.accountId === id);
+  const held = imp.lines.filter(l => isHeld(l)); // sans les positions soldées, gardées pour la courbe
+  const byAcc = id => held.filter(l => l.accountId === id);
   openSheet(`${sheetHead('Import Trade Republic', `${num(st.rows, 0)} opérations, du ${dateLong(st.from)} au ${dateLong(st.to)}`)}
     ${imp.accounts.map(a => `<div class="section-head" style="margin-top:8px"><h2>${esc(a.name)}</h2><span class="aside">${byAcc(a.id).length} ligne${byAcc(a.id).length > 1 ? 's' : ''}</span></div>
       <div class="holdings">${byAcc(a.id).sort((x, y) => lineCost(y) - lineCost(x)).map(l => `<div class="holding"><span class="r"></span><span class="n">${esc(shortName(l))}</span><span class="a">${isCashLike(l) ? eur(l.amount) : fqty(l.qty)}</span><span class="w">${isCashLike(l) ? 'Solde espèces recalculé' : 'Prix de revient ' + eur(l.cost) + (l.pending ? ' · dont ' + eur(l.pending) + ' en attente d’exécution' : '')}</span></div>`).join('')}</div>`).join('')}
@@ -829,7 +830,7 @@ async function importCsvFlow() {
     onMount: (sh, close) => sh.querySelector('[data-ok]').addEventListener('click', () => {
       if (data.demo) { const keep = { profile: data.profile, settings: data.settings }; data = { ...emptyData(), ...keep }; }
       data = mergeImport(data, imp); close(); ui.tab = 'patrimoine'; history.replaceState(null, '', '#patrimoine'); window.scrollTo(0, 0);
-      commit(`${imp.lines.length} lignes importées.`);
+      commit(`${held.length} lignes importées.`);
     }),
   });
 }
