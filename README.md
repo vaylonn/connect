@@ -50,8 +50,7 @@ Pour installer l'app sur un téléphone : menu du navigateur → *Ajouter à l'�
 1. Importez le dépôt sur [vercel.com](https://vercel.com). Aucun réglage à faire : `vercel.json` fixe tout (preset « Other », dossier `public`, fonctions `api/`).
 2. Pour la synchronisation : *Storage → Create Database → Redis* (ou Upstash), reliée au projet pour **Production et Preview**, puis redéployez.
    Carnet accepte `REDIS_URL` comme `KV_REST_API_URL` / `KV_REST_API_TOKEN`, même avec un préfixe. Sans base, l'app fonctionne, seule la synchronisation est désactivée.
-3. Réservez la synchronisation à vos identifiants : variable d'environnement `CARNET_SYNC_USERS` (par exemple `camille`, ou `camille,sam`), puis redéployez.
-   Sans elle, n'importe qui peut créer des coffres sur votre base (5 par heure et par adresse au plus) et la remplir.
+   Chacun peut y créer son propre coffre (5 par heure et par adresse au plus) : vos proches peuvent utiliser votre version en ligne.
 
 Les URL de preview sont protégées par la connexion Vercel (*Settings → Deployment Protection*).
 
@@ -65,7 +64,7 @@ node server.mjs
 
 Ouvrez http://localhost:8080. Les coffres de synchronisation sont rangés dans `./data`.
 
-Options : `PORT=9000`, `HOST=0.0.0.0` (accès depuis le réseau local), `CARNET_PASSWORD="…"` (mot de passe d'accès, 20 essais ratés bloquent l'adresse un quart d'heure), `CARNET_SYNC_USERS="…"` (identifiants autorisés à synchroniser).
+Options : `PORT=9000`, `HOST=0.0.0.0` (accès depuis le réseau local), `CARNET_PASSWORD="…"` (mot de passe d'accès, 20 essais ratés bloquent l'adresse un quart d'heure).
 Sous PowerShell : `$env:PORT=9000; node server.mjs`.
 
 ### Docker (NAS, Raspberry Pi)

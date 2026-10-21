@@ -2,7 +2,7 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { createHash, randomBytes } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 import { mkdtemp, rm, readdir, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
@@ -11,14 +11,13 @@ import { clientKey } from '../lib/limits.mjs';
 
 const SERVER = join(dirname(fileURLToPath(import.meta.url)), '..', 'server.mjs');
 const ID = 'a'.repeat(64), TOKEN = 'T'.repeat(43), OTHER = 'U'.repeat(43);
-const vaultId = user => createHash('sha256').update('carnet-vault-v1:' + user).digest('hex'); // comme sync.js
 const servers = [];
 let dir, base;
 
 // Lance un serveur Carnet (coffres dans un dossier temporaire) → { url, dir }
 async function start(port, env = {}) {
   const d = await mkdtemp(join(tmpdir(), 'carnet-sync-'));
-  const srv = spawn(process.execPath, [SERVER], { env: { ...process.env, PORT: String(port), HOST: '127.0.0.1', CARNET_DATA_DIR: d, KV_REST_API_URL: '', UPSTASH_REDIS_REST_URL: '', REDIS_URL: '', CARNET_SYNC_USERS: '', CARNET_PASSWORD: '', ...env }, stdio: 'ignore' });
+  const srv = spawn(process.execPath, [SERVER], { env: { ...process.env, PORT: String(port), HOST: '127.0.0.1', CARNET_DATA_DIR: d, KV_REST_API_URL: '', UPSTASH_REDIS_REST_URL: '', REDIS_URL: '', CARNET_PASSWORD: '', ...env }, stdio: 'ignore' });
   servers.push({ srv, dir: d });
   for (let i = 0; i < 50; i++) { try { await fetch(`http://127.0.0.1:${port}/api/health`); return { url: `http://127.0.0.1:${port}`, dir: d }; } catch { await new Promise(r => setTimeout(r, 100)); } }
   throw new Error('serveur non démarré');
@@ -85,15 +84,6 @@ test('20 essais refusés bloquent l’adresse, même avec le bon jeton', async (
   const blocked = await req('GET', { url, token: OTHER });
   assert.equal(blocked.status, 429); assert.match(blocked.json.error, /quart d’heure/);
   assert.equal((await req('GET', { url })).status, 429, 'plus aucun essai pendant le blocage');
-});
-
-test('CARNET_SYNC_USERS réserve les coffres aux identifiants listés', async () => {
-  const { url } = await start(8126, { CARNET_SYNC_USERS: 'camille, Sam ' });
-  assert.equal((await req('PUT', { url, id: vaultId('camille'), body: { base: 0, blob: 'x' } })).status, 200);
-  assert.equal((await req('PUT', { url, id: vaultId('sam'), body: { base: 0, blob: 'x' } })).status, 200, 'identifiant normalisé comme dans l’app');
-  assert.equal((await req('PUT', { url, id: vaultId('intrus'), body: { base: 0, blob: 'x' } })).status, 403);
-  assert.equal((await req('GET', { url, id: vaultId('intrus') })).status, 403);
-  assert.equal((await req('GET', { url, id: vaultId('camille') })).status, 200);
 });
 
 test('mot de passe du serveur : 20 essais ratés bloquent l’adresse', async () => {

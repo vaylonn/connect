@@ -14,7 +14,7 @@ Carnet is a personal net-worth tracker (PEA, brokerage, crypto, savings, life in
 No dependencies and no build step: plain Node (≥ 18.17; CI uses 22) and browser ES modules.
 
 - Run: `node server.mjs` → http://localhost:8080 (env options in the README; vaults are stored in `./data`).
-- Tests (as in CI): `node --test tests/*.test.mjs`; a single test: `node --test --test-name-pattern="CARNET_SYNC_USERS" tests/sync.test.mjs`.
+- Tests (as in CI): `node --test tests/*.test.mjs`; a single test: `node --test --test-name-pattern="courbe" tests/calculs.test.mjs`.
 - Syntax check (as in CI): `for f in server.mjs lib/*.mjs api/*.mjs tools/*.mjs tests/*.mjs public/js/*.js public/sw.js; do node --check "$f"; done`
 - Offline upstreams: `node tests/mock-yahoo.mjs &` then `YAHOO_BASE=http://127.0.0.1:9911 node server.mjs`; `MORNINGSTAR_BASE` and `JUSTETF_BASE` redirect the composition sources the same way.
 - Standalone preview page (no server, no CSP): `node tools/build-preview.mjs out.html`. Trade Republic CSV → backup file: `npm run sauvegarde -- export.csv out.json`.
@@ -23,7 +23,7 @@ No dependencies and no build step: plain Node (≥ 18.17; CI uses 22) and browse
 ## Deployment
 
 - Pushing to `main` deploys production on Vercel (https://connect-liard-three.vercel.app); other branches and PRs get preview URLs behind Vercel authentication. GitHub Actions CI runs on `main` and on PRs.
-- Vercel serves `public/` as static files and `api/*.mjs` as functions (`vercel.json`). Sync uses the project's Redis through `REDIS_URL` (free tier: 30 MB, no persistence). `CARNET_SYNC_USERS` restricts sync to the listed usernames.
+- Vercel serves `public/` as static files and `api/*.mjs` as functions (`vercel.json`). Sync uses the project's Redis through `REDIS_URL` (free tier: 30 MB, no persistence). Anyone can create a vault on purpose: the owner's friends use this deployment too.
 
 ## Architecture
 
