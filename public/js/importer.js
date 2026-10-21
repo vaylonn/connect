@@ -1,6 +1,7 @@
 // Import of Trade Republic's « Exportation de transactions » CSV.
 // Pure module (no DOM): usable in the browser as well as in Node.
 import { libraryFor } from './library.js';
+import { t } from './i18n.js';
 
 export function parseCSV(text) {
   if (text.charCodeAt(0) === 0xfeff) text = text.slice(1);
@@ -50,9 +51,9 @@ function lineType(cls, isin) {
 
 export function importTradeRepublic(text) {
   const rows = parseCSV(text);
-  if (!rows.length) throw new Error('Le fichier est vide.');
+  if (!rows.length) throw new Error(t('Le fichier est vide.'));
   const missing = REQUIRED.filter(k => !(k in rows[0]));
-  if (missing.length) throw new Error('Ce fichier ne ressemble pas à un export Trade Republic (colonnes manquantes : ' + missing.join(', ') + ').');
+  if (missing.length) throw new Error(t('Ce fichier ne ressemble pas à un export Trade Republic (colonnes manquantes : {cols}).', { cols: missing.join(', ') }));
   rows.sort((a, b) => a.datetime < b.datetime ? -1 : a.datetime > b.datetime ? 1 : 0);
 
   const pos = new Map();     // key account|symbol

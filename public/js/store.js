@@ -1,4 +1,5 @@
 // Local storage (localStorage), plain or encrypted backups.
+import { t } from './i18n.js';
 const KEY = 'carnet:data:v1';
 export const SCHEMA = 1;
 
@@ -6,7 +7,7 @@ export function emptyData() {
   return {
     app: 'carnet', schema: SCHEMA,
     profile: { firstName: '' },
-    settings: { theme: 'auto', taxRate: 31.4, staleDays: 4, snoozeUntil: '' },
+    settings: { theme: 'auto', lang: 'auto', taxRate: 31.4, staleDays: 4, snoozeUntil: '' },
     accounts: [], lines: [], priceHistory: {}, trStats: null, imports: [],
     updatedAt: new Date().toISOString(),
   };
@@ -44,9 +45,9 @@ export function normalize(d) {
 }
 
 export function validateBackup(obj) {
-  if (!obj || typeof obj !== 'object') throw new Error('Ce fichier n’est pas une sauvegarde Carnet.');
-  if (obj.app !== 'carnet') throw new Error('Ce fichier n’est pas une sauvegarde Carnet.');
-  if (!Array.isArray(obj.lines) || !Array.isArray(obj.accounts)) throw new Error('La sauvegarde est incomplète (comptes ou lignes manquants).');
+  if (!obj || typeof obj !== 'object') throw new Error(t('Ce fichier n’est pas une sauvegarde Carnet.'));
+  if (obj.app !== 'carnet') throw new Error(t('Ce fichier n’est pas une sauvegarde Carnet.'));
+  if (!Array.isArray(obj.lines) || !Array.isArray(obj.accounts)) throw new Error(t('La sauvegarde est incomplète (comptes ou lignes manquants).'));
   const out = normalize(obj);
   if (obj.partial) out.partial = true;
   return out;
@@ -73,7 +74,7 @@ export async function decryptBackup(obj, pass) {
   try {
     const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: unb64(obj.iv) }, key, unb64(obj.data));
     return JSON.parse(new TextDecoder().decode(pt));
-  } catch { throw new Error('Phrase de passe incorrecte, ou fichier abîmé.'); }
+  } catch { throw new Error(t('Phrase de passe incorrecte, ou fichier abîmé.')); }
 }
 
 export function backupPayload(data) {

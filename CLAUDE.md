@@ -38,13 +38,15 @@ No dependencies and no build step: plain Node (≥ 18.17; CI uses 22) and browse
 - The Réglages tab (internal key `donnees`) is a list of `SECTIONS`, each on its own page at `#donnees/<key>` (pushed to history, so the phone's back button returns to the list).
 - `compute.js` (totals, look-through by sector/country/company, value history, buy/sell simulator) and `importer.js` (Trade Republic CSV → accounts, lines, transactions) are pure modules, also used by `tools/`.
 - `sync.js` does the end-to-end encryption: username + passphrase → PBKDF2 → AES-GCM key + access token; only ciphertext reaches the server.
+- `i18n.js`: `t()`/`tn()` translate French source strings through `i18n-en.js`; the language is `data.settings.lang` (`auto` follows the device, else `fr`/`en`), and `format.js` formats numbers, amounts and dates for it. Stored data keeps French values (envelope, sector, country names, refresh errors as keys with an `arg`) and is translated on display.
 - `library.js` lists known products (Yahoo ticker, indicative composition); compositions fetched from the server override it at runtime (`setFetchedLibrary`). A ticker must match the fund **and** its share class (Acc/Dist).
 
-**Data model.** Lines with `source: 'tr'` are replaced by each Trade Republic import (`mergeImport` keeps manual lines and user overrides such as `customName` and `customTicker`). `events` holds `[date, qty, cost, price]` snapshots used by the value history chart. Use `heldLines()`/`isHeld()` (`compute.js`) for anything about current holdings: they drop lines of deleted accounts and sub-cent leftovers after a sale. `data.transactions` feeds the Historique tab. The meaning of the displayed figures (gain %, cost basis, unlisted funds) is described in the README section « Lire les chiffres ».
+**Data model.** Lines with `source: 'tr'` are replaced by each Trade Republic import (`mergeImport` keeps manual lines and user overrides such as `customName` and `customTicker`). `events` holds `[date, qty, cost, price]` snapshots used by the value history chart. Use `heldLines()`/`isHeld()` (`compute.js`) for anything about current holdings: they drop lines of deleted accounts and sub-cent leftovers after a sale. `data.transactions` feeds the Historique tab. The meaning of the displayed figures (gain %, cost basis, unlisted funds) is described in the README section "Reading the figures".
 
 ## Things that must change together
 
 - A new persisted key in `data` → add it to `backupPayload()` in `store.js` (exports are a whitelist) and to the « Ajouter » restore merge in `app.js`. Sync already sends everything except `demo`.
+- A new UI string → write it in French inside `t()`/`tn()` and add its English to `i18n-en.js`; `tests/i18n.test.mjs` fails on any missing translation.
 - A new module in `public/js/` → add it to `SHELL` in `public/sw.js`.
 - The version string lives in `package.json`, `lib/handlers.mjs`, `public/js/app.js` (`VERSION`) and `public/sw.js` (`CACHE`).
 - Every value interpolated into HTML goes through `esc()` or a number/date formatter from `format.js`: backups, vaults, CSV files and upstream APIs are untrusted, and the CSP (`script-src 'self'`) forbids inline scripts and event handlers.

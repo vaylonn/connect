@@ -3,6 +3,7 @@
 //   - 256 bits for the AES-GCM key, which never leaves the browser;
 //   - 256 bits for the access token, of which the server keeps only the hash.
 // The server only receives an encrypted blob (compressed before encryption) and a version number.
+import { t } from './i18n.js';
 const STATE = 'carnet:sync:v1';
 const ITER = 310000;
 const enc = new TextEncoder();
@@ -46,9 +47,9 @@ async function open(acc, blob) {
   const o = JSON.parse(blob);
   let pt;
   try { pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: unb64(o.iv), additionalData: enc.encode(acc.id) }, await aesKey(acc), unb64(o.ct)); }
-  catch { throw new Error('Impossible de déchiffrer le coffre.'); }
+  catch { throw new Error(t('Impossible de déchiffrer le coffre.')); }
   if (o.z) {
-    if (typeof DecompressionStream !== 'function') throw new Error('Ce navigateur est trop ancien pour lire ce coffre.');
+    if (typeof DecompressionStream !== 'function') throw new Error(t('Ce navigateur est trop ancien pour lire ce coffre.'));
     pt = await pipe(pt, new DecompressionStream('gzip'));
   }
   return JSON.parse(new TextDecoder().decode(pt));
@@ -56,7 +57,7 @@ async function open(acc, blob) {
 
 // ——— Server calls ———
 async function call(acc, method, body, headers = {}) {
-  const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 20000);
+  const ctl = new AbortController(); const timer = setTimeout(() => ctl.abort(), 20000);
   let r, j;
   try {
     r = await fetch('api/sync', {
@@ -66,9 +67,9 @@ async function call(acc, method, body, headers = {}) {
     });
     j = await r.json().catch(() => ({}));
   } catch (e) {
-    throw Object.assign(new Error(e.name === 'AbortError' ? 'Le serveur met trop de temps à répondre.' : 'Serveur injoignable (hors ligne ?).'), { status: 0 });
-  } finally { clearTimeout(t); }
-  if (!r.ok) throw Object.assign(new Error(j.error || 'Erreur ' + r.status), { status: r.status, version: j.version });
+    throw Object.assign(new Error(t(e.name === 'AbortError' ? 'Le serveur met trop de temps à répondre.' : 'Serveur injoignable (hors ligne ?).')), { status: 0 });
+  } finally { clearTimeout(timer); }
+  if (!r.ok) throw Object.assign(new Error(j.error ? t(j.error) : t('Erreur {n}', { n: r.status })), { status: r.status, version: j.version });
   return j;
 }
 

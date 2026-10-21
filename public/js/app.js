@@ -1,7 +1,8 @@
-// Carnet — interface. Aucune donnée ne quitte le navigateur en clair : le serveur Carnet
-// (facultatif) interroge Yahoo Finance avec les symboles, jamais avec les montants, et la
-// synchronisation (facultative) ne lui envoie qu'un coffre chiffré ici (voir sync.js).
-import { eur, signedEur, pct, signedPct, pts, qty as fqty, qtyShort, num, dateLong, dateShort, daysAgo, esc, parseNum, bigParts } from './format.js';
+// Carnet — interface. No data leaves the browser in clear: the Carnet server (optional) queries
+// Yahoo Finance with the symbols, never with the amounts, and sync (optional) only sends it a
+// vault encrypted here (see sync.js). Every text goes through t() (i18n.js): French is the source.
+import { eur, signedEur, pct, signedPct, pts, qty as fqty, qtyShort, num, inputNum, dateLong, dateShort, monthLong, timeShort, dateTime, daysAgo, esc, parseNum, bigParts } from './format.js';
+import { t, tn, setLang, lang } from './i18n.js';
 import { load, save, clearAll, emptyData, normalize, validateBackup, encryptBackup, decryptBackup, backupPayload, storageWorks } from './store.js';
 import { syncState, saveSyncState, clearSyncState, deriveAccount, pullVault, pushVault, deleteVault, normUser, USER_RE } from './sync.js';
 import { importTradeRepublic, mergeImport } from './importer.js';
@@ -9,7 +10,7 @@ import { totals, staleLines, lookthrough, DIRECT, heldLines, isHeld, lineComposi
 import { libraryFor, libraryChoices, SECTORS, COMPOSITION_NOTE, setFetchedLibrary, wantsComposition } from './library.js';
 import { lineChart, hoverText } from './chart.js';
 
-const VERSION = '1.2.0';
+const VERSION = '1.3.0';
 let data = load();
 const ui = {
   tab: 'patrimoine', range: '1A', filter: 'all', group: 'accounts', analyse: 'sectors', server: 'unknown', busy: false, progress: '', lineRange: '1A',
@@ -23,6 +24,7 @@ const COLORS = ['ink', 'orange', 'blue', 'pink', 'lilac', 'green'];
 const KINDS = [['courant', 'Compte courant'], ['livret', 'Livret d’épargne'], ['cto', 'Compte-titres'], ['pea', 'PEA'], ['av', 'Assurance-vie'], ['per', 'PER'], ['crypto', 'Crypto'], ['autre', 'Autre']];
 const TYPES = [['etf', 'ETF'], ['fonds', 'Fonds (OPCVM, unité de compte)'], ['action', 'Action'], ['crypto', 'Crypto'], ['fonds-euros', 'Fonds en euros'], ['livret', 'Livret'], ['especes', 'Espèces'], ['non-cote', 'Non coté'], ['autre', 'Autre']];
 const TYPE_LABEL = Object.fromEntries(TYPES);
+const kindLabel = k => t(KINDS.find(x => x[0] === k)?.[1] || '');
 
 const ICONS = {
   patrimoine: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 4l9 6.5"/><path d="M5 9.5V20h14V9.5"/><path d="M9.5 20v-5.5h5V20"/></svg>',
@@ -43,23 +45,24 @@ const ICONS = {
   lock: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="5" y="10.5" width="14" height="9.5" rx="2.5"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/></svg>',
 };
 
-// ——— Utilitaires ———
+// ——— Utilities ———
 const $ = (s, root = document) => root.querySelector(s);
 const accById = id => data.accounts.find(a => a.id === id);
 const lineById = id => data.lines.find(l => l.id === id);
 const initials = s => (String(s || '?').replace(/[^\p{L}\p{N}\s&]/gu, ' ').trim().split(/\s+/).filter(w => w.length > 1 || /\d/.test(w)).slice(0, 2).map(w => w[0]).join('') || String(s || '?')[0] || '?').toUpperCase();
-const shortName = l => libraryFor(l.isin)?.short || l.name;
+// Library short names and the names Carnet gives cash lines (« Espèces », « Livret ») are translated; user names are not.
+const shortName = l => { const s = libraryFor(l.isin)?.short; return s ? t(s) : isCashLike(l) && !l.customName ? t(l.name) : l.name; };
 const isWide = () => matchMedia('(min-width: 1100px)').matches;
 const today = () => new Date().toISOString().slice(0, 10);
-function commit(msg) { data.updatedAt = new Date().toISOString(); if (!save(data) && !commit.warned) { commit.warned = true; toast('Stockage du navigateur indisponible : vos changements seront perdus en fermant la page.'); } else if (msg) toast(msg); render(); scheduleSync(); setTimeout(autoCompositions, 0); }
+function commit(msg) { data.updatedAt = new Date().toISOString(); if (!save(data) && !commit.warned) { commit.warned = true; toast(t('Stockage du navigateur indisponible : vos changements seront perdus en fermant la page.')); } else if (msg) toast(msg); render(); scheduleSync(); setTimeout(autoCompositions, 0); }
 
 let toastTimer;
 function toast(msg) {
-  const t = $('#toast'); t.textContent = msg; t.classList.add('show');
-  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 3600);
+  const el = $('#toast'); el.textContent = msg; el.classList.add('show');
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove('show'), 3600);
 }
 
-// ——— Thème ———
+// ——— Theme and language ———
 function applyTheme() {
   const th = data.settings.theme;
   const root = document.documentElement;
@@ -68,17 +71,26 @@ function applyTheme() {
   const m = document.querySelector('meta[name="theme-color"]');
   if (m) m.setAttribute('content', dark ? '#121010' : '#F5F1EB');
 }
+// Static texts of index.html (tab names, labels): the French original is kept in data-t / data-t-aria.
+let shownLang = '';
+function applyLang() {
+  if (setLang(data.settings.lang) === shownLang) return;
+  shownLang = lang();
+  for (const el of document.querySelectorAll('[data-t]')) { el.dataset.t ||= el.textContent; el.textContent = t(el.dataset.t); }
+  for (const el of document.querySelectorAll('[data-t-aria]')) { el.dataset.tAria ||= el.getAttribute('aria-label'); el.setAttribute('aria-label', t(el.dataset.tAria)); }
+}
 
-// ——— Rendu principal ———
+// ——— Main render ———
 function render() {
   const v = $('#view');
   try {
     setFetchedLibrary(data.compositions);
     applyTheme();
+    applyLang();
     const name = data.profile.firstName || '';
     for (const b of document.querySelectorAll('[data-tab]')) b.setAttribute('aria-current', b.dataset.tab === ui.tab ? 'page' : 'false');
     for (const a of document.querySelectorAll('.avatar')) a.textContent = name ? name[0].toUpperCase() : 'C';
-    const sideName = $('#side-name'); if (sideName) sideName.textContent = name || 'Votre profil';
+    const sideName = $('#side-name'); if (sideName) sideName.textContent = name || t('Votre profil');
     const fn = { patrimoine: viewHome, analyse: viewAnalyse, historique: viewHistorique, simuler: viewSimuler, donnees: viewData }[ui.tab] || viewHome;
     v.innerHTML = (data.demo ? demoBanner() : '') + fn();
     after[ui.tab]?.();
@@ -87,61 +99,62 @@ function render() {
 }
 const after = {};
 
-// Donnée illisible (sauvegarde abîmée ou modifiée à la main) : de quoi l'exporter, puis tout effacer
+// Unreadable data (damaged or hand-edited backup): a way to export it, then wipe everything
 function brokenView(e) {
-  return `<div class="card"><h3>Affichage impossible</h3>
-    <p class="lead">Une donnée enregistrée sur cet appareil est illisible (${esc(e?.message)}). Exportez-la pour la garder, puis effacez les données de cet appareil.</p>
-    <div class="btn-row"><button class="btn" data-action="export-plain">${ICONS.download}Exporter en clair</button><button class="btn danger" data-action="wipe">Effacer toutes les données</button></div></div>`;
+  return `<div class="card"><h3>${t('Affichage impossible')}</h3>
+    <p class="lead">${t('Une donnée enregistrée sur cet appareil est illisible ({err}). Exportez-la pour la garder, puis effacez les données de cet appareil.', { err: esc(e?.message) })}</p>
+    <div class="btn-row"><button class="btn" data-action="export-plain">${ICONS.download}${t('Exporter en clair')}</button><button class="btn danger" data-action="wipe">${t('Effacer toutes les données')}</button></div></div>`;
 }
 
 function demoBanner() {
-  return `<div class="demo-banner"><span>Données d’exemple. Rien ici ne vous appartient.</span><button class="btn-pill light" data-action="clear-demo">Effacer l’exemple</button></div>`;
+  return `<div class="demo-banner"><span>${t('Données d’exemple. Rien ici ne vous appartient.')}</span><button class="btn-pill light" data-action="clear-demo">${t('Effacer l’exemple')}</button></div>`;
 }
 
-function headline(t) {
+function headline(tot) {
   const n = data.profile.firstName;
-  const hi = n ? `Bonjour ${esc(n)},` : 'Bonjour,';
-  if (t.cost > 0) {
-    const up = t.gain >= 0;
-    return `${hi} votre patrimoine est en ${up ? 'hausse' : 'baisse'} de <span class="hl ${up ? '' : 'down'}">${pct(Math.abs(t.gainPct))}</span>.`;
+  const hi = n ? t('Bonjour {name},', { name: esc(n) }) : t('Bonjour,');
+  if (tot.cost > 0) {
+    const up = tot.gain >= 0;
+    const p = `<span class="hl ${up ? '' : 'down'}">${pct(Math.abs(tot.gainPct))}</span>`;
+    return t(up ? '{hi} votre patrimoine est en hausse de {p}.' : '{hi} votre patrimoine est en baisse de {p}.', { hi, p });
   }
-  return `${hi} voici votre patrimoine.`;
+  return t('{hi} voici votre patrimoine.', { hi });
 }
 
-// ——— Onglet Patrimoine ———
+// ——— Patrimoine tab ———
 function viewHome() {
   if (!data.lines.length && !data.accounts.length) return emptyState();
-  const t = totals(data);
-  const parts = bigParts(t.total);
-  const hero = `<section class="hero" aria-label="Patrimoine total">
-    <div class="eyebrow">Patrimoine total</div>
-    <div class="big num"><span>${parts.int}<span class="dec">,${parts.dec}</span></span><span class="unit">euros</span></div>
+  const tot = totals(data);
+  const parts = bigParts(tot.total);
+  const hero = `<section class="hero" aria-label="${t('Patrimoine total')}">
+    <div class="eyebrow">${t('Patrimoine total')}</div>
+    <div class="big num"><span>${parts.int}<span class="dec">${parts.sep}${parts.dec}</span></span><span class="unit">${t('euros')}</span></div>
     <div class="pills">
-      ${t.cost > 0 ? `<span class="pill"><span class="dotc"></span>${signedEur(t.gain)} de plus-value</span>` : ''}
-      <span class="pill">${pct(t.equityPct, 0)} en actions</span>
-      ${t.liquid > 0 ? `<span class="pill">${eur(t.liquid, 0)} d’espèces</span>` : ''}
+      ${tot.cost > 0 ? `<span class="pill"><span class="dotc"></span>${t('{x} de plus-value', { x: signedEur(tot.gain) })}</span>` : ''}
+      <span class="pill">${t('{x} en actions', { x: pct(tot.equityPct, 0) })}</span>
+      ${tot.liquid > 0 ? `<span class="pill">${t('{x} d’espèces', { x: eur(tot.liquid, 0) })}</span>` : ''}
     </div>
-    <div class="meta">${t.cost > 0 ? `Depuis l’achat, sur ${eur(t.cost, 0)} investis.` : 'Ajoutez des placements pour suivre leur plus-value.'}</div>
+    <div class="meta">${tot.cost > 0 ? t('Depuis l’achat, sur {x} investis.', { x: eur(tot.cost, 0) }) : t('Ajoutez des placements pour suivre leur plus-value.')}</div>
   </section>`;
   const stale = staleCard();
-  const chart = `<section class="card chart-card" aria-label="Évolution">
-    <div class="chart-top"><h3>Évolution</h3>
-      <div class="chips" role="group" aria-label="Période">${['1M', '6M', '1A', 'Tout'].map(r => `<button class="chip" data-action="range" data-v="${r}" aria-pressed="${ui.range === r}">${r}</button>`).join('')}</div>
+  const chart = `<section class="card chart-card" aria-label="${t('Évolution')}">
+    <div class="chart-top"><h3>${t('Évolution')}</h3>
+      <div class="chips" role="group" aria-label="${t('Période')}">${['1M', '6M', '1A', 'Tout'].map(r => `<button class="chip" data-action="range" data-v="${r}" aria-pressed="${ui.range === r}">${t(r)}</button>`).join('')}</div>
     </div>
     <div class="chart-hover" id="chart-hover"></div>
     <div class="chart-host" id="chart-host"></div>
-    <div class="legend"><span><i></i>Valeur</span><span><i class="dash"></i>Montant investi</span></div>
-    ${Object.keys(data.priceHistory || {}).length ? '' : '<div class="chart-note">Courbe reconstruite à partir des prix de vos transactions. Actualisez les cours pour un historique complet.</div>'}
+    <div class="legend"><span><i></i>${t('Valeur')}</span><span><i class="dash"></i>${t('Montant investi')}</span></div>
+    ${Object.keys(data.priceHistory || {}).length ? '' : `<div class="chart-note">${t('Courbe reconstruite à partir des prix de vos transactions. Actualisez les cours pour un historique complet.')}</div>`}
   </section>`;
-  // Comptes et enveloppes se partagent la même place : un sélecteur passe de l’un à l’autre.
-  const groups = ui.group === 'envelopes' ? t.envelopes.filter(e => e.value > 0).map(envelopeCard) : t.accounts.map(accountCard);
-  const accounts = `<div><div class="section-head mid"><h2>Répartition</h2>
-      <div class="chips" role="group" aria-label="Regrouper par">${[['accounts', 'Comptes'], ['envelopes', 'Enveloppes']].map(([k, l]) => `<button class="chip" data-action="group" data-v="${k}" aria-pressed="${ui.group === k}">${l}</button>`).join('')}</div></div>
-    <div class="accounts">${groups.join('') || `<p class="muted">${ui.group === 'envelopes' ? 'Aucune ligne.' : 'Aucun compte.'}</p>`}</div></div>`;
+  // Accounts and envelopes share the same spot: a switch goes from one to the other.
+  const groups = ui.group === 'envelopes' ? tot.envelopes.filter(e => e.value > 0).map(envelopeCard) : tot.accounts.map(accountCard);
+  const accounts = `<div><div class="section-head mid"><h2>${t('Répartition')}</h2>
+      <div class="chips" role="group" aria-label="${t('Regrouper par')}">${[['accounts', 'Comptes'], ['envelopes', 'Enveloppes']].map(([k, l]) => `<button class="chip" data-action="group" data-v="${k}" aria-pressed="${ui.group === k}">${t(l)}</button>`).join('')}</div></div>
+    <div class="accounts">${groups.join('') || `<p class="muted">${t(ui.group === 'envelopes' ? 'Aucune ligne.' : 'Aucun compte.')}</p>`}</div></div>`;
   const lines = linesSection();
-  if (isWide()) return `<h1 class="title">${headline(t)}</h1>
+  if (isWide()) return `<h1 class="title">${headline(tot)}</h1>
     <div class="grid-home"><div class="col">${hero}${chart}${lines}</div><div class="col">${stale}${accounts}</div></div>`;
-  return `<h1 class="title">${headline(t)}</h1>
+  return `<h1 class="title">${headline(tot)}</h1>
     <div class="grid-home">${hero}${stale}${chart}${lines}${accounts}</div>`;
 }
 after.patrimoine = () => {
@@ -151,7 +164,7 @@ after.patrimoine = () => {
   const from = new Date(Date.now() - days * 86400000).toISOString().slice(0, 10);
   const shown = pts_.filter(p => p.d >= from);
   const hover = $('#chart-hover');
-  const base = shown.length > 1 ? (() => { const a = shown[0], b = shown[shown.length - 1]; const d = b.value - a.value - (b.invested - a.invested); return `Sur la période : ${signedEur(d, 0)} hors versements`; })() : '';
+  const base = shown.length > 1 ? (() => { const a = shown[0], b = shown[shown.length - 1]; const d = b.value - a.value - (b.invested - a.invested); return t('Sur la période : {x} hors versements', { x: signedEur(d, 0) }); })() : '';
   hover.textContent = base;
   lineChart(host, shown, { onHover: p => { hover.textContent = p ? hoverText(p) : base; } });
 };
@@ -161,11 +174,11 @@ function staleCard() {
   if (!st.length) return '';
   if (data.settings.snoozeUntil && data.settings.snoozeUntil > new Date().toISOString()) return '';
   const oldest = st.map(l => l.priceDate).filter(Boolean).sort()[0];
-  const n = st.length;
-  return `<section class="night" aria-label="Cours à actualiser">
-    <p class="lead">${n === 1 ? 'Un cours a' : n + ' cours ont'} plus de ${data.settings.staleDays || 4} jours.</p>
-    <p class="sub">${oldest ? `Le plus ancien date du ${dateLong(oldest)}.` : 'Certains cours n’ont jamais été actualisés.'} Les montants affichés en dépendent.</p>
-    <div class="row"><button class="btn-pill light refresh-btn" data-action="refresh"><span class="ic">${ICONS.refresh}</span>Actualiser</button><button class="btn-pill ghost" data-action="snooze">Plus tard</button></div>
+  const days = data.settings.staleDays || 4;
+  return `<section class="night" aria-label="${t('Cours à actualiser')}">
+    <p class="lead">${tn(st.length, 'Un cours a plus de {d} jours.', '{n} cours ont plus de {d} jours.', { d: days })}</p>
+    <p class="sub">${oldest ? t('Le plus ancien date du {x}.', { x: dateLong(oldest) }) : t('Certains cours n’ont jamais été actualisés.')} ${t('Les montants affichés en dépendent.')}</p>
+    <div class="row"><button class="btn-pill light refresh-btn" data-action="refresh"><span class="ic">${ICONS.refresh}</span>${t('Actualiser')}</button><button class="btn-pill ghost" data-action="snooze">${t('Plus tard')}</button></div>
   </section>`;
 }
 
@@ -174,20 +187,20 @@ function accountCard(a) {
   const on = Math.round(a.share * 20);
   return `<button class="acc" data-action="open-account" data-id="${esc(acc.id)}">
     <span class="tile c-${esc(acc.color || 'ink')}">${esc(initials(acc.name))}</span>
-    <span class="name">${esc(KINDS.find(k => k[0] === acc.kind)?.[1] || 'Compte')}</span><span class="val">${eur(a.value, 0)}</span>
+    <span class="name">${esc(kindLabel(acc.kind) || t('Compte'))}</span><span class="val">${eur(a.value, 0)}</span>
     <span class="sub">${esc(acc.name)}${a.gain && Math.abs(a.gain) >= 0.5 ? ` · <span class="${a.gain >= 0 ? 'pos' : 'neg'}">${signedEur(a.gain, 0)}</span>` : ''}</span><span class="share">${pct(a.share, 0)}</span>
     <span class="segs" aria-hidden="true">${Array.from({ length: 20 }, (_, i) => `<i class="${i < on ? 'on c-' + esc(acc.color || 'ink') : ''}"></i>`).join('')}</span>
   </button>`;
 }
 
-// Toucher une enveloppe filtre les lignes sur elle.
+// Tapping an envelope filters the holdings on it.
 function envelopeCard(e) {
   const n = heldLines(data).filter(l => (l.envelope || 'Autre') === e.name).length;
   const on = Math.round(e.share * 20);
   return `<button class="acc" data-action="env-lines" data-v="${esc(e.name)}">
-    <span class="tile c-ink">${esc(initials(e.name))}</span>
-    <span class="name">${esc(e.name)}</span><span class="val">${eur(e.value, 0)}</span>
-    <span class="sub">${n} ligne${n > 1 ? 's' : ''}</span><span class="share">${pct(e.share, 0)}</span>
+    <span class="tile c-ink">${esc(initials(t(e.name)))}</span>
+    <span class="name">${esc(t(e.name))}</span><span class="val">${eur(e.value, 0)}</span>
+    <span class="sub">${tn(n, '{n} ligne', '{n} lignes')}</span><span class="share">${pct(e.share, 0)}</span>
     <span class="segs" aria-hidden="true">${Array.from({ length: 20 }, (_, i) => `<i class="${i < on ? 'on c-ink' : ''}"></i>`).join('')}</span>
   </button>`;
 }
@@ -197,22 +210,24 @@ function linesSection() {
   const envs = [...new Set(held.map(l => l.envelope || 'Autre'))].sort((a, b) => ENVELOPE_ORDER.indexOf(a) - ENVELOPE_ORDER.indexOf(b));
   if (ui.filter !== 'all' && !envs.includes(ui.filter)) ui.filter = 'all';
   const ls = held.filter(l => ui.filter === 'all' || (l.envelope || 'Autre') === ui.filter).sort((a, b) => lineValue(b) - lineValue(a));
-  return `<div id="lines"><div class="section-head"><h2>Lignes</h2><button class="linkish" data-action="add-line">Ajouter</button></div>
-    <div class="filters" role="group" aria-label="Filtrer par enveloppe">
-      <button class="filter" data-action="filter" data-v="all" aria-pressed="${ui.filter === 'all'}">Toutes</button>
-      ${envs.map(e => `<button class="filter" data-action="filter" data-v="${esc(e)}" aria-pressed="${ui.filter === e}">${esc(e)}</button>`).join('')}
+  return `<div id="lines"><div class="section-head"><h2>${t('Lignes')}</h2><button class="linkish" data-action="add-line">${t('Ajouter')}</button></div>
+    <div class="filters" role="group" aria-label="${t('Filtrer par enveloppe')}">
+      <button class="filter" data-action="filter" data-v="all" aria-pressed="${ui.filter === 'all'}">${t('Toutes')}</button>
+      ${envs.map(e => `<button class="filter" data-action="filter" data-v="${esc(e)}" aria-pressed="${ui.filter === e}">${esc(t(e))}</button>`).join('')}
     </div>
-    <div class="lines">${ls.map(lineRow).join('') || '<p class="muted" style="padding:16px">Aucune ligne.</p>'}</div></div>`;
+    <div class="lines">${ls.map(lineRow).join('') || `<p class="muted" style="padding:16px">${t('Aucune ligne.')}</p>`}</div></div>`;
 }
 
 function lineRow(l) {
   const acc = accById(l.accountId);
   const g = lineGain(l), c = lineCost(l);
   const stale = NEEDS_PRICE(l) && daysAgo(l.priceDate) > (data.settings.staleDays || 4);
-  const sub = isCashLike(l) ? `${esc(acc?.name || '')} · ${esc(l.envelope || '')}` : l.estimateFromAmount ? `${esc(acc?.name || '')} · ${eur(l.cost)} investis` : `${esc(acc?.name || '')} · ${qtyShort(l.qty)} part${l.qty > 1 ? 's' : ''}${l.qtyEstimated ? ' (estim.)' : ''}${l.pending ? ' · ' + eur(l.pending, 0) + ' en attente' : ''}`;
+  const where = esc(acc?.name || '');
+  const sub = isCashLike(l) ? `${where} · ${esc(t(l.envelope || ''))}` : l.estimateFromAmount ? `${where} · ${t('{x} investis', { x: eur(l.cost) })}`
+    : `${where} · ${tn(l.qty, '{n} part', '{n} parts', { n: qtyShort(l.qty) })}${l.qtyEstimated ? ' ' + t('(estim.)') : ''}${l.pending ? ' · ' + t('{x} en attente', { x: eur(l.pending, 0) }) : ''}`;
   return `<button class="line" data-action="open-line" data-id="${esc(l.id)}">
     <span class="mono t-${esc(l.type)}">${esc(initials(shortName(l)))}</span>
-    <span class="n">${esc(shortName(l))}${stale ? '<span class="badge warn">cours ancien</span>' : ''}</span><span class="v">${eur(lineValue(l))}</span>
+    <span class="n">${esc(shortName(l))}${stale ? `<span class="badge warn">${t('cours ancien')}</span>` : ''}</span><span class="v">${eur(lineValue(l))}</span>
     <span class="s">${sub}</span>
     <span class="g ${c > 0 && Math.abs(g / c) >= 0.0005 ? (g > 0 ? 'pos' : 'neg') : 'muted'}">${isCashLike(l) ? '<span class="muted">—</span>' : c > 0 ? signedPct(g / c) : ''}</span>
   </button>`;
@@ -222,177 +237,177 @@ function emptyState() {
   return `<div class="empty">
     <div class="orb" aria-hidden="true"><i class="ring"></i><i class="core"></i><i class="s1"></i><i class="s2"></i><i class="s3"></i></div>
     <div class="wordmark">Carnet<span class="dot">.</span></div>
-    <h1 class="title" style="text-align:center;margin:6px auto 4px">Votre patrimoine, en un seul endroit.<em>Et seulement sur cet appareil.</em></h1>
-    <p>Importez l’export de vos transactions Trade Republic, restaurez une sauvegarde, ou ajoutez vos comptes à la main.</p>
+    <h1 class="title" style="text-align:center;margin:6px auto 4px">${t('Votre patrimoine, en un seul endroit.')}<em>${t('Et seulement sur cet appareil.')}</em></h1>
+    <p>${t('Importez l’export de vos transactions Trade Republic, restaurez une sauvegarde, ou ajoutez vos comptes à la main.')}</p>
     <div class="btn-row">
-      <button class="btn primary" data-action="pick-csv">${ICONS.upload}Importer un CSV Trade Republic</button>
-      <button class="btn" data-action="pick-backup">Restaurer une sauvegarde</button>
-      <button class="btn" data-action="add-account">${ICONS.plus}Ajouter un compte</button>
+      <button class="btn primary" data-action="pick-csv">${ICONS.upload}${t('Importer un CSV Trade Republic')}</button>
+      <button class="btn" data-action="pick-backup">${t('Restaurer une sauvegarde')}</button>
+      <button class="btn" data-action="add-account">${ICONS.plus}${t('Ajouter un compte')}</button>
     </div>
-    <button class="linkish" data-action="demo" style="margin-top:14px">Essayer avec des données d’exemple</button>
+    <button class="linkish" data-action="demo" style="margin-top:14px">${t('Essayer avec des données d’exemple')}</button>
   </div>`;
 }
 
-// ——— Onglet Analyse ———
+// ——— Analyse tab ———
 function viewAnalyse() {
-  const t = totals(data);
-  if (!data.lines.length) return `<h1 class="title">Où va votre argent.<em>Secteurs, pays et entreprises.</em></h1>${emptyHint()}`;
+  const tot = totals(data);
+  if (!data.lines.length) return `<h1 class="title">${t('Où va votre argent.')}<em>${t('Secteurs, pays et entreprises.')}</em></h1>${emptyHint()}`;
   const lt = lookthrough(data);
   const top10 = lt.companies.slice(0, 10).reduce((s, c) => s + c.value, 0);
   const first = lt.companies[0];
   const st = data.trStats;
-  // Total, plus-value et espèces sont déjà sur l’accueil : ici, seulement ce qui éclaire la répartition.
+  // Total, gain and cash are already on the home screen: here, only what sheds light on the breakdown.
   const sums = [
-    { k: 'Part en actions', v: pct(t.equityPct, 0), d: eur(t.equity, 0) },
-    { k: '10 premières entreprises', v: pct(t.total ? top10 / t.total : 0), d: first ? `dont ${esc(first.name)} ${pct(t.total ? first.value / t.total : 0)}` : '' },
-    ...st ? [{ k: 'Dividendes reçus', v: eur(st.dividends), d: 'nets de retenue' }, { k: 'Frais payés', v: eur(st.fees), d: `depuis ${dateLong(st.from)}` }] : [],
+    { k: t('Part en actions'), v: pct(tot.equityPct, 0), d: eur(tot.equity, 0) },
+    { k: t('10 premières entreprises'), v: pct(tot.total ? top10 / tot.total : 0), d: first ? t('dont {name} {p}', { name: esc(first.name), p: pct(tot.total ? first.value / tot.total : 0) }) : '' },
+    ...st ? [{ k: t('Dividendes reçus'), v: eur(st.dividends), d: t('nets de retenue') }, { k: t('Frais payés'), v: eur(st.fees), d: t('depuis le {x}', { x: dateLong(st.from) }) }] : [],
   ];
   const list = { sectors: lt.sectors, countries: lt.countries, companies: lt.companies.slice(0, 15) }[ui.analyse];
   const max = Math.max(...list.map(x => x.value), 1);
-  return `<h1 class="title">Où va votre argent.<em>À travers vos fonds.</em></h1>
+  return `<h1 class="title">${t('Où va votre argent.')}<em>${t('À travers vos fonds.')}</em></h1>
     ${sumsCard(sums)}
-    <div class="section-head"><h2>Répartition</h2><span class="aside">hors espèces · ${eur(lt.base, 0)}</span></div>
+    <div class="section-head"><h2>${t('Répartition')}</h2><span class="aside">${t('hors espèces · {x}', { x: eur(lt.base, 0) })}</span></div>
     <div class="card">
-      <div class="seg" role="group" aria-label="Répartition">${[['sectors', 'Secteurs'], ['countries', 'Pays'], ['companies', 'Entreprises']].map(([k, l]) => `<button data-action="analyse" data-v="${k}" aria-pressed="${ui.analyse === k}">${l}</button>`).join('')}</div>
-      <div class="bars">${list.map((x, i) => `<button class="barrow" data-action="open-split" data-v="${i}" aria-label="${esc(x.name)} : détail"><span class="n">${esc(x.name)}</span><span class="p"><b>${eur(x.value, 0)}</b>${pct(x.pct)}</span><span class="track"><i style="width:${(100 * x.value / max).toFixed(1)}%"></i></span></button>`).join('') || '<p class="muted">Rien à afficher.</p>'}</div>
-      <p class="note">${ui.analyse === 'companies' ? 'Montants détenus à travers vos ETF (principales positions de chaque fonds) et en direct. ' : ''}${pct(lt.coverage, 0)} des placements sont ventilés ; le reste (non coté, fonds inconnus) apparaît en « Non ventilé » ou « Capital-investissement ». ${COMPOSITION_NOTE}</p>
+      <div class="seg" role="group" aria-label="${t('Répartition')}">${[['sectors', 'Secteurs'], ['countries', 'Pays'], ['companies', 'Entreprises']].map(([k, l]) => `<button data-action="analyse" data-v="${k}" aria-pressed="${ui.analyse === k}">${t(l)}</button>`).join('')}</div>
+      <div class="bars">${list.map((x, i) => `<button class="barrow" data-action="open-split" data-v="${i}" aria-label="${t('{name} : détail', { name: esc(t(x.name)) })}"><span class="n">${esc(t(x.name))}</span><span class="p"><b>${eur(x.value, 0)}</b>${pct(x.pct)}</span><span class="track"><i style="width:${(100 * x.value / max).toFixed(1)}%"></i></span></button>`).join('') || `<p class="muted">${t('Rien à afficher.')}</p>`}</div>
+      <p class="note">${ui.analyse === 'companies' ? t('Montants détenus à travers vos ETF (principales positions de chaque fonds) et en direct.') + ' ' : ''}${t('{p} des placements sont ventilés ; le reste (non coté, fonds inconnus) apparaît en « Non ventilé » ou « Capital-investissement ».', { p: pct(lt.coverage, 0) })} ${t(COMPOSITION_NOTE)}</p>
     </div>`;
 }
-// Détail d'une case de la répartition : ce qui compose le montant, du plus gros au plus petit
-const SPLIT_WORD = { sectors: 'du secteur', countries: 'du pays', companies: 'de la position' };
+// Detail of one breakdown entry: what makes up the amount, largest first
+const SPLIT_WORD = { sectors: '{p} du secteur', countries: '{p} du pays', companies: '{p} de la position' };
 function openSplit(i) {
   const dim = ui.analyse;
   const lt = lookthrough(data);
   const x = lt[dim]?.[+i]; if (!x) return;
-  const of = SPLIT_WORD[dim];
-  const row = (p, r, sub) => `<div class="holding"><span class="r">${r}</span><span class="n">${esc(p.name)}</span><span class="a">${eur(p.value)}</span>
-    <span class="w">${pct(p.pct)} ${of}${sub ? ' · ' + sub : ''}</span><span class="track"><i style="width:${(100 * Math.min(1, p.pct)).toFixed(1)}%"></i></span></div>`;
+  const row = (p, r, sub) => `<div class="holding"><span class="r">${r}</span><span class="n">${esc(t(p.name))}</span><span class="a">${eur(p.value)}</span>
+    <span class="w">${t(SPLIT_WORD[dim], { p: pct(p.pct) })}${sub ? ' · ' + sub : ''}</span><span class="track"><i style="width:${(100 * Math.min(1, p.pct)).toFixed(1)}%"></i></span></div>`;
+  const direct = t('en direct');
   const via = p => {
     if (!p.via.length) return '';
-    if (p.via.length === 1) return p.via[0].name === DIRECT ? 'en direct' : 'via ' + esc(p.via[0].name);
-    return 'via ' + p.via.map(v => `${v.name === DIRECT ? 'en direct' : esc(v.name)} ${eur(v.value, 0)}`).join(', ');
+    if (p.via.length === 1) return p.via[0].name === DIRECT ? direct : t('via {x}', { x: esc(p.via[0].name) });
+    return t('via {x}', { x: p.via.map(v => `${v.name === DIRECT ? direct : esc(v.name)} ${eur(v.value, 0)}`).join(', ') });
   };
   let body;
   if (dim === 'companies') {
-    body = `<div class="section-head" style="margin-top:22px"><h2>Détenue à travers</h2><span class="aside">${x.parts.length} ligne${x.parts.length > 1 ? 's' : ''}</span></div>
-      <div class="holdings">${x.parts.map((p, r) => row(p, r + 1, p.kind === 'direct' ? 'en direct' : `${pct(p.weight)} du fonds`)).join('')}</div>`;
+    body = `<div class="section-head" style="margin-top:22px"><h2>${t('Détenue à travers')}</h2><span class="aside">${tn(x.parts.length, '{n} ligne', '{n} lignes')}</span></div>
+      <div class="holdings">${x.parts.map((p, r) => row(p, r + 1, p.kind === 'direct' ? direct : t('{p} du fonds', { p: pct(p.weight) }))).join('')}</div>`;
   } else {
     const named = x.parts.filter(p => p.kind !== 'rest'), rest = x.parts.filter(p => p.kind === 'rest');
     const restSum = rest.reduce((s, p) => s + p.value, 0);
-    body = `${named.length ? `<div class="section-head" style="margin-top:22px"><h2>${named.some(p => p.kind === 'company') ? 'Entreprises' : 'Lignes'}</h2><span class="aside">classées par montant</span></div>
-      <div class="holdings">${named.map((p, r) => row(p, r + 1, p.kind === 'line' ? 'ligne entière' : via(p))).join('')}</div>` : ''}
-      ${rest.length ? `<div class="section-head" style="margin-top:22px"><h2>Reste des fonds</h2><span class="aside">${eur(restSum, 0)} · ${pct(x.value ? restSum / x.value : 0)}</span></div>
-      <p class="note" style="margin:0 2px 6px">Autres entreprises de ces fonds ${of === 'du pays' ? 'dans ce pays' : 'dans ce secteur'}, au-delà de leurs principales positions.</p>
-      <div class="holdings">${rest.map(p => row(p, '·', 'autres positions du fonds')).join('')}</div>` : ''}`;
+    body = `${named.length ? `<div class="section-head" style="margin-top:22px"><h2>${t(named.some(p => p.kind === 'company') ? 'Entreprises' : 'Lignes')}</h2><span class="aside">${t('classées par montant')}</span></div>
+      <div class="holdings">${named.map((p, r) => row(p, r + 1, p.kind === 'line' ? t('ligne entière') : via(p))).join('')}</div>` : ''}
+      ${rest.length ? `<div class="section-head" style="margin-top:22px"><h2>${t('Reste des fonds')}</h2><span class="aside">${eur(restSum, 0)} · ${pct(x.value ? restSum / x.value : 0)}</span></div>
+      <p class="note" style="margin:0 2px 6px">${t(dim === 'countries' ? 'Autres entreprises de ces fonds dans ce pays, au-delà de leurs principales positions.' : 'Autres entreprises de ces fonds dans ce secteur, au-delà de leurs principales positions.')}</p>
+      <div class="holdings">${rest.map(p => row(p, '·', t('autres positions du fonds'))).join('')}</div>` : ''}`;
   }
-  const label = { sectors: 'Secteur', countries: 'Pays', companies: 'Entreprise' }[dim];
-  openSheet(`${sheetHead(esc(x.name), `${label} · ${pct(x.pct)} des placements hors espèces`)}
+  const label = t({ sectors: 'Secteur', countries: 'Pays', companies: 'Entreprise' }[dim]);
+  openSheet(`${sheetHead(esc(t(x.name)), t('{label} · {p} des placements hors espèces', { label, p: pct(x.pct) }))}
     <div class="detail-big">${eur(x.value)}</div>
     ${body}
-    <p class="note">${COMPOSITION_NOTE}</p>`, { label: x.name });
+    <p class="note">${t(COMPOSITION_NOTE)}</p>`, { label: t(x.name) });
 }
 
-// Quelques chiffres clés dans une seule carte.
+// A few key figures in one card.
 function sumsCard(sums) {
   return `<div class="card sums">${sums.map(x => `<div><span class="k">${x.k}</span><span class="v ${x.cls || ''}">${x.v}</span><span class="d">${x.d}</span></div>`).join('')}</div>`;
 }
 
 function emptyHint() {
-  return `<div class="card"><p class="muted" style="margin:0 0 12px">Aucune donnée pour l’instant.</p><div class="btn-row"><button class="btn primary" data-action="go" data-v="donnees">Importer ou ajouter des lignes</button></div></div>`;
+  return `<div class="card"><p class="muted" style="margin:0 0 12px">${t('Aucune donnée pour l’instant.')}</p><div class="btn-row"><button class="btn primary" data-action="go" data-v="donnees">${t('Importer ou ajouter des lignes')}</button></div></div>`;
 }
 
-// ——— Onglet Historique ———
-// Opérations sur titres gardées à l'import (achats, ventes, divisions…), sans les mouvements
-// d'espèces (versements, retraits, intérêts, dividendes, paiements par carte).
+// ——— Historique tab ———
+// Security transactions kept at import (buys, sells, splits…), without cash movements
+// (deposits, withdrawals, interest, dividends, card payments).
 const OP_LABEL = { BUY: 'Achat', SELL: 'Vente', SPLIT: 'Division', BONUS_ISSUE: 'Attribution gratuite', FREE_RECEIPT: 'Réception de titres', PRIVATE_MARKET_BUY: 'Souscription' };
 const HIST_KINDS = [['all', 'Toutes'], ['BUY', 'Achats'], ['SELL', 'Ventes'], ['other', 'Autres']];
-const MONTH = new Intl.DateTimeFormat('fr-FR', { month: 'long', year: 'numeric' });
-const isBuy = t => t.kind === 'BUY' || t.kind === 'PRIVATE_MARKET_BUY';
-const opName = t => libraryFor(t.isin)?.short || t.name || t.isin;
+const isBuy = tr => tr.kind === 'BUY' || tr.kind === 'PRIVATE_MARKET_BUY';
+const opName = tr => { const s = libraryFor(tr.isin)?.short; return s ? t(s) : tr.name || tr.isin; };
 
 function histFiltered() {
   const h = ui.hist;
   const q = h.q.trim().toLowerCase();
   return (data.transactions || [])
-    .filter(t => h.kind === 'all' || (h.kind === 'other' ? !isBuy(t) && t.kind !== 'SELL' : h.kind === 'BUY' ? isBuy(t) : t.kind === h.kind))
-    .filter(t => h.acc === 'all' || t.accountId === h.acc)
-    .filter(t => !q || opName(t).toLowerCase().includes(q) || String(t.name || '').toLowerCase().includes(q) || String(t.isin || '').toLowerCase().includes(q))
-    .map((t, i) => [t, i]).sort((a, b) => (a[0].date < b[0].date ? 1 : a[0].date > b[0].date ? -1 : b[1] - a[1])).map(x => x[0]);
+    .filter(tr => h.kind === 'all' || (h.kind === 'other' ? !isBuy(tr) && tr.kind !== 'SELL' : h.kind === 'BUY' ? isBuy(tr) : tr.kind === h.kind))
+    .filter(tr => h.acc === 'all' || tr.accountId === h.acc)
+    .filter(tr => !q || opName(tr).toLowerCase().includes(q) || String(tr.name || '').toLowerCase().includes(q) || String(tr.isin || '').toLowerCase().includes(q))
+    .map((tr, i) => [tr, i]).sort((a, b) => (a[0].date < b[0].date ? 1 : a[0].date > b[0].date ? -1 : b[1] - a[1])).map(x => x[0]);
 }
 
 function viewHistorique() {
-  const title = '<h1 class="title">Vos opérations.<em>Achats et ventes, sans les mouvements d’espèces.</em></h1>';
+  const title = `<h1 class="title">${t('Vos opérations.')}<em>${t('Achats et ventes, sans les mouvements d’espèces.')}</em></h1>`;
   const all = data.transactions || [];
   if (!all.length) {
     if (!data.trStats) return title + emptyHint();
-    return title + `<div class="card"><p class="muted" style="margin:0 0 12px">L’historique se remplit à l’import. Réimportez votre export Trade Republic : les imports précédents ne gardaient que les positions, pas le détail des opérations.</p>
-      <div class="btn-row"><button class="btn primary" data-action="pick-csv">${ICONS.upload}Importer le CSV</button></div></div>`;
+    return title + `<div class="card"><p class="muted" style="margin:0 0 12px">${t('L’historique se remplit à l’import. Réimportez votre export Trade Republic : les imports précédents ne gardaient que les positions, pas le détail des opérations.')}</p>
+      <div class="btn-row"><button class="btn primary" data-action="pick-csv">${ICONS.upload}${t('Importer le CSV')}</button></div></div>`;
   }
   const h = ui.hist;
-  const accs = [...new Set(all.map(t => t.accountId))].map(accById).filter(Boolean);
+  const accs = [...new Set(all.map(tr => tr.accountId))].map(accById).filter(Boolean);
   if (h.acc !== 'all' && !accs.some(a => a.id === h.acc)) h.acc = 'all';
   const manual = data.lines.some(l => l.source !== 'tr' && !isCashLike(l) && isHeld(l));
   return `${title}
     <div class="hist-tools">
-      <label class="hist-search"><span class="sr">Rechercher</span><input class="input" type="search" id="hist-q" data-hist="q" value="${esc(h.q)}" placeholder="Produit ou ISIN" autocomplete="off"></label>
-      ${accs.length > 1 ? `<label class="hist-acc"><span class="sr">Compte</span><select class="input" id="hist-acc" data-hist="acc"><option value="all">Tous les comptes</option>${accs.map(a => `<option value="${esc(a.id)}" ${h.acc === a.id ? 'selected' : ''}>${esc(a.name)}</option>`).join('')}</select></label>` : ''}
+      <label class="hist-search"><span class="sr">${t('Rechercher')}</span><input class="input" type="search" id="hist-q" data-hist="q" value="${esc(h.q)}" placeholder="${t('Produit ou ISIN')}" autocomplete="off"></label>
+      ${accs.length > 1 ? `<label class="hist-acc"><span class="sr">${t('Compte')}</span><select class="input" id="hist-acc" data-hist="acc"><option value="all">${t('Tous les comptes')}</option>${accs.map(a => `<option value="${esc(a.id)}" ${h.acc === a.id ? 'selected' : ''}>${esc(a.name)}</option>`).join('')}</select></label>` : ''}
     </div>
-    <div class="filters" role="group" aria-label="Type d’opération">${HIST_KINDS.map(([k, l]) => `<button class="filter" data-action="hist-kind" data-v="${k}" aria-pressed="${h.kind === k}">${l}</button>`).join('')}</div>
+    <div class="filters" role="group" aria-label="${t('Type d’opération')}">${HIST_KINDS.map(([k, l]) => `<button class="filter" data-action="hist-kind" data-v="${k}" aria-pressed="${h.kind === k}">${t(l)}</button>`).join('')}</div>
     <div id="hist-body">${histBody()}</div>
-    ${manual && !data.demo ? '<p class="note">Les lignes ajoutées à la main n’ont pas d’historique d’opérations.</p>' : ''}`;
+    ${manual && !data.demo ? `<p class="note">${t('Les lignes ajoutées à la main n’ont pas d’historique d’opérations.')}</p>` : ''}`;
 }
 
 function histBody() {
   const ts = histFiltered();
-  if (!ts.length) return '<div class="card"><p class="muted" style="margin:0">Aucune opération ne correspond.</p></div>';
-  const sum = f => ts.reduce((s, t) => s + (f(t) || 0), 0);
-  const bought = sum(t => isBuy(t) ? Math.abs(t.amount) : 0), sold = sum(t => t.kind === 'SELL' ? Math.abs(t.amount) : 0);
-  const realized = sum(t => t.realized), fees = sum(t => Math.abs(t.fee || 0));
-  const nBuy = ts.filter(isBuy).length, nSell = ts.filter(t => t.kind === 'SELL').length;
+  if (!ts.length) return `<div class="card"><p class="muted" style="margin:0">${t('Aucune opération ne correspond.')}</p></div>`;
+  const sum = f => ts.reduce((s, tr) => s + (f(tr) || 0), 0);
+  const bought = sum(tr => isBuy(tr) ? Math.abs(tr.amount) : 0), sold = sum(tr => tr.kind === 'SELL' ? Math.abs(tr.amount) : 0);
+  const realized = sum(tr => tr.realized), fees = sum(tr => Math.abs(tr.fee || 0));
+  const nBuy = ts.filter(isBuy).length, nSell = ts.filter(tr => tr.kind === 'SELL').length;
   const first = ts[ts.length - 1].date, last = ts[0].date;
   const sums = [
-    { k: 'Investi', v: eur(bought, 0), d: `${nBuy} achat${nBuy > 1 ? 's' : ''}` },
-    { k: 'Vendu', v: eur(sold, 0), d: `${nSell} vente${nSell > 1 ? 's' : ''}` },
-    { k: 'Plus-values', v: signedEur(realized, 0), d: nSell ? 'réalisées, frais déduits' : 'aucune vente', cls: realized > 0.5 ? 'pos' : realized < -0.5 ? 'neg' : '' },
-    { k: 'Frais', v: eur(fees), d: 'achats et ventes' },
+    { k: t('Investi'), v: eur(bought, 0), d: tn(nBuy, '{n} achat', '{n} achats') },
+    { k: t('Vendu'), v: eur(sold, 0), d: tn(nSell, '{n} vente', '{n} ventes') },
+    { k: t('Plus-values'), v: signedEur(realized, 0), d: t(nSell ? 'réalisées, frais déduits' : 'aucune vente'), cls: realized > 0.5 ? 'pos' : realized < -0.5 ? 'neg' : '' },
+    { k: t('Frais'), v: eur(fees), d: t('achats et ventes') },
   ];
   const shown = ts.slice(0, ui.hist.limit);
   const months = [];
-  for (const t of shown) { const m = t.date.slice(0, 7); if (!months.length || months[months.length - 1].m !== m) months.push({ m, ops: [] }); months[months.length - 1].ops.push(t); }
+  for (const tr of shown) { const m = tr.date.slice(0, 7); if (!months.length || months[months.length - 1].m !== m) months.push({ m, ops: [] }); months[months.length - 1].ops.push(tr); }
   const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
-  // Le compte n’apparaît sur chaque opération que s’il y en a plusieurs, qu’aucun n’est choisi et que l’écran est assez large.
-  const showAcc = ui.hist.acc === 'all' && new Set(ts.map(t => t.accountId)).size > 1;
+  // The account shows on each operation only when there are several, none is selected and the screen is wide enough.
+  const showAcc = ui.hist.acc === 'all' && new Set(ts.map(tr => tr.accountId)).size > 1;
+  const span = first === last ? t('le {x}', { x: dateLong(first) }) : t('du {a} au {b}', { a: dateLong(first), b: dateLong(last) });
   return `${sumsCard(sums)}
-    <p class="hist-count">${ts.length} opération${ts.length > 1 ? 's' : ''}, ${first === last ? 'le ' + dateLong(first) : `du ${dateLong(first)} au ${dateLong(last)}`}</p>
+    <p class="hist-count">${tn(ts.length, '{n} opération, {span}', '{n} opérations, {span}', { span })}</p>
     <div class="lines hist-list">${months.map(({ m, ops }) => {
-      const net = ops.reduce((s, t) => s + (isBuy(t) || t.kind === 'SELL' ? t.amount : 0), 0);
-      return `<div class="hist-month"><span>${cap(MONTH.format(new Date(m + '-15T12:00:00')))}</span><span>${Math.abs(net) >= 0.5 ? signedEur(net, 0) : ''}</span></div>
-        ${ops.map(t => histRow(t, showAcc)).join('')}`;
+      const net = ops.reduce((s, tr) => s + (isBuy(tr) || tr.kind === 'SELL' ? tr.amount : 0), 0);
+      return `<div class="hist-month"><span>${cap(monthLong(m))}</span><span>${Math.abs(net) >= 0.5 ? signedEur(net, 0) : ''}</span></div>
+        ${ops.map(tr => histRow(tr, showAcc)).join('')}`;
     }).join('')}</div>
-    ${ts.length > shown.length ? `<div class="btn-row" style="margin-top:14px;justify-content:center"><button class="btn" data-action="hist-more">Afficher ${Math.min(150, ts.length - shown.length)} de plus</button></div>` : ''}`;
+    ${ts.length > shown.length ? `<div class="btn-row" style="margin-top:14px;justify-content:center"><button class="btn" data-action="hist-more">${t('Afficher {n} de plus', { n: Math.min(150, ts.length - shown.length) })}</button></div>` : ''}`;
 }
 
-function histRow(t, showAcc) {
-  const name = opName(t);
-  const acc = accById(t.accountId);
-  const line = data.lines.find(l => l.accountId === t.accountId && l.isin === t.isin && isHeld(l));
-  const label = (OP_LABEL[t.kind] || t.kind) + (/SAVING|PLAN/i.test(t.category || '') ? ' programmé' : '');
-  const n = +(+t.shares || 0).toFixed(6);
-  const shares = n ? (t.price ? `${qtyShort(n)} × ${eur(t.price)}` : `${qtyShort(n)} part${n > 1 ? 's' : ''}`) : '';
-  const where = showAcc && (acc?.name || t.envelope);
-  const sub = [dateShort(t.date), label, shares].filter(Boolean).map(esc).join(' · ') + (where ? `<span class="where"> · ${esc(where)}</span>` : '');
-  const money = isBuy(t) || t.kind === 'SELL';
-  const value = money ? signedEur(t.amount) : n ? '+' + qtyShort(n) + ' part' + (n > 1 ? 's' : '') : '—';
-  const g = t.kind === 'SELL' && typeof t.realized === 'number'
-    ? `<span class="${t.realized > 0.005 ? 'pos' : t.realized < -0.005 ? 'neg' : 'muted'}" title="Plus-value réalisée">${signedEur(t.realized)}</span>`
-    : t.fee ? `<span class="muted">frais ${eur(Math.abs(t.fee))}</span>` : '';
-  const inner = `<span class="mono t-${esc(t.type || 'etf')}">${esc(initials(name))}</span>
-    <span class="n">${esc(name)}</span><span class="v ${t.kind === 'SELL' ? 'in' : ''}">${value}</span>
+function histRow(tr, showAcc) {
+  const name = opName(tr);
+  const acc = accById(tr.accountId);
+  const line = data.lines.find(l => l.accountId === tr.accountId && l.isin === tr.isin && isHeld(l));
+  const label = t(OP_LABEL[tr.kind] || tr.kind) + (/SAVING|PLAN/i.test(tr.category || '') ? ' ' + t('programmé') : '');
+  const n = +(+tr.shares || 0).toFixed(6);
+  const shares = n ? (tr.price ? `${qtyShort(n)} × ${eur(tr.price)}` : tn(n, '{n} part', '{n} parts', { n: qtyShort(n) })) : '';
+  const where = showAcc && (acc?.name || t(tr.envelope || ''));
+  const sub = [dateShort(tr.date), label, shares].filter(Boolean).map(esc).join(' · ') + (where ? `<span class="where"> · ${esc(where)}</span>` : '');
+  const money = isBuy(tr) || tr.kind === 'SELL';
+  const value = money ? signedEur(tr.amount) : n ? '+' + tn(n, '{n} part', '{n} parts', { n: qtyShort(n) }) : '—';
+  const g = tr.kind === 'SELL' && typeof tr.realized === 'number'
+    ? `<span class="${tr.realized > 0.005 ? 'pos' : tr.realized < -0.005 ? 'neg' : 'muted'}" title="${t('Plus-value réalisée')}">${signedEur(tr.realized)}</span>`
+    : tr.fee ? `<span class="muted">${t('frais {x}', { x: eur(Math.abs(tr.fee)) })}</span>` : '';
+  const inner = `<span class="mono t-${esc(tr.type || 'etf')}">${esc(initials(name))}</span>
+    <span class="n">${esc(name)}</span><span class="v ${tr.kind === 'SELL' ? 'in' : ''}">${value}</span>
     <span class="s">${sub}</span><span class="g">${g}</span>`;
   return line ? `<button class="line" data-action="open-line" data-id="${esc(line.id)}">${inner}</button>` : `<div class="line static">${inner}</div>`;
 }
 
-// ——— Onglet Simuler ———
+// ——— Simuler tab ———
 function simOptions() {
   const groups = data.accounts.map(a => {
     const ls = data.lines.filter(l => l.accountId === a.id && !isCashLike(l) && isHeld(l));
@@ -400,38 +415,39 @@ function simOptions() {
     return `<optgroup label="${esc(a.name)}">${ls.map(l => `<option value="${esc(l.id)}" ${ui.sim.lineId === l.id ? 'selected' : ''}>${esc(shortName(l))} · ${eur(lineValue(l), 0)}</option>`).join('')}</optgroup>`;
   }).join('');
   const lib = libraryChoices().map(c => `<option value="new:${c.isin}" ${ui.sim.lineId === 'new:' + c.isin ? 'selected' : ''}>${esc(c.name)}</option>`).join('');
-  return groups + `<optgroup label="Nouvelle ligne">${lib}<option value="new:custom" ${ui.sim.lineId === 'new:custom' ? 'selected' : ''}>Autre produit…</option></optgroup>`;
+  return groups + `<optgroup label="${t('Nouvelle ligne')}">${lib}<option value="new:custom" ${ui.sim.lineId === 'new:custom' ? 'selected' : ''}>${t('Autre produit…')}</option></optgroup>`;
 }
 function viewSimuler() {
-  if (!data.accounts.length) return `<h1 class="title">Et si vous…<em>achetiez ou vendiez, avant de le faire.</em></h1>${emptyHint()}`;
+  const title = `<h1 class="title">${t('Et si vous…')}<em>${t('achetiez ou vendiez, avant de le faire.')}</em></h1>`;
+  if (!data.accounts.length) return title + emptyHint();
   const s = ui.sim;
   if (!s.lineId) { const first = heldLines(data).filter(l => !isCashLike(l)).sort((a, b) => lineValue(b) - lineValue(a))[0]; s.lineId = first ? first.id : 'new:IE0002XZSHO1'; }
   const isNew = s.lineId.startsWith('new:');
   if (isNew) s.mode = 'buy';
   const line = isNew ? null : lineById(s.lineId);
-  if (!s.price) s.price = line && line.price ? String(+line.price.toFixed(4)).replace('.', ',') : '';
+  if (!s.price) s.price = line && line.price ? inputNum(line.price, 4) : '';
   if (!s.accountId || !accById(s.accountId)) s.accountId = data.accounts[0].id;
-  return `<h1 class="title">Et si vous…<em>achetiez ou vendiez, avant de le faire.</em></h1>
+  return `${title}
   <div class="sim-grid">
     <form class="card form" id="sim-form" autocomplete="off">
-      <div class="sim-modes"><div class="seg" role="group" aria-label="Opération">
-        <button type="button" data-action="sim-mode" data-v="buy" aria-pressed="${s.mode === 'buy'}">Achat</button>
-        <button type="button" data-action="sim-mode" data-v="sell" aria-pressed="${s.mode === 'sell'}" ${isNew ? 'disabled' : ''}>Vente</button>
+      <div class="sim-modes"><div class="seg" role="group" aria-label="${t('Opération')}">
+        <button type="button" data-action="sim-mode" data-v="buy" aria-pressed="${s.mode === 'buy'}">${t('Achat')}</button>
+        <button type="button" data-action="sim-mode" data-v="sell" aria-pressed="${s.mode === 'sell'}" ${isNew ? 'disabled' : ''}>${t('Vente')}</button>
       </div>
-      <div class="seg" role="group" aria-label="Saisir"><button type="button" data-action="sim-by" data-v="amount" aria-pressed="${s.by === 'amount'}">Montant</button><button type="button" data-action="sim-by" data-v="qty" aria-pressed="${s.by === 'qty'}">Quantité</button></div></div>
-      <label class="field"><span>Produit</span><select class="input" id="sim-line" data-sim="lineId">${simOptions()}</select></label>
+      <div class="seg" role="group" aria-label="${t('Saisir')}"><button type="button" data-action="sim-by" data-v="amount" aria-pressed="${s.by === 'amount'}">${t('Montant')}</button><button type="button" data-action="sim-by" data-v="qty" aria-pressed="${s.by === 'qty'}">${t('Quantité')}</button></div></div>
+      <label class="field"><span>${t('Produit')}</span><select class="input" id="sim-line" data-sim="lineId">${simOptions()}</select></label>
       ${isNew ? `
-        ${s.lineId === 'new:custom' ? `<div class="row2"><label class="field"><span>Nom</span><input class="input" id="sim-newname" data-sim="newName" value="${esc(s.newName)}" placeholder="ex. Fonds Linxea"></label>
-        <label class="field"><span>ISIN</span><input class="input" id="sim-newisin" data-sim="newIsin" value="${esc(s.newIsin)}" placeholder="facultatif"></label></div>` : ''}
-        <label class="field"><span>Sur le compte</span><select class="input" id="sim-acc" data-sim="accountId">${data.accounts.map(a => `<option value="${esc(a.id)}" ${s.accountId === a.id ? 'selected' : ''}>${esc(a.name)}</option>`).join('')}</select></label>` : ''}
+        ${s.lineId === 'new:custom' ? `<div class="row2"><label class="field"><span>${t('Nom')}</span><input class="input" id="sim-newname" data-sim="newName" value="${esc(s.newName)}" placeholder="${t('ex. Fonds Linxea')}"></label>
+        <label class="field"><span>ISIN</span><input class="input" id="sim-newisin" data-sim="newIsin" value="${esc(s.newIsin)}" placeholder="${t('facultatif')}"></label></div>` : ''}
+        <label class="field"><span>${t('Sur le compte')}</span><select class="input" id="sim-acc" data-sim="accountId">${data.accounts.map(a => `<option value="${esc(a.id)}" ${s.accountId === a.id ? 'selected' : ''}>${esc(a.name)}</option>`).join('')}</select></label>` : ''}
       <div class="row3">
-        ${s.by === 'amount' ? `<label class="field"><span>Montant (€)</span><input class="input" id="sim-amount" inputmode="decimal" data-sim="amount" value="${esc(s.amount)}"></label>`
-          : `<label class="field"><span>Quantité</span><input class="input" id="sim-qty" inputmode="decimal" data-sim="qty" value="${esc(s.qty)}"></label>`}
-        <label class="field"><span>Prix (€)</span><input class="input" id="sim-price" inputmode="decimal" data-sim="price" value="${esc(s.price)}" placeholder="cours"></label>
-        <label class="field"><span>Frais (€)</span><input class="input" id="sim-fees" inputmode="decimal" data-sim="fees" value="${esc(s.fees)}"></label>
+        ${s.by === 'amount' ? `<label class="field"><span>${t('Montant (€)')}</span><input class="input" id="sim-amount" inputmode="decimal" data-sim="amount" value="${esc(s.amount)}"></label>`
+          : `<label class="field"><span>${t('Quantité')}</span><input class="input" id="sim-qty" inputmode="decimal" data-sim="qty" value="${esc(s.qty)}"></label>`}
+        <label class="field"><span>${t('Prix (€)')}</span><input class="input" id="sim-price" inputmode="decimal" data-sim="price" value="${esc(s.price)}" placeholder="${t('cours')}"></label>
+        <label class="field"><span>${t('Frais (€)')}</span><input class="input" id="sim-fees" inputmode="decimal" data-sim="fees" value="${esc(s.fees)}"></label>
       </div>
-      <label class="check"><input type="checkbox" id="sim-cash" data-sim="useCash" ${s.useCash ? 'checked' : ''}><span>${s.mode === 'buy' ? 'Payer avec les espèces du compte' : 'Garder le produit de la vente en espèces sur le compte'}</span></label>
-      ${line ? `<p class="small muted" style="margin:0">Vous détenez ${qtyShort(line.qty)} parts, prix de revient ${eur(pru(line))}, cours ${eur(line.price)} (${dateShort(line.priceDate)}).</p>` : ''}
+      <label class="check"><input type="checkbox" id="sim-cash" data-sim="useCash" ${s.useCash ? 'checked' : ''}><span>${t(s.mode === 'buy' ? 'Payer avec les espèces du compte' : 'Garder le produit de la vente en espèces sur le compte')}</span></label>
+      ${line ? `<p class="small muted" style="margin:0">${t('Vous détenez {n} parts, prix de revient {pru}, cours {price} ({date}).', { n: qtyShort(line.qty), pru: eur(pru(line)), price: eur(line.price), date: dateShort(line.priceDate) })}</p>` : ''}
     </form>
     <div id="sim-out">${simResult()}</div>
   </div>`;
@@ -452,97 +468,103 @@ function simResult() {
   const row = (k, from, to, x = '') => `<div class="cmp"><span class="k">${k}</span><span class="v"><span class="from">${from}</span>→ ${to}</span>${x ? `<span class="x">${x}</span>` : ''}</div>`;
   const deltas = r.deltas.sectors.filter(d => Math.abs(d.delta) >= 0.001).slice(0, 4);
   const cdeltas = r.deltas.countries.filter(d => Math.abs(d.delta) >= 0.001).slice(0, 4);
+  const parts = tn(p.qty, '{n} part', '{n} parts', { n: (ui.sim.by === 'amount' ? '≈ ' : '') + qtyShort(p.qty) });
   return `<div class="card">
-    <div class="eyebrow">${p.mode === 'buy' ? 'Achat' : 'Vente'} de ${ui.sim.by === 'amount' ? '≈ ' : ''}${qtyShort(p.qty)} part${p.qty > 1 ? 's' : ''} · ${eur(p.qty * p.price)}</div>
+    <div class="eyebrow">${t(p.mode === 'buy' ? 'Achat de {parts} · {x}' : 'Vente de {parts} · {x}', { parts, x: eur(p.qty * p.price) })}</div>
     <div class="compare" style="margin-top:6px">
-      ${row('Patrimoine total', eur(b.total, 0), eur(a.total, 0), p.useCash || p.mode === 'sell' ? '' : 'L’achat est compté comme un nouvel apport.')}
-      ${row('Part en actions', pct(b.equityPct), pct(a.equityPct), pts(a.equityPct - b.equityPct))}
-      ${row('Poids de la ligne', pct(r.weightBefore), pct(r.weightAfter))}
-      ${p.mode === 'buy' ? row('Prix de revient unitaire', r.line.prevQty ? eur(r.line.prevPru) : '—', eur(r.line.pru)) : row('Parts restantes', qtyShort(r.line.prevQty), qtyShort(r.line.qty))}
-      ${row('Espèces', eur(b.cash, 0), eur(a.cash, 0))}
-      ${p.mode === 'sell' ? `<div class="cmp"><span class="k">Plus-value réalisée</span><span class="v ${r.realized >= 0 ? 'pos' : 'neg'}">${signedEur(r.realized)}</span></div>
-        <div class="cmp"><span class="k">Impôt estimé</span><span class="v">${eur(r.tax)}</span><span class="x">${esc(r.taxNote)}</span></div>` : ''}
+      ${row(t('Patrimoine total'), eur(b.total, 0), eur(a.total, 0), p.useCash || p.mode === 'sell' ? '' : t('L’achat est compté comme un nouvel apport.'))}
+      ${row(t('Part en actions'), pct(b.equityPct), pct(a.equityPct), pts(a.equityPct - b.equityPct))}
+      ${row(t('Poids de la ligne'), pct(r.weightBefore), pct(r.weightAfter))}
+      ${p.mode === 'buy' ? row(t('Prix de revient unitaire'), r.line.prevQty ? eur(r.line.prevPru) : '—', eur(r.line.pru)) : row(t('Parts restantes'), qtyShort(r.line.prevQty), qtyShort(r.line.qty))}
+      ${row(t('Espèces'), eur(b.cash, 0), eur(a.cash, 0))}
+      ${p.mode === 'sell' ? `<div class="cmp"><span class="k">${t('Plus-value réalisée')}</span><span class="v ${r.realized >= 0 ? 'pos' : 'neg'}">${signedEur(r.realized)}</span></div>
+        <div class="cmp"><span class="k">${t('Impôt estimé')}</span><span class="v">${eur(r.tax)}</span><span class="x">${esc(r.taxNote)}</span></div>` : ''}
     </div>
     ${r.warnings.map(w => `<div class="callout warn" style="margin-top:10px">${esc(w)}</div>`).join('')}
   </div>
-  ${deltas.length || cdeltas.length ? `<div class="card" style="margin-top:14px"><h3>Ce qui bouge</h3>
-    ${deltas.length ? `<div class="eyebrow" style="margin-top:12px">Secteurs</div><div class="compare tight">${deltas.map(d => row(esc(d.name), pct(d.before), pct(d.after), pts(d.delta))).join('')}</div>` : ''}
-    ${cdeltas.length ? `<div class="eyebrow" style="margin-top:12px">Pays</div><div class="compare tight">${cdeltas.map(d => row(esc(d.name), pct(d.before), pct(d.after), pts(d.delta))).join('')}</div>` : ''}
-    <p class="note">Parts calculées hors espèces, avec la composition indicative des fonds.</p></div>` : ''}`;
+  ${deltas.length || cdeltas.length ? `<div class="card" style="margin-top:14px"><h3>${t('Ce qui bouge')}</h3>
+    ${deltas.length ? `<div class="eyebrow" style="margin-top:12px">${t('Secteurs')}</div><div class="compare tight">${deltas.map(d => row(esc(t(d.name)), pct(d.before), pct(d.after), pts(d.delta))).join('')}</div>` : ''}
+    ${cdeltas.length ? `<div class="eyebrow" style="margin-top:12px">${t('Pays')}</div><div class="compare tight">${cdeltas.map(d => row(esc(t(d.name)), pct(d.before), pct(d.after), pts(d.delta))).join('')}</div>` : ''}
+    <p class="note">${t('Parts calculées hors espèces, avec la composition indicative des fonds.')}</p></div>` : ''}`;
 }
 
-// ——— Onglet Réglages ———
-// Une liste de rubriques, chacune sur sa page (#donnees/comptes…) : le retour du téléphone ramène à la liste.
+// ——— Réglages tab ———
+// A list of sections, each on its own page (#donnees/comptes…): the phone's back button returns to the list.
 const THEMES = { auto: 'Automatique', light: 'Clair', dark: 'Sombre' };
+// Language names stay in their own language, so anyone can find theirs.
+const LANGS = { auto: 'Automatique', fr: 'Français', en: 'English' };
+const langLabel = k => (k === 'fr' || k === 'en' ? LANGS[k] : t('Automatique'));
 const SECTIONS = {
   comptes: { title: 'Comptes', sub: 'Ajoutez, modifiez ou supprimez vos comptes.', icon: 'compte', body: sectionAccounts,
-    summary: () => { const n = data.accounts.length; return n ? `${n} compte${n > 1 ? 's' : ''} · ${eur(totals(data).total, 0)}` : 'Aucun compte'; } },
+    summary: () => { const n = data.accounts.length; return n ? tn(n, '{n} compte · {x}', '{n} comptes · {x}', { x: eur(totals(data).total, 0) }) : t('Aucun compte'); } },
   import: { title: 'Import et sauvegarde', sub: 'Trade Republic, et vos fichiers de sauvegarde.', icon: 'transfert', body: sectionImport,
-    summary: () => data.imports?.length ? 'Dernier import le ' + dateLong(data.imports[data.imports.length - 1].at?.slice(0, 10)) : 'Trade Republic, fichier de sauvegarde' },
+    summary: () => data.imports?.length ? t('Dernier import le {x}', { x: dateLong(data.imports[data.imports.length - 1].at?.slice(0, 10)) }) : t('Trade Republic, fichier de sauvegarde') },
   sync: { title: 'Synchronisation', sub: 'Le même carnet sur tous vos appareils.', icon: 'nuage', body: syncCard,
-    summary: () => syncState() ? 'Coffre ' + syncState().user : 'Désactivée' },
+    summary: () => syncState() ? t('Coffre {x}', { x: syncState().user }) : t('Désactivée') },
   cours: { title: 'Cours', sub: 'Yahoo Finance, sans jamais vos montants.', icon: 'cours', body: sectionPrices,
-    summary: () => ui.server === 'off' ? 'Serveur absent : actualisation indisponible' : data.lastRefresh ? refreshLabel().long : 'Jamais actualisés' },
-  preferences: { title: 'Préférences', sub: 'Prénom, thème et impôt.', icon: 'profil', body: sectionPreferences,
-    summary: () => [data.profile.firstName || 'Sans prénom', 'thème ' + THEMES[data.settings.theme]?.toLowerCase(), 'impôt ' + num(data.settings.taxRate, 1) + ' %'].join(' · ') },
+    summary: () => ui.server === 'off' ? t('Serveur absent : actualisation indisponible') : data.lastRefresh ? refreshLabel().long : t('Jamais actualisés') },
+  preferences: { title: 'Préférences', sub: 'Prénom, langue, thème et impôt.', icon: 'profil', body: sectionPreferences,
+    summary: () => [data.profile.firstName || t('Sans prénom'), langLabel(data.settings.lang), t('thème {x}', { x: t(THEMES[data.settings.theme] || 'Automatique').toLowerCase() }), t('impôt {x}', { x: pct(data.settings.taxRate / 100, 1) })].join(' · ') },
 };
 
 function viewData() {
   const s = SECTIONS[ui.section];
-  if (s) return `<div class="settings-page"><button class="linkish back" data-action="section-close">‹ Réglages</button>
-    <h1 class="title">${s.title}.<em>${s.sub}</em></h1><div class="settings">${s.body()}</div></div>`;
+  if (s) return `<div class="settings-page"><button class="linkish back" data-action="section-close">‹ ${t('Réglages')}</button>
+    <h1 class="title">${t(s.title)}.<em>${t(s.sub)}</em></h1><div class="settings">${s.body()}</div></div>`;
   const rows = Object.entries(SECTIONS).map(([k, x]) => `<button class="line" data-action="section" data-v="${k}">
-    <span class="mono">${ICONS[x.icon]}</span><span class="n">${x.title}</span><span class="v chev" aria-hidden="true">›</span><span class="s">${esc(x.summary())}</span><span class="g"></span></button>`).join('');
-  return `<div class="settings-page"><h1 class="title">Vos données, chez vous.<em>${syncState() ? 'Chiffrées avant de partir.' : 'Rien ne quitte cet appareil.'}</em></h1>
+    <span class="mono">${ICONS[x.icon]}</span><span class="n">${t(x.title)}</span><span class="v chev" aria-hidden="true">›</span><span class="s">${esc(x.summary())}</span><span class="g"></span></button>`).join('');
+  return `<div class="settings-page"><h1 class="title">${t('Vos données, chez vous.')}<em>${t(syncState() ? 'Chiffrées avant de partir.' : 'Rien ne quitte cet appareil.')}</em></h1>
     <div class="settings"><div class="lines">${rows}</div>
-      <div><button class="btn danger" data-action="wipe">Effacer toutes les données</button>
-      <p class="note">Carnet ${VERSION}. ${storageWorks() ? 'Stockage local actif.' : 'Stockage local bloqué par le navigateur : les données ne survivront pas à la fermeture.'}</p></div></div></div>`;
+      <div><button class="btn danger" data-action="wipe">${t('Effacer toutes les données')}</button>
+      <p class="note">Carnet ${VERSION}. ${t(storageWorks() ? 'Stockage local actif.' : 'Stockage local bloqué par le navigateur : les données ne survivront pas à la fermeture.')}</p></div></div></div>`;
 }
 
 function sectionAccounts() {
-  return `<section class="card"><p class="lead">Un solde (compte courant, livret) ou des lignes (assurance-vie, PER, autre courtier).</p>
-    <div class="list">${data.accounts.map(a => { const v = data.lines.filter(l => l.accountId === a.id).reduce((s, l) => s + lineValue(l), 0); return `<div class="list-item"><span class="tile c-${esc(a.color || 'ink')}">${esc(initials(a.name))}</span><span><span class="n">${esc(a.name)}</span><br><span class="s">${esc(KINDS.find(k => k[0] === a.kind)?.[1] || '')} · ${eur(v, 0)}</span></span><button class="btn sm" data-action="edit-account" data-id="${esc(a.id)}">Modifier</button></div>`; }).join('') || '<p class="muted small">Aucun compte.</p>'}</div>
-    <div class="btn-row" style="margin-top:12px"><button class="btn" data-action="add-account">${ICONS.plus}Ajouter un compte</button><button class="btn" data-action="add-line" ${data.accounts.length ? '' : 'disabled'}>${ICONS.plus}Ajouter une ligne</button></div></section>`;
+  return `<section class="card"><p class="lead">${t('Un solde (compte courant, livret) ou des lignes (assurance-vie, PER, autre courtier).')}</p>
+    <div class="list">${data.accounts.map(a => { const v = data.lines.filter(l => l.accountId === a.id).reduce((s, l) => s + lineValue(l), 0); return `<div class="list-item"><span class="tile c-${esc(a.color || 'ink')}">${esc(initials(a.name))}</span><span><span class="n">${esc(a.name)}</span><br><span class="s">${esc(kindLabel(a.kind))} · ${eur(v, 0)}</span></span><button class="btn sm" data-action="edit-account" data-id="${esc(a.id)}">${t('Modifier')}</button></div>`; }).join('') || `<p class="muted small">${t('Aucun compte.')}</p>`}</div>
+    <div class="btn-row" style="margin-top:12px"><button class="btn" data-action="add-account">${ICONS.plus}${t('Ajouter un compte')}</button><button class="btn" data-action="add-line" ${data.accounts.length ? '' : 'disabled'}>${ICONS.plus}${t('Ajouter une ligne')}</button></div></section>`;
 }
 
 function sectionImport() {
   const st = data.trStats;
   return `<section class="card"><h3>Trade Republic</h3>
-      <p class="lead">Exportez vos transactions depuis Trade Republic au format CSV (« Exportation de transactions »), puis importez le fichier ici. Un nouvel import remplace les lignes Trade Republic et garde vos lignes manuelles.</p>
-      <div class="btn-row"><button class="btn primary" data-action="pick-csv">${ICONS.upload}Importer le CSV</button></div>
-      ${st ? `<dl class="kv"><dt>Dernier import</dt><dd>${dateLong(data.imports?.[data.imports.length - 1]?.at?.slice(0, 10))}</dd>
-        <dt>Opérations lues</dt><dd>${num(st.rows, 0)}</dd><dt>Période</dt><dd>${dateLong(st.from)} → ${dateLong(st.to)}</dd>
-        ${Object.entries(st.cash || {}).map(([id, v]) => `<dt>Espèces ${esc(accById(id)?.name || id)}</dt><dd>${eur(v)}</dd>`).join('')}</dl>
-        <p class="note">Le solde espèces est recalculé à partir de toutes les opérations (montant + frais + taxes). Comparez-le avec le solde affiché dans l’app Trade Republic.</p>` : ''}
+      <p class="lead">${t('Exportez vos transactions depuis Trade Republic au format CSV (« Exportation de transactions »), puis importez le fichier ici. Un nouvel import remplace les lignes Trade Republic et garde vos lignes manuelles.')}</p>
+      <div class="btn-row"><button class="btn primary" data-action="pick-csv">${ICONS.upload}${t('Importer le CSV')}</button></div>
+      ${st ? `<dl class="kv"><dt>${t('Dernier import')}</dt><dd>${dateLong(data.imports?.[data.imports.length - 1]?.at?.slice(0, 10))}</dd>
+        <dt>${t('Opérations lues')}</dt><dd>${num(st.rows, 0)}</dd><dt>${t('Période')}</dt><dd>${dateLong(st.from)} → ${dateLong(st.to)}</dd>
+        ${Object.entries(st.cash || {}).map(([id, v]) => `<dt>${t('Espèces {x}', { x: esc(accById(id)?.name || id) })}</dt><dd>${eur(v)}</dd>`).join('')}</dl>
+        <p class="note">${t('Le solde espèces est recalculé à partir de toutes les opérations (montant + frais + taxes). Comparez-le avec le solde affiché dans l’app Trade Republic.')}</p>` : ''}
     </section>
-    <section class="card"><h3>Sauvegarde</h3><p class="lead">Un fichier à garder de côté, ou à restaurer sur un appareil sans synchronisation.</p>
-      <div class="btn-row"><button class="btn" data-action="export-plain" ${data.lines.length ? '' : 'disabled'}>${ICONS.download}Exporter en clair</button><button class="btn" data-action="export-enc" ${data.lines.length ? '' : 'disabled'}>${ICONS.lock}Exporter chiffrée</button></div>
-      <div class="btn-row" style="margin-top:8px"><button class="btn primary" data-action="pick-backup">${ICONS.upload}Restaurer une sauvegarde</button></div>
-      <p class="note">La sauvegarde chiffrée utilise AES-GCM 256 bits avec une clé tirée de votre phrase de passe (PBKDF2, 310 000 itérations). Sans la phrase, le fichier est illisible : rien ne permet de la retrouver.</p>
+    <section class="card"><h3>${t('Sauvegarde')}</h3><p class="lead">${t('Un fichier à garder de côté, ou à restaurer sur un appareil sans synchronisation.')}</p>
+      <div class="btn-row"><button class="btn" data-action="export-plain" ${data.lines.length ? '' : 'disabled'}>${ICONS.download}${t('Exporter en clair')}</button><button class="btn" data-action="export-enc" ${data.lines.length ? '' : 'disabled'}>${ICONS.lock}${t('Exporter chiffrée')}</button></div>
+      <div class="btn-row" style="margin-top:8px"><button class="btn primary" data-action="pick-backup">${ICONS.upload}${t('Restaurer une sauvegarde')}</button></div>
+      <p class="note">${t('La sauvegarde chiffrée utilise AES-GCM 256 bits avec une clé tirée de votre phrase de passe (PBKDF2, 310 000 itérations). Sans la phrase, le fichier est illisible : rien ne permet de la retrouver.')}</p>
     </section>`;
 }
 
 function sectionPrices() {
-  const server = { ok: '<span class="status ok"><i></i>Serveur Carnet joignable</span>', off: '<span class="status off"><i></i>Serveur Carnet absent : actualisation indisponible</span>', unknown: '<span class="status"><i></i>Vérification du serveur…</span>' }[ui.server];
-  return `<section class="card"><p class="lead">L’actualisation récupère sur Yahoo Finance, via le serveur Carnet, le cours du jour et l’historique (5 ans) de chaque produit coté. Seuls les symboles sont envoyés, jamais vos quantités ni vos montants.</p>
-    <p style="margin:0 0 12px">${server}</p>
-    <div class="btn-row"><button class="btn refresh-btn" data-action="refresh" ${ui.busy ? 'disabled' : ''}><span class="ic">${ICONS.refresh}</span><span class="r-long">Actualiser les cours</span></button></div>
+  const server = { ok: ['ok', 'Serveur Carnet joignable'], off: ['off', 'Serveur Carnet absent : actualisation indisponible'], unknown: ['', 'Vérification du serveur…'] }[ui.server];
+  return `<section class="card"><p class="lead">${t('L’actualisation récupère sur Yahoo Finance, via le serveur Carnet, le cours du jour et l’historique (5 ans) de chaque produit coté. Seuls les symboles sont envoyés, jamais vos quantités ni vos montants.')}</p>
+    <p style="margin:0 0 12px"><span class="status ${server[0]}"><i></i>${t(server[1])}</span></p>
+    <div class="btn-row"><button class="btn refresh-btn" data-action="refresh" ${ui.busy ? 'disabled' : ''}><span class="ic">${ICONS.refresh}</span><span class="r-long">${t('Actualiser les cours')}</span></button></div>
     ${refreshReport()}</section>`;
 }
 
 function sectionPreferences() {
-  return `<section class="card"><h3>Prénom</h3><p class="lead">Il s’affiche dans le titre de l’accueil.</p>
-      <form class="form" data-form="profile"><label class="field"><span class="sr">Prénom</span><input class="input" id="pf-name" name="firstName" value="${esc(data.profile.firstName)}" autocomplete="given-name" maxlength="40"></label>
-      <div class="btn-row"><button class="btn primary sm" type="submit">Enregistrer</button></div></form></section>
-    <section class="card"><h3>Thème</h3><p class="lead">Le mode automatique suit le réglage de l’appareil.</p>
-      <div class="seg" role="group" aria-label="Thème">${Object.entries(THEMES).map(([k, l]) => `<button data-action="theme" data-v="${k}" aria-pressed="${data.settings.theme === k}">${l}</button>`).join('')}</div></section>
-    <section class="card"><h3>Impôt sur les plus-values</h3><p class="lead">Utilisé par le simulateur pour les ventes hors PEA et assurance-vie.</p>
-      <label class="field"><span>Taux (%)</span><input class="input" id="tax-rate" data-setting="taxRate" inputmode="decimal" value="${num(data.settings.taxRate, 1)}"><small>31,4 % en 2026 (prélèvement forfaitaire unique).</small></label></section>`;
+  return `<section class="card"><h3>${t('Prénom')}</h3><p class="lead">${t('Il s’affiche dans le titre de l’accueil.')}</p>
+      <form class="form" data-form="profile"><label class="field"><span class="sr">${t('Prénom')}</span><input class="input" id="pf-name" name="firstName" value="${esc(data.profile.firstName)}" autocomplete="given-name" maxlength="40"></label>
+      <div class="btn-row"><button class="btn primary sm" type="submit">${t('Enregistrer')}</button></div></form></section>
+    <section class="card"><h3>${t('Langue')}</h3><p class="lead">${t('Le mode automatique suit la langue de l’appareil.')}</p>
+      <div class="seg" role="group" aria-label="${t('Langue')}">${Object.keys(LANGS).map(k => `<button data-action="lang" data-v="${k}" aria-pressed="${(data.settings.lang || 'auto') === k}" ${k === 'auto' ? '' : `lang="${k}"`}>${langLabel(k)}</button>`).join('')}</div></section>
+    <section class="card"><h3>${t('Thème')}</h3><p class="lead">${t('Le mode automatique suit le réglage de l’appareil.')}</p>
+      <div class="seg" role="group" aria-label="${t('Thème')}">${Object.entries(THEMES).map(([k, l]) => `<button data-action="theme" data-v="${k}" aria-pressed="${data.settings.theme === k}">${t(l)}</button>`).join('')}</div></section>
+    <section class="card"><h3>${t('Impôt sur les plus-values')}</h3><p class="lead">${t('Utilisé par le simulateur pour les ventes hors PEA et assurance-vie.')}</p>
+      <label class="field"><span>${t('Taux (%)')}</span><input class="input" id="tax-rate" data-setting="taxRate" inputmode="decimal" value="${inputNum(data.settings.taxRate, 1)}"><small>${t('31,4 % en 2026 (prélèvement forfaitaire unique).')}</small></label></section>`;
 }
 
-// ——— Fenêtres du bas ———
+// ——— Bottom sheets ———
 let sheetStack = [];
-function openSheet(html, { onMount, onClose, label = 'Fenêtre' } = {}) {
+function openSheet(html, { onMount, onClose, label = t('Fenêtre') } = {}) {
   const scrim = document.createElement('div'); scrim.className = 'scrim';
   const sh = document.createElement('div'); sh.className = 'sheet'; sh.setAttribute('role', 'dialog'); sh.setAttribute('aria-modal', 'true'); sh.setAttribute('aria-label', label);
   sh.innerHTML = '<div class="grab" aria-hidden="true"></div>' + html;
@@ -562,12 +584,12 @@ function openSheet(html, { onMount, onClose, label = 'Fenêtre' } = {}) {
   onMount && onMount(sh, close);
   return close;
 }
-const sheetHead = (title, sub = '') => `<div class="sheet-head"><h2>${title}${sub ? `<em>${sub}</em>` : ''}</h2><button class="icon-btn close" data-close aria-label="Fermer">${ICONS.close}</button></div>`;
+const sheetHead = (title, sub = '') => `<div class="sheet-head"><h2>${title}${sub ? `<em>${sub}</em>` : ''}</h2><button class="icon-btn close" data-close aria-label="${t('Fermer')}">${ICONS.close}</button></div>`;
 
-function confirmSheet({ title, text, ok = 'Confirmer', danger = false }) {
+function confirmSheet({ title, text, ok = t('Confirmer'), danger = false }) {
   return new Promise(res => {
     let done = false;
-    openSheet(`${sheetHead(title)}<p class="muted" style="margin-top:0">${text}</p><div class="btn-row"><button class="btn ${danger ? 'danger solid' : 'primary'}" data-ok>${ok}</button><button class="btn" data-close>Annuler</button></div>`, {
+    openSheet(`${sheetHead(title)}<p class="muted" style="margin-top:0">${text}</p><div class="btn-row"><button class="btn ${danger ? 'danger solid' : 'primary'}" data-ok>${ok}</button><button class="btn" data-close>${t('Annuler')}</button></div>`, {
       label: title,
       onMount: (sh, close) => sh.querySelector('[data-ok]').addEventListener('click', () => { done = true; res(true); close(); }),
       onClose: () => { if (!done) res(false); },
@@ -577,7 +599,7 @@ function confirmSheet({ title, text, ok = 'Confirmer', danger = false }) {
 function choiceSheet({ title, text, choices }) {
   return new Promise(res => {
     let done = false;
-    openSheet(`${sheetHead(title)}<p class="muted" style="margin-top:0">${text}</p><div class="btn-row">${choices.map(([k, l, cls]) => `<button class="btn ${cls}" data-choice="${k}">${l}</button>`).join('')}<button class="btn" data-close>Annuler</button></div>`, {
+    openSheet(`${sheetHead(title)}<p class="muted" style="margin-top:0">${text}</p><div class="btn-row">${choices.map(([k, l, cls]) => `<button class="btn ${cls}" data-choice="${k}">${l}</button>`).join('')}<button class="btn" data-close>${t('Annuler')}</button></div>`, {
       label: title,
       onMount: (sh, close) => sh.addEventListener('click', e => { const c = e.target.closest('[data-choice]'); if (c) { done = true; res(c.dataset.choice); close(); } }),
       onClose: () => { if (!done) res(null); },
@@ -587,11 +609,11 @@ function choiceSheet({ title, text, choices }) {
 function passSheet({ title, confirm }) {
   return new Promise(res => {
     let done = false;
-    openSheet(`${sheetHead(title, confirm ? 'Choisissez une phrase dont vous vous souviendrez.' : '')}
-      <form class="form" autocomplete="off"><label class="field"><span>Phrase de passe</span><input class="input" type="password" id="pp1" autocomplete="new-password" minlength="${confirm ? 8 : 1}" required></label>
-      ${confirm ? '<label class="field"><span>Encore une fois</span><input class="input" type="password" id="pp2" autocomplete="new-password" required></label>' : ''}
+    openSheet(`${sheetHead(title, confirm ? t('Choisissez une phrase dont vous vous souviendrez.') : '')}
+      <form class="form" autocomplete="off"><label class="field"><span>${t('Phrase de passe')}</span><input class="input" type="password" id="pp1" autocomplete="new-password" minlength="${confirm ? 8 : 1}" required></label>
+      ${confirm ? `<label class="field"><span>${t('Encore une fois')}</span><input class="input" type="password" id="pp2" autocomplete="new-password" required></label>` : ''}
       <p class="small neg" id="pp-err" hidden></p>
-      <div class="btn-row"><button class="btn primary" type="submit">${confirm ? 'Chiffrer et exporter' : 'Déchiffrer'}</button><button class="btn" type="button" data-close>Annuler</button></div></form>`, {
+      <div class="btn-row"><button class="btn primary" type="submit">${t(confirm ? 'Chiffrer et exporter' : 'Déchiffrer')}</button><button class="btn" type="button" data-close>${t('Annuler')}</button></div></form>`, {
       label: title,
       onMount: (sh, close) => {
         sh.querySelector('#pp1').focus();
@@ -599,8 +621,8 @@ function passSheet({ title, confirm }) {
           e.preventDefault();
           const a = sh.querySelector('#pp1').value, b = sh.querySelector('#pp2')?.value;
           const err = sh.querySelector('#pp-err');
-          if (confirm && a.length < 8) { err.textContent = 'Au moins 8 caractères.'; err.hidden = false; return; }
-          if (confirm && a !== b) { err.textContent = 'Les deux phrases ne sont pas identiques.'; err.hidden = false; return; }
+          if (confirm && a.length < 8) { err.textContent = t('Au moins 8 caractères.'); err.hidden = false; return; }
+          if (confirm && a !== b) { err.textContent = t('Les deux phrases ne sont pas identiques.'); err.hidden = false; return; }
           done = true; res(a); close();
         });
       },
@@ -615,25 +637,25 @@ function openLine(id) {
   const comp = lineComposition(l);
   const v = lineValue(l), g = lineGain(l), c = lineCost(l);
   const lib = libraryFor(l.isin);
-  const stats = isCashLike(l) ? `<div class="stat"><div class="k">Type</div><div class="v">${esc(TYPE_LABEL[l.type] || l.type)}</div></div><div class="stat"><div class="k">Enveloppe</div><div class="v">${esc(l.envelope || '—')}</div></div>`
-    : `<div class="stat"><div class="k">Quantité</div><div class="v">${fqty(l.qty)}${l.pending ? `<br><span class="small muted">+ ${eur(l.pending)} en attente</span>` : ''}</div></div>
-      <div class="stat"><div class="k">Prix de revient</div><div class="v">${eur(pru(l))}</div></div>
-      <div class="stat"><div class="k">Cours</div><div class="v">${eur(l.price)}<br><span class="small muted">${l.priceDate ? dateLong(l.priceDate) : 'jamais actualisé'}${l.priceSource === 'transaction' ? ' · prix de transaction' : l.priceSource === 'yahoo' ? ' · Yahoo' : ''}</span></div></div>
-      <div class="stat"><div class="k">Plus-value</div><div class="v ${Math.abs(g) < 0.5 ? '' : g > 0 ? 'pos' : 'neg'}">${signedEur(g)}<br><span class="small">${c > 0 ? signedPct(g / c) : ''}</span></div></div>`;
-  // Nom complet du fonds, ISIN et symbole sur une ligne sous le titre, plutôt qu’une case de plus.
+  const stats = isCashLike(l) ? `<div class="stat"><div class="k">${t('Type')}</div><div class="v">${esc(t(TYPE_LABEL[l.type] || l.type))}</div></div><div class="stat"><div class="k">${t('Enveloppe')}</div><div class="v">${esc(t(l.envelope || '—'))}</div></div>`
+    : `<div class="stat"><div class="k">${t('Quantité')}</div><div class="v">${fqty(l.qty)}${l.pending ? `<br><span class="small muted">${t('+ {x} en attente', { x: eur(l.pending) })}</span>` : ''}</div></div>
+      <div class="stat"><div class="k">${t('Prix de revient')}</div><div class="v">${eur(pru(l))}</div></div>
+      <div class="stat"><div class="k">${t('Cours|prix')}</div><div class="v">${eur(l.price)}<br><span class="small muted">${l.priceDate ? dateLong(l.priceDate) : t('jamais actualisé')}${l.priceSource === 'transaction' ? ' · ' + t('prix de transaction') : l.priceSource === 'yahoo' ? ' · Yahoo' : ''}</span></div></div>
+      <div class="stat"><div class="k">${t('Plus-value')}</div><div class="v ${Math.abs(g) < 0.5 ? '' : g > 0 ? 'pos' : 'neg'}">${signedEur(g)}<br><span class="small">${c > 0 ? signedPct(g / c) : ''}</span></div></div>`;
+  // Full fund name, ISIN and symbol on one line under the title, rather than one more card.
   const ids = [lib && lib.name !== shortName(l) ? lib.name : '', l.isin, l.ticker].filter(Boolean);
-  const holdings = comp ? `<div class="section-head" style="margin-top:22px"><h2>Principales entreprises</h2><span class="aside">${esc(comp.index)}</span></div>
-    <div class="holdings">${comp.holdings.map((h, i) => `<div class="holding"><span class="r">${i + 1}</span><span class="n">${esc(h.name)}</span><span class="a">${eur(h.amount)}</span><span class="w">${pct(h.weight)} du fonds · ${esc(h.sector)} · ${esc(h.country)}</span></div>`).join('')}</div>
-    <div class="section-head"><h2>Pays</h2></div><div class="bars" style="margin-top:0">${comp.countries.slice(0, 6).map(x => `<div class="barrow"><span class="n">${esc(x.name)}</span><span class="p"><b>${eur(v * x.pct, 0)}</b>${pct(x.pct)}</span><span class="track"><i style="width:${(100 * x.pct / comp.countries[0].pct).toFixed(1)}%"></i></span></div>`).join('')}</div>
-    <p class="note">${COMPOSITION_NOTE}</p>`
-    : (!isCashLike(l) && l.type === 'etf' ? '<p class="note">Composition non disponible pour ce fonds.</p>' : '');
-  openSheet(`${sheetHead(esc(shortName(l)), esc((acc?.name || '') + ' · ' + (l.envelope || '')))}
+  const holdings = comp ? `<div class="section-head" style="margin-top:22px"><h2>${t('Principales entreprises')}</h2><span class="aside">${esc(comp.index)}</span></div>
+    <div class="holdings">${comp.holdings.map((h, i) => `<div class="holding"><span class="r">${i + 1}</span><span class="n">${esc(h.name)}</span><span class="a">${eur(h.amount)}</span><span class="w">${t('{p} du fonds', { p: pct(h.weight) })} · ${esc(t(h.sector))} · ${esc(t(h.country))}</span></div>`).join('')}</div>
+    <div class="section-head"><h2>${t('Pays')}</h2></div><div class="bars" style="margin-top:0">${comp.countries.slice(0, 6).map(x => `<div class="barrow"><span class="n">${esc(t(x.name))}</span><span class="p"><b>${eur(v * x.pct, 0)}</b>${pct(x.pct)}</span><span class="track"><i style="width:${(100 * x.pct / comp.countries[0].pct).toFixed(1)}%"></i></span></div>`).join('')}</div>
+    <p class="note">${t(COMPOSITION_NOTE)}</p>`
+    : (!isCashLike(l) && l.type === 'etf' ? `<p class="note">${t('Composition non disponible pour ce fonds.')}</p>` : '');
+  openSheet(`${sheetHead(esc(shortName(l)), esc((acc?.name || '') + ' · ' + t(l.envelope || '')))}
     ${ids.length ? `<p class="small muted" style="margin:-8px 0 10px">${ids.map(esc).join(' · ')}</p>` : ''}
     <div class="detail-big">${eur(v)}</div>
-    ${l.qtyEstimated || l.estimateFromAmount ? `<div class="callout" style="margin-top:12px">${l.estimateFromAmount ? 'Montant investi connu, quantité pas encore calculée : elle le sera à la prochaine actualisation, avec la valeur liquidative du jour de souscription.' : 'Quantité estimée à partir du montant investi et de la valeur liquidative du jour de souscription. Remplacez-la par celle de votre relevé quand vous l’aurez (Modifier).'}</div>` : ''}
+    ${l.qtyEstimated || l.estimateFromAmount ? `<div class="callout" style="margin-top:12px">${t(l.estimateFromAmount ? 'Montant investi connu, quantité pas encore calculée : elle le sera à la prochaine actualisation, avec la valeur liquidative du jour de souscription.' : 'Quantité estimée à partir du montant investi et de la valeur liquidative du jour de souscription. Remplacez-la par celle de votre relevé quand vous l’aurez (Modifier).')}</div>` : ''}
     <div class="stat-grid">${stats}</div>
     ${priceSection(l)}
-    <div class="btn-row"><button class="btn primary sm" data-act="edit">Modifier</button>${isCashLike(l) ? '' : '<button class="btn sm" data-act="sim">Simuler</button>'}<button class="btn sm danger" data-act="del">Supprimer</button></div>
+    <div class="btn-row"><button class="btn primary sm" data-act="edit">${t('Modifier')}</button>${isCashLike(l) ? '' : `<button class="btn sm" data-act="sim">${t('Simuler')}</button>`}<button class="btn sm danger" data-act="del">${t('Supprimer')}</button></div>
     ${holdings}`, {
     label: shortName(l),
     onMount: (sh, close) => { drawLineChart(sh, l); sh.addEventListener('click', async e => {
@@ -641,27 +663,27 @@ function openLine(id) {
       if (rg) { ui.lineRange = rg.dataset.lrange; sh.querySelectorAll('[data-lrange]').forEach(b => b.setAttribute('aria-pressed', b === rg)); drawLineChart(sh, l); return; }
       const a = e.target.closest('[data-act]')?.dataset.act; if (!a) return;
       if (a === 'edit') { close(); setTimeout(() => lineForm(l.id), 200); }
-      if (a === 'sim') { close(); ui.sim.lineId = l.id; ui.sim.price = l.price ? String(+l.price.toFixed(4)).replace('.', ',') : ''; ui.sim.mode = 'buy'; go('simuler'); }
+      if (a === 'sim') { close(); ui.sim.lineId = l.id; ui.sim.price = l.price ? inputNum(l.price, 4) : ''; ui.sim.mode = 'buy'; go('simuler'); }
       if (a === 'del') {
-        if (await confirmSheet({ title: 'Supprimer cette ligne ?', text: `${esc(shortName(l))} (${eur(v)}) sera retirée de cet appareil.${l.source === 'tr' ? ' Elle reviendra au prochain import Trade Republic.' : ''}`, ok: 'Supprimer', danger: true })) {
-          data.lines = data.lines.filter(x => x.id !== l.id); close(); commit('Ligne supprimée.');
+        if (await confirmSheet({ title: t('Supprimer cette ligne ?'), text: t('{name} ({x}) sera retirée de cet appareil.', { name: esc(shortName(l)), x: eur(v) }) + (l.source === 'tr' ? ' ' + t('Elle reviendra au prochain import Trade Republic.') : ''), ok: t('Supprimer'), danger: true })) {
+          data.lines = data.lines.filter(x => x.id !== l.id); close(); commit(t('Ligne supprimée.'));
         }
       }
     }); },
   });
 }
 
-// Courbe du cours d'un produit (historique récupéré à l'actualisation)
+// Price chart of one product (history fetched on refresh)
 const LRANGES = [['1M', 31], ['6M', 183], ['1A', 366], ['5A', 1830]];
 function priceSection(l) {
   if (isCashLike(l)) return '';
   const h = l.ticker && data.priceHistory?.[l.ticker];
-  if (!h || h.length < 2) return `<p class="note" style="margin:0 2px 14px">${l.type === 'non-cote' ? 'Pas de cours public pour ce fonds non coté.' : 'L’historique du cours apparaîtra après une actualisation (bouton en haut de l’écran).'}</p>`;
+  if (!h || h.length < 2) return `<p class="note" style="margin:0 2px 14px">${t(l.type === 'non-cote' ? 'Pas de cours public pour ce fonds non coté.' : 'L’historique du cours apparaîtra après une actualisation (bouton en haut de l’écran).')}</p>`;
   return `<section class="card chart-card" style="margin:0 0 14px;padding:16px 12px 10px">
-    <div class="chart-top"><h3>Cours</h3><div class="chips" role="group" aria-label="Période">${LRANGES.map(([k]) => `<button class="chip" data-lrange="${k}" aria-pressed="${ui.lineRange === k}">${k}</button>`).join('')}</div></div>
+    <div class="chart-top"><h3>${t('Cours|prix')}</h3><div class="chips" role="group" aria-label="${t('Période')}">${LRANGES.map(([k]) => `<button class="chip" data-lrange="${k}" aria-pressed="${ui.lineRange === k}">${t(k)}</button>`).join('')}</div></div>
     <div class="chart-hover" data-lhover></div><div class="chart-host" data-lhost></div>
-    <div class="legend"><span><i></i>Cours</span><span><i class="dash"></i>Prix de revient</span></div>
-    <div class="chart-note">Source : Yahoo Finance (${esc(l.ticker)}), en euros.</div></section>`;
+    <div class="legend"><span><i></i>${t('Cours|prix')}</span><span><i class="dash"></i>${t('Prix de revient')}</span></div>
+    <div class="chart-note">${t('Source : Yahoo Finance ({x}), en euros.', { x: esc(l.ticker) })}</div></section>`;
 }
 function drawLineChart(sh, l) {
   const host = sh.querySelector('[data-lhost]'); if (!host) return;
@@ -672,7 +694,7 @@ function drawLineChart(sh, l) {
   const pts_ = h.filter(x => x[0] >= from).map(([d, c]) => ({ d, value: c, invested: p0 || c }));
   if (l.priceDate && l.price && (!pts_.length || pts_[pts_.length - 1].d < l.priceDate)) pts_.push({ d: l.priceDate, value: l.price, invested: p0 || l.price });
   const hover = sh.querySelector('[data-lhover]');
-  const base = pts_.length > 1 ? `${signedPct(pts_[pts_.length - 1].value / pts_[0].value - 1)} sur la période · ${eur(pts_[pts_.length - 1].value)}` : '';
+  const base = pts_.length > 1 ? `${t('{x} sur la période', { x: signedPct(pts_[pts_.length - 1].value / pts_[0].value - 1) })} · ${eur(pts_[pts_.length - 1].value)}` : '';
   hover.textContent = base;
   requestAnimationFrame(() => lineChart(host, pts_, { onHover: p => { hover.textContent = p ? `${dateLong(p.d)} · ${eur(p.value)}` : base; } }));
 }
@@ -681,10 +703,10 @@ function openAccount(id) {
   const a = accById(id); if (!a) return;
   const ls = data.lines.filter(l => l.accountId === id && isHeld(l)).sort((x, y) => lineValue(y) - lineValue(x));
   const v = ls.reduce((s, l) => s + lineValue(l), 0);
-  openSheet(`${sheetHead(esc(a.name), esc(KINDS.find(k => k[0] === a.kind)?.[1] || ''))}
+  openSheet(`${sheetHead(esc(a.name), esc(kindLabel(a.kind)))}
     <div class="detail-big">${eur(v)}</div>
-    <div class="lines" style="margin:14px 0">${ls.map(lineRow).join('') || '<p class="muted" style="padding:16px;margin:0">Aucune ligne sur ce compte.</p>'}</div>
-    <div class="btn-row"><button class="btn primary sm" data-act="add">${ICONS.plus}Ajouter une ligne</button><button class="btn sm" data-act="edit">Modifier le compte</button></div>`, {
+    <div class="lines" style="margin:14px 0">${ls.map(lineRow).join('') || `<p class="muted" style="padding:16px;margin:0">${t('Aucune ligne sur ce compte.')}</p>`}</div>
+    <div class="btn-row"><button class="btn primary sm" data-act="add">${ICONS.plus}${t('Ajouter une ligne')}</button><button class="btn sm" data-act="edit">${t('Modifier le compte')}</button></div>`, {
     label: a.name,
     onMount: (sh, close) => sh.addEventListener('click', e => {
       const row = e.target.closest('[data-action="open-line"]');
@@ -700,17 +722,17 @@ function accountForm(id) {
   const a = id ? accById(id) : null;
   const cash = a ? data.lines.find(l => l.accountId === a.id && (l.type === 'especes' || l.type === 'livret')) : null;
   const kind = a?.kind || 'courant';
-  openSheet(`${sheetHead(a ? 'Modifier le compte' : 'Nouveau compte', a ? '' : 'Un solde, un livret, un contrat d’assurance-vie…')}
+  openSheet(`${sheetHead(t(a ? 'Modifier le compte' : 'Nouveau compte'), a ? '' : t('Un solde, un livret, un contrat d’assurance-vie…'))}
     <form class="form" autocomplete="off">
-      <label class="field"><span>Nom</span><input class="input" id="ac-name" name="name" required maxlength="60" value="${esc(a?.name || '')}" placeholder="ex. Caisse d’Épargne"></label>
-      <div class="row2"><label class="field"><span>Établissement</span><input class="input" id="ac-inst" name="institution" maxlength="60" value="${esc(a?.institution || '')}" placeholder="facultatif"></label>
-      <label class="field"><span>Type</span><select class="input" id="ac-kind" name="kind">${KINDS.map(([k, l]) => `<option value="${k}" ${kind === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label></div>
-      <label class="field" id="ac-bal-wrap"><span>Solde actuel (€)</span><input class="input" id="ac-bal" name="balance" inputmode="decimal" value="${cash ? num(cash.amount) : ''}" placeholder="0,00"><small>Pour un compte courant ou un livret. Pour une assurance-vie ou un compte-titres, ajoutez ensuite des lignes.</small></label>
-      <div class="field"><span>Couleur</span><div class="swatches">${COLORS.map(c => `<label><input type="radio" name="color" value="${c}" ${(a?.color || 'blue') === c ? 'checked' : ''} aria-label="${c}"><span class="tile c-${c}" style="width:34px;height:34px"></span></label>`).join('')}</div></div>
+      <label class="field"><span>${t('Nom')}</span><input class="input" id="ac-name" name="name" required maxlength="60" value="${esc(a?.name || '')}" placeholder="${t('ex. Caisse d’Épargne')}"></label>
+      <div class="row2"><label class="field"><span>${t('Établissement')}</span><input class="input" id="ac-inst" name="institution" maxlength="60" value="${esc(a?.institution || '')}" placeholder="${t('facultatif')}"></label>
+      <label class="field"><span>${t('Type')}</span><select class="input" id="ac-kind" name="kind">${KINDS.map(([k, l]) => `<option value="${k}" ${kind === k ? 'selected' : ''}>${t(l)}</option>`).join('')}</select></label></div>
+      <label class="field" id="ac-bal-wrap"><span>${t('Solde actuel (€)')}</span><input class="input" id="ac-bal" name="balance" inputmode="decimal" value="${cash ? inputNum(cash.amount) : ''}" placeholder="${t('0,00')}"><small>${t('Pour un compte courant ou un livret. Pour une assurance-vie ou un compte-titres, ajoutez ensuite des lignes.')}</small></label>
+      <div class="field"><span>${t('Couleur')}</span><div class="swatches">${COLORS.map(c => `<label><input type="radio" name="color" value="${c}" ${(a?.color || 'blue') === c ? 'checked' : ''} aria-label="${c}"><span class="tile c-${c}" style="width:34px;height:34px"></span></label>`).join('')}</div></div>
       <p class="small neg" id="ac-err" hidden></p>
-      <div class="btn-row"><button class="btn primary" type="submit">${a ? 'Enregistrer' : 'Créer le compte'}</button>${a ? '<button class="btn danger" type="button" data-act="del">Supprimer le compte</button>' : ''}</div>
+      <div class="btn-row"><button class="btn primary" type="submit">${t(a ? 'Enregistrer' : 'Créer le compte')}</button>${a ? `<button class="btn danger" type="button" data-act="del">${t('Supprimer le compte')}</button>` : ''}</div>
     </form>`, {
-    label: 'Compte',
+    label: t('Compte'),
     onMount: (sh, close) => {
       const form = sh.querySelector('form');
       const sync = () => { const k = form.kind.value; sh.querySelector('#ac-bal-wrap').hidden = !(k === 'courant' || k === 'livret' || cash); };
@@ -719,10 +741,10 @@ function accountForm(id) {
         e.preventDefault();
         const name = form.name.value.trim();
         const err = sh.querySelector('#ac-err');
-        if (!name) { err.textContent = 'Donnez un nom au compte.'; err.hidden = false; return; }
+        if (!name) { err.textContent = t('Donnez un nom au compte.'); err.hidden = false; return; }
         const balRaw = form.balance.value.trim();
         const bal = balRaw ? parseNum(balRaw) : null;
-        if (balRaw && !isFinite(bal)) { err.textContent = 'Le solde doit être un nombre, par exemple 1 250,40.'; err.hidden = false; return; }
+        if (balRaw && !isFinite(bal)) { err.textContent = t('Le solde doit être un nombre, par exemple 1 250,40.'); err.hidden = false; return; }
         const acc = a || { id: 'acc-' + Date.now().toString(36), source: 'manual' };
         Object.assign(acc, { name, institution: form.institution.value.trim(), kind: form.kind.value, color: form.color.value });
         if (!a) data.accounts.push(acc);
@@ -732,13 +754,13 @@ function accountForm(id) {
           else data.lines.push({ id: 'ln-' + Date.now().toString(36), source: 'manual', accountId: acc.id, type: isLiv ? 'livret' : 'especes', envelope: isLiv ? 'Livrets' : 'Espèces', name: isLiv ? 'Livret' : 'Solde', qty: 1, amount: bal, price: bal, cost: bal, priceDate: today(), equity: 0, pending: 0, events: [], since: today() });
         }
         if (a) for (const l of data.lines) if (l.accountId === acc.id && l.source !== 'tr' && !isCashLike(l)) l.envelope = envelopeForAccount(acc);
-        close(); commit(a ? 'Compte mis à jour.' : 'Compte créé.');
+        close(); commit(t(a ? 'Compte mis à jour.' : 'Compte créé.'));
       });
       sh.querySelector('[data-act="del"]')?.addEventListener('click', async () => {
         const n = data.lines.filter(l => l.accountId === a.id && isHeld(l)).length;
-        if (await confirmSheet({ title: 'Supprimer ce compte ?', text: `${esc(a.name)} et ses ${n} ligne${n > 1 ? 's' : ''} seront retirés de cet appareil.`, ok: 'Supprimer', danger: true })) {
+        if (await confirmSheet({ title: t('Supprimer ce compte ?'), text: tn(n, '{name} et sa ligne seront retirés de cet appareil.', '{name} et ses {n} lignes seront retirés de cet appareil.', { name: esc(a.name) }), ok: t('Supprimer'), danger: true })) {
           data.accounts = data.accounts.filter(x => x.id !== a.id); data.lines = data.lines.filter(l => l.accountId !== a.id);
-          data.transactions = (data.transactions || []).filter(t => t.accountId !== a.id); close(); commit('Compte supprimé.');
+          data.transactions = (data.transactions || []).filter(tr => tr.accountId !== a.id); close(); commit(t('Compte supprimé.'));
         }
       });
     },
@@ -750,33 +772,33 @@ function lineForm(id, accountId) {
   if (!data.accounts.length) { accountForm(); return; }
   const accId = l?.accountId || accountId || data.accounts[0].id;
   const type = l?.type || (accById(accId)?.kind === 'av' ? 'fonds' : 'etf');
-  const sectorOpts = Object.entries(SECTORS).map(([k, v]) => `<option value="${k}" ${l?.lookthrough?.sector === k ? 'selected' : ''}>${v}</option>`).join('');
-  openSheet(`${sheetHead(l ? 'Modifier la ligne' : 'Nouvelle ligne', l?.source === 'tr' ? 'Ligne importée : un nouvel import remplacera quantité et prix de revient.' : '')}
+  const sectorOpts = Object.entries(SECTORS).map(([k, v]) => `<option value="${k}" ${l?.lookthrough?.sector === k ? 'selected' : ''}>${t(v)}</option>`).join('');
+  openSheet(`${sheetHead(t(l ? 'Modifier la ligne' : 'Nouvelle ligne'), l?.source === 'tr' ? t('Ligne importée : un nouvel import remplacera quantité et prix de revient.') : '')}
     <form class="form" autocomplete="off" novalidate>
-      <div class="row2"><label class="field"><span>Compte</span><select class="input" id="lf-acc" name="accountId">${data.accounts.map(a => `<option value="${esc(a.id)}" ${a.id === accId ? 'selected' : ''}>${esc(a.name)}</option>`).join('')}</select></label>
-      <label class="field"><span>Type</span><select class="input" id="lf-type" name="type">${TYPES.map(([k, v]) => `<option value="${k}" ${type === k ? 'selected' : ''}>${v}</option>`).join('')}</select></label></div>
-      <label class="field"><span>Nom</span><input class="input" id="lf-name" name="name" required maxlength="80" value="${esc(l?.name || '')}" placeholder="ex. Fonds euros Linxea Spirit"></label>
-      <div class="row2" data-show="market"><label class="field"><span>ISIN</span><input class="input" id="lf-isin" name="isin" maxlength="20" value="${esc(l?.isin || '')}" placeholder="ex. FR0010315770"></label>
-      <label class="field"><span>Symbole Yahoo</span><input class="input" id="lf-ticker" name="ticker" maxlength="20" value="${esc(l?.ticker || '')}" placeholder="trouvé via l’ISIN"></label></div>
-      <div class="row2" data-show="market"><label class="field"><span>Quantité</span><input class="input" id="lf-qty" name="qty" inputmode="decimal" value="${l && !isCashLike(l) ? num(l.qty, 6).replace(/,?0+$/, '') : ''}"></label>
-      <label class="field"><span>Prix de revient unitaire (€)</span><input class="input" id="lf-pru" name="pru" inputmode="decimal" value="${l && !isCashLike(l) && l.qty ? num(pru(l), 4) : ''}"></label></div>
-      <div class="row2" data-show="market"><label class="field"><span>Cours actuel (€)</span><input class="input" id="lf-price" name="price" inputmode="decimal" value="${l && !isCashLike(l) ? num(l.price, 4) : ''}"><small>Mis à jour à l’actualisation si un symbole est connu.</small></label>
-      <label class="field"><span>Part en actions (%)</span><input class="input" id="lf-eq" name="equity" inputmode="decimal" value="${l ? num((l.equity ?? 1) * 100, 0) : '100'}"></label></div>
-      <label class="field" data-show="cash"><span>Montant (€)</span><input class="input" id="lf-amount" name="amount" inputmode="decimal" value="${l && isCashLike(l) ? num(l.amount) : ''}"></label>
-      <div class="row2" data-show="action"><label class="field"><span>Secteur</span><select class="input" id="lf-sector" name="sector"><option value="">—</option>${sectorOpts}</select></label>
-      <label class="field"><span>Pays</span><input class="input" id="lf-country" name="country" maxlength="40" value="${esc(l?.lookthrough?.country || '')}" placeholder="ex. France"></label></div>
-      <label class="field"><span>Détenu depuis</span><input class="input" type="date" id="lf-since" name="since" value="${esc(l?.since || (l?.events?.[0]?.[0]) || today())}"><small>Sert à placer la ligne sur la courbe d’évolution.</small></label>
+      <div class="row2"><label class="field"><span>${t('Compte')}</span><select class="input" id="lf-acc" name="accountId">${data.accounts.map(a => `<option value="${esc(a.id)}" ${a.id === accId ? 'selected' : ''}>${esc(a.name)}</option>`).join('')}</select></label>
+      <label class="field"><span>${t('Type')}</span><select class="input" id="lf-type" name="type">${TYPES.map(([k, v]) => `<option value="${k}" ${type === k ? 'selected' : ''}>${t(v)}</option>`).join('')}</select></label></div>
+      <label class="field"><span>${t('Nom')}</span><input class="input" id="lf-name" name="name" required maxlength="80" value="${esc(l?.name || '')}" placeholder="${t('ex. Fonds euros Linxea Spirit')}"></label>
+      <div class="row2" data-show="market"><label class="field"><span>ISIN</span><input class="input" id="lf-isin" name="isin" maxlength="20" value="${esc(l?.isin || '')}" placeholder="${t('ex. FR0010315770')}"></label>
+      <label class="field"><span>${t('Symbole Yahoo')}</span><input class="input" id="lf-ticker" name="ticker" maxlength="20" value="${esc(l?.ticker || '')}" placeholder="${t('trouvé via l’ISIN')}"></label></div>
+      <div class="row2" data-show="market"><label class="field"><span>${t('Quantité')}</span><input class="input" id="lf-qty" name="qty" inputmode="decimal" value="${l && !isCashLike(l) ? inputNum(l.qty, 6) : ''}"></label>
+      <label class="field"><span>${t('Prix de revient unitaire (€)')}</span><input class="input" id="lf-pru" name="pru" inputmode="decimal" value="${l && !isCashLike(l) && l.qty ? inputNum(pru(l), 4) : ''}"></label></div>
+      <div class="row2" data-show="market"><label class="field"><span>${t('Cours actuel (€)')}</span><input class="input" id="lf-price" name="price" inputmode="decimal" value="${l && !isCashLike(l) ? inputNum(l.price, 4) : ''}"><small>${t('Mis à jour à l’actualisation si un symbole est connu.')}</small></label>
+      <label class="field"><span>${t('Part en actions (%)')}</span><input class="input" id="lf-eq" name="equity" inputmode="decimal" value="${l ? inputNum((l.equity ?? 1) * 100, 0) : '100'}"></label></div>
+      <label class="field" data-show="cash"><span>${t('Montant (€)')}</span><input class="input" id="lf-amount" name="amount" inputmode="decimal" value="${l && isCashLike(l) ? inputNum(l.amount) : ''}"></label>
+      <div class="row2" data-show="action"><label class="field"><span>${t('Secteur')}</span><select class="input" id="lf-sector" name="sector"><option value="">—</option>${sectorOpts}</select></label>
+      <label class="field"><span>${t('Pays')}</span><input class="input" id="lf-country" name="country" maxlength="40" value="${esc(l?.lookthrough?.country || '')}" placeholder="${t('ex. France')}"></label></div>
+      <label class="field"><span>${t('Détenu depuis')}</span><input class="input" type="date" id="lf-since" name="since" value="${esc(l?.since || (l?.events?.[0]?.[0]) || today())}"><small>${t('Sert à placer la ligne sur la courbe d’évolution.')}</small></label>
       <p class="small neg" id="lf-err" hidden></p>
-      <div class="btn-row"><button class="btn primary" type="submit">${l ? 'Enregistrer' : 'Ajouter la ligne'}</button><button class="btn" type="button" data-close>Annuler</button></div>
+      <div class="btn-row"><button class="btn primary" type="submit">${t(l ? 'Enregistrer' : 'Ajouter la ligne')}</button><button class="btn" type="button" data-close>${t('Annuler')}</button></div>
     </form>`, {
-    label: 'Ligne',
+    label: t('Ligne'),
     onMount: (sh, close) => {
       const f = sh.querySelector('form');
       const sync = () => {
-        const t = f.type.value, cash = ['especes', 'livret', 'fonds-euros'].includes(t);
+        const ty = f.type.value, cash = ['especes', 'livret', 'fonds-euros'].includes(ty);
         sh.querySelectorAll('[data-show="market"]').forEach(x => x.hidden = cash);
         sh.querySelectorAll('[data-show="cash"]').forEach(x => x.hidden = !cash);
-        sh.querySelectorAll('[data-show="action"]').forEach(x => x.hidden = !(t === 'action' || t === 'fonds' || t === 'autre'));
+        sh.querySelectorAll('[data-show="action"]').forEach(x => x.hidden = !(ty === 'action' || ty === 'fonds' || ty === 'autre'));
       };
       f.type.addEventListener('change', () => { sync(); if (f.type.value === 'crypto' || f.type.value === 'non-cote') f.equity.value = '0'; if (f.type.value === 'action' || f.type.value === 'etf') f.equity.value = '100'; });
       f.isin.addEventListener('change', () => { const lib = libraryFor(f.isin.value.trim()); if (lib) { if (!f.name.value) f.name.value = lib.name; if (!f.ticker.value) f.ticker.value = lib.ticker; f.type.value = lib.type; sync(); } });
@@ -784,21 +806,21 @@ function lineForm(id, accountId) {
       f.addEventListener('submit', e => {
         e.preventDefault();
         const err = sh.querySelector('#lf-err'); const fail = m => { err.textContent = m; err.hidden = false; };
-        const t = f.type.value, cash = ['especes', 'livret', 'fonds-euros'].includes(t);
-        const name = f.name.value.trim(); if (!name) return fail('Donnez un nom à la ligne.');
+        const ty = f.type.value, cash = ['especes', 'livret', 'fonds-euros'].includes(ty);
+        const name = f.name.value.trim(); if (!name) return fail(t('Donnez un nom à la ligne.'));
         const acc = accById(f.accountId.value);
         const n = l ? { ...l } : { id: 'ln-' + Date.now().toString(36), source: 'manual', events: [], pending: 0 };
-        n.accountId = acc.id; n.type = t; n.name = name; n.since = f.since.value || today();
+        n.accountId = acc.id; n.type = ty; n.name = name; n.since = f.since.value || today();
         if (l && l.name !== name) n.customName = true;
         if (cash) {
-          const amt = parseNum(f.amount.value); if (!isFinite(amt)) return fail('Indiquez un montant, par exemple 2 500.');
+          const amt = parseNum(f.amount.value); if (!isFinite(amt)) return fail(t('Indiquez un montant, par exemple 2 500.'));
           Object.assign(n, { amount: amt, qty: 1, price: amt, cost: amt, priceDate: today(), equity: 0, isin: '', ticker: '' });
-          n.envelope = acc.kind === 'av' ? 'Assurance-vie' : acc.kind === 'per' ? 'PER' : t === 'livret' ? 'Livrets' : t === 'fonds-euros' ? envelopeForAccount(acc) : 'Espèces';
+          n.envelope = acc.kind === 'av' ? 'Assurance-vie' : acc.kind === 'per' ? 'PER' : ty === 'livret' ? 'Livrets' : ty === 'fonds-euros' ? envelopeForAccount(acc) : 'Espèces';
           if (l?.source === 'tr') n.events = l.events;
         } else {
           const q = parseNum(f.qty.value), p = parseNum(f.pru.value), cur = parseNum(f.price.value);
-          if (!(q > 0)) return fail('Indiquez une quantité positive.');
-          if (!(p >= 0)) return fail('Indiquez le prix de revient unitaire (0 si offert).');
+          if (!(q > 0)) return fail(t('Indiquez une quantité positive.'));
+          if (!(p >= 0)) return fail(t('Indiquez le prix de revient unitaire (0 si offert).'));
           const price = isFinite(cur) && cur > 0 ? cur : p;
           const eq = parseNum(f.equity.value);
           n.isin = f.isin.value.trim().toUpperCase(); n.ticker = f.ticker.value.trim().toUpperCase();
@@ -806,19 +828,19 @@ function lineForm(id, accountId) {
           n.qty = q; n.cost = q * p + (+n.pending || 0);
           if (!l || Math.abs(price - l.price) > 1e-9) { n.price = price; n.priceDate = today(); n.priceSource = 'manuel'; }
           n.equity = isFinite(eq) ? Math.min(100, Math.max(0, eq)) / 100 : 1;
-          n.envelope = l?.source === 'tr' ? l.envelope : (t === 'crypto' && acc.kind !== 'pea' && acc.kind !== 'av' ? 'Crypto' : envelopeForAccount(acc));
+          n.envelope = l?.source === 'tr' ? l.envelope : (ty === 'crypto' && acc.kind !== 'pea' && acc.kind !== 'av' ? 'Crypto' : envelopeForAccount(acc));
           if (f.sector.value || f.country.value.trim()) n.lookthrough = { sector: f.sector.value, country: f.country.value.trim() };
           else delete n.lookthrough;
           if (l?.source === 'tr' && (Math.abs(q - l.qty) > 1e-9)) n.events = [...(l.events || []), [today(), q, n.cost, price]];
         }
         if (l) data.lines = data.lines.map(x => x.id === l.id ? n : x); else data.lines.push(n);
-        close(); commit(l ? 'Ligne mise à jour.' : 'Ligne ajoutée.');
+        close(); commit(t(l ? 'Ligne mise à jour.' : 'Ligne ajoutée.'));
       });
     },
   });
 }
 
-// ——— Fichiers ———
+// ——— Files ———
 function pickFile(accept) {
   return new Promise(res => {
     const inp = document.createElement('input'); inp.type = 'file'; inp.accept = accept; inp.style.display = 'none';
@@ -826,13 +848,13 @@ function pickFile(accept) {
     document.body.append(inp); inp.click();
   });
 }
-const readText = f => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result)); r.onerror = () => rej(new Error('Lecture du fichier impossible.')); r.readAsText(f, 'utf-8'); });
+const readText = f => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result)); r.onerror = () => rej(new Error(t('Lecture du fichier impossible.'))); r.readAsText(f, 'utf-8'); });
 
 async function saveFile(filename, text) {
   if (window.claude && typeof window.claude.use === 'function') {
     try {
       const dl = await window.claude.use('downloads');
-      if (dl) { await dl.save({ filename, data: text }); toast('Fichier enregistré.'); return; }
+      if (dl) { await dl.save({ filename, data: text }); toast(t('Fichier enregistré.')); return; }
     } catch (e) { if (e && e.code === 'declined') return; }
   }
   try {
@@ -840,10 +862,10 @@ async function saveFile(filename, text) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a'); a.href = url; a.download = filename; document.body.append(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 4000);
-    toast('Sauvegarde exportée : ' + filename);
+    toast(t('Sauvegarde exportée : {x}', { x: filename }));
   } catch {
-    openSheet(`${sheetHead('Copiez votre sauvegarde', 'Le téléchargement est bloqué ici.')}<textarea class="input" readonly id="bk-text">${esc(text)}</textarea><div class="btn-row" style="margin-top:12px"><button class="btn primary" data-copy>Copier</button></div>`, {
-      onMount: sh => sh.querySelector('[data-copy]').addEventListener('click', () => { const t = sh.querySelector('#bk-text'); navigator.clipboard?.writeText(t.value).then(() => toast('Copié.'), () => { t.select(); }); }),
+    openSheet(`${sheetHead(t('Copiez votre sauvegarde'), t('Le téléchargement est bloqué ici.'))}<textarea class="input" readonly id="bk-text">${esc(text)}</textarea><div class="btn-row" style="margin-top:12px"><button class="btn primary" data-copy>${t('Copier')}</button></div>`, {
+      onMount: sh => sh.querySelector('[data-copy]').addEventListener('click', () => { const ta = sh.querySelector('#bk-text'); navigator.clipboard?.writeText(ta.value).then(() => toast(t('Copié.')), () => { ta.select(); }); }),
     });
   }
 }
@@ -854,19 +876,19 @@ async function importCsvFlow() {
   let imp;
   try { imp = importTradeRepublic(await readText(f)); } catch (e) { toast(e.message); return; }
   const st = imp.stats;
-  const held = imp.lines.filter(l => isHeld(l)); // sans les positions soldées, gardées pour la courbe
+  const held = imp.lines.filter(l => isHeld(l)); // without fully sold positions, kept for the chart
   const byAcc = id => held.filter(l => l.accountId === id);
-  openSheet(`${sheetHead('Import Trade Republic', `${num(st.rows, 0)} opérations, du ${dateLong(st.from)} au ${dateLong(st.to)}`)}
-    ${imp.accounts.map(a => `<div class="section-head" style="margin-top:8px"><h2>${esc(a.name)}</h2><span class="aside">${byAcc(a.id).length} ligne${byAcc(a.id).length > 1 ? 's' : ''}</span></div>
-      <div class="holdings">${byAcc(a.id).sort((x, y) => lineCost(y) - lineCost(x)).map(l => `<div class="holding"><span class="r"></span><span class="n">${esc(shortName(l))}</span><span class="a">${isCashLike(l) ? eur(l.amount) : fqty(l.qty)}</span><span class="w">${isCashLike(l) ? 'Solde espèces recalculé' : 'Prix de revient ' + eur(l.cost) + (l.pending ? ' · dont ' + eur(l.pending) + ' en attente d’exécution' : '')}</span></div>`).join('')}</div>`).join('')}
-    <div class="callout" style="margin:16px 0">Espèces recalculées : <b>${Object.entries(st.cash).map(([id, v]) => esc(imp.accounts.find(a => a.id === id)?.name || id) + ' ' + eur(v)).join(' · ')}</b>. Vérifiez ce montant dans l’app Trade Republic.</div>
-    ${data.demo ? '<p class="small muted">Les données d’exemple seront effacées.</p>' : ''}
-    <div class="btn-row"><button class="btn primary" data-ok>Importer</button><button class="btn" data-close>Annuler</button></div>`, {
-    label: 'Import',
+  openSheet(`${sheetHead(t('Import Trade Republic'), tn(st.rows, '{n} opération, du {a} au {b}', '{n} opérations, du {a} au {b}', { n: num(st.rows, 0), a: dateLong(st.from), b: dateLong(st.to) }))}
+    ${imp.accounts.map(a => `<div class="section-head" style="margin-top:8px"><h2>${esc(a.name)}</h2><span class="aside">${tn(byAcc(a.id).length, '{n} ligne', '{n} lignes')}</span></div>
+      <div class="holdings">${byAcc(a.id).sort((x, y) => lineCost(y) - lineCost(x)).map(l => `<div class="holding"><span class="r"></span><span class="n">${esc(shortName(l))}</span><span class="a">${isCashLike(l) ? eur(l.amount) : fqty(l.qty)}</span><span class="w">${isCashLike(l) ? t('Solde espèces recalculé') : t('Prix de revient {x}', { x: eur(l.cost) }) + (l.pending ? ' · ' + t('dont {x} en attente d’exécution', { x: eur(l.pending) }) : '')}</span></div>`).join('')}</div>`).join('')}
+    <div class="callout" style="margin:16px 0">${t('Espèces recalculées : {x}. Vérifiez ce montant dans l’app Trade Republic.', { x: `<b>${Object.entries(st.cash).map(([id, v]) => esc(imp.accounts.find(a => a.id === id)?.name || id) + ' ' + eur(v)).join(' · ')}</b>` })}</div>
+    ${data.demo ? `<p class="small muted">${t('Les données d’exemple seront effacées.')}</p>` : ''}
+    <div class="btn-row"><button class="btn primary" data-ok>${t('Importer')}</button><button class="btn" data-close>${t('Annuler')}</button></div>`, {
+    label: t('Import'),
     onMount: (sh, close) => sh.querySelector('[data-ok]').addEventListener('click', () => {
       if (data.demo) { const keep = { profile: data.profile, settings: data.settings }; data = { ...emptyData(), ...keep }; }
       data = mergeImport(data, imp); close(); land('patrimoine');
-      commit(`${held.length} lignes importées.`);
+      commit(tn(held.length, '{n} ligne importée.', '{n} lignes importées.'));
     }),
   });
 }
@@ -875,23 +897,23 @@ async function restoreFlow() {
   const f = await pickFile('.json,application/json');
   if (!f) return;
   let obj;
-  try { obj = JSON.parse(await readText(f)); } catch { toast('Ce fichier n’est pas un JSON lisible.'); return; }
+  try { obj = JSON.parse(await readText(f)); } catch { toast(t('Ce fichier n’est pas un JSON lisible.')); return; }
   try {
     if (obj && obj.encrypted) {
-      const pass = await passSheet({ title: 'Sauvegarde chiffrée', confirm: false });
+      const pass = await passSheet({ title: t('Sauvegarde chiffrée'), confirm: false });
       if (!pass) return;
       obj = await decryptBackup(obj, pass);
     }
     const nd = validateBackup(obj);
     const accs = nd.accounts.length, lns = nd.lines.length;
     const empty = !data.lines.length && !data.accounts.length;
-    const what = `${accs} compte${accs > 1 ? 's' : ''} et ${lns} ligne${lns > 1 ? 's' : ''}`;
+    const what = `${tn(accs, '{n} compte', '{n} comptes')} ${t('et')} ${tn(lns, '{n} ligne', '{n} lignes')}`;
     let mode = empty && !obj.partial ? 'replace' : null;
     if (!mode) mode = await choiceSheet({
-      title: obj.partial ? 'Ajouter ces comptes ?' : 'Restaurer la sauvegarde',
-      text: obj.partial ? `Ce fichier contient ${what} (${esc(nd.accounts.map(a => a.name).join(', '))}). Ils seront ajoutés à vos données ; un compte déjà présent avec le même identifiant sera remplacé.`
-        : `La sauvegarde du ${dateLong((obj.exportedAt || '').slice(0, 10))} contient ${what}. Vous pouvez l’ajouter à vos données actuelles, ou tout remplacer.`,
-      choices: obj.partial || empty ? [['merge', 'Ajouter', 'primary']] : [['merge', 'Ajouter à mes données', 'primary'], ['replace', 'Tout remplacer', '']],
+      title: t(obj.partial ? 'Ajouter ces comptes ?' : 'Restaurer la sauvegarde'),
+      text: obj.partial ? t('Ce fichier contient {what} ({names}). Ils seront ajoutés à vos données ; un compte déjà présent avec le même identifiant sera remplacé.', { what, names: esc(nd.accounts.map(a => a.name).join(', ')) })
+        : t('La sauvegarde du {date} contient {what}. Vous pouvez l’ajouter à vos données actuelles, ou tout remplacer.', { date: dateLong((obj.exportedAt || '').slice(0, 10)), what }),
+      choices: obj.partial || empty ? [['merge', t('Ajouter'), 'primary']] : [['merge', t('Ajouter à mes données'), 'primary'], ['replace', t('Tout remplacer'), '']],
     });
     if (!mode) return;
     if (mode === 'replace') data = nd;
@@ -900,27 +922,27 @@ async function restoreFlow() {
       const accIds = new Set(nd.accounts.map(a => a.id)), lineIds = new Set(nd.lines.map(l => l.id));
       data.accounts = [...data.accounts.filter(a => !accIds.has(a.id)), ...nd.accounts];
       data.lines = [...data.lines.filter(l => !lineIds.has(l.id) && !accIds.has(l.accountId)), ...nd.lines];
-      // opérations des comptes restaurés ; une sauvegarde sans historique garde celui de l'appareil
-      if (Array.isArray(nd.transactions)) data.transactions = [...(data.transactions || []).filter(t => !accIds.has(t.accountId)), ...nd.transactions];
+      // transactions of the restored accounts; a backup without history keeps the device's
+      if (Array.isArray(nd.transactions)) data.transactions = [...(data.transactions || []).filter(tr => !accIds.has(tr.accountId)), ...nd.transactions];
       data.priceHistory = { ...(data.priceHistory || {}), ...(nd.priceHistory || {}) };
       if (!data.profile.firstName && nd.profile.firstName) data.profile.firstName = nd.profile.firstName;
       if (!data.trStats && nd.trStats) data.trStats = nd.trStats;
     }
-    land('patrimoine'); commit(mode === 'replace' ? 'Sauvegarde restaurée.' : `${what} ajoutés.`);
-  } catch (e) { toast(e.message || 'Restauration impossible.'); }
+    land('patrimoine'); commit(mode === 'replace' ? t('Sauvegarde restaurée.') : t('{what} ajoutés.', { what }));
+  } catch (e) { toast(e.message || t('Restauration impossible.')); }
 }
 
 async function exportFlow(encrypted) {
   const payload = backupPayload(data);
   const stamp = today();
   if (!encrypted) return saveFile(`carnet-sauvegarde-${stamp}.json`, JSON.stringify(payload, null, 1));
-  const pass = await passSheet({ title: 'Sauvegarde chiffrée', confirm: true });
+  const pass = await passSheet({ title: t('Sauvegarde chiffrée'), confirm: true });
   if (!pass) return;
   const enc = await encryptBackup(payload, pass);
   return saveFile(`carnet-sauvegarde-chiffree-${stamp}.json`, JSON.stringify(enc));
 }
 
-// ——— Synchronisation (chiffrée dans le navigateur, voir sync.js) ———
+// ——— Sync (encrypted in the browser, see sync.js) ———
 const syncPayload = d => { const { demo, ...rest } = d; return rest; };
 const nowIso = () => new Date().toISOString();
 let syncTimer, editRev = 0;
@@ -930,7 +952,7 @@ function scheduleSync() {
   if (!st.dirty) { st.dirty = true; saveSyncState(st); }
   clearTimeout(syncTimer); syncTimer = setTimeout(() => syncNow(), 1500);
 }
-// rev : numéro de modification envoyé. Une modification faite pendant l'envoi reste à envoyer.
+// rev: number of the change being sent. A change made during the send stays to be sent.
 function markSynced(st, version, rev) {
   const dirty = rev !== editRev;
   saveSyncState({ ...st, version, dirty, at: nowIso() });
@@ -940,29 +962,29 @@ function adoptRemote(r) { data = normalize(r.data); save(data); render(); }
 
 function syncStatusHtml() {
   const st = syncState(); if (!st) return '';
-  if (ui.syncing) return '<span class="status"><i></i>Synchronisation…</span>';
-  if (ui.syncError) return `<span class="status off"><i></i>${esc(ui.syncError)}</span>${ui.syncLost ? '<br><button class="btn sm" style="margin-top:10px" data-action="sync-recreate">Recréer le coffre avec les données de cet appareil</button>' : ''}`;
-  if (st.dirty) return '<span class="status"><i></i>Changements en attente d’envoi</span>';
-  if (!st.at) return '<span class="status"><i></i>Pas encore synchronisé</span>';
+  if (ui.syncing) return `<span class="status"><i></i>${t('Synchronisation…')}</span>`;
+  if (ui.syncError) return `<span class="status off"><i></i>${esc(ui.syncError)}</span>${ui.syncLost ? `<br><button class="btn sm" style="margin-top:10px" data-action="sync-recreate">${t('Recréer le coffre avec les données de cet appareil')}</button>` : ''}`;
+  if (st.dirty) return `<span class="status"><i></i>${t('Changements en attente d’envoi')}</span>`;
+  if (!st.at) return `<span class="status"><i></i>${t('Pas encore synchronisé')}</span>`;
   const d = new Date(st.at), sameDay = d.toDateString() === new Date().toDateString();
-  return `<span class="status ok"><i></i>À jour (${sameDay ? 'à ' + d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : 'le ' + dateShort(st.at.slice(0, 10))})</span>`;
+  return `<span class="status ok"><i></i>${t(sameDay ? 'À jour (à {x})' : 'À jour (le {x})', { x: sameDay ? timeShort(d) : dateShort(st.at.slice(0, 10)) })}</span>`;
 }
 function setSyncUI() { const el = $('#sync-status'); if (el) el.innerHTML = syncStatusHtml(); }
 function syncCard() {
   const st = syncState();
-  if (!st) return `<section class="card"><p class="lead">Retrouvez vos données sur l’ordinateur et le téléphone. Elles sont chiffrées dans ce navigateur avant d’être envoyées : le serveur ne garde qu’un bloc illisible.</p>
-    <div class="btn-row"><button class="btn primary" data-action="sync-create">Créer un coffre</button><button class="btn" data-action="sync-login">Se connecter</button></div>
-    <p class="note">Un identifiant et une phrase de passe, sans e-mail. La phrase n’est jamais envoyée : si vous l’oubliez, personne ne peut ouvrir le coffre, mais les données de vos appareils restent intactes.</p></section>`;
-  return `<section class="card"><p class="lead">Cet appareil est relié au coffre <b>${esc(st.user)}</b>. Chaque modification y est envoyée chiffrée, et vos autres appareils la récupèrent en s’ouvrant.</p>
+  if (!st) return `<section class="card"><p class="lead">${t('Retrouvez vos données sur l’ordinateur et le téléphone. Elles sont chiffrées dans ce navigateur avant d’être envoyées : le serveur ne garde qu’un bloc illisible.')}</p>
+    <div class="btn-row"><button class="btn primary" data-action="sync-create">${t('Créer un coffre')}</button><button class="btn" data-action="sync-login">${t('Se connecter')}</button></div>
+    <p class="note">${t('Un identifiant et une phrase de passe, sans e-mail. La phrase n’est jamais envoyée : si vous l’oubliez, personne ne peut ouvrir le coffre, mais les données de vos appareils restent intactes.')}</p></section>`;
+  return `<section class="card"><p class="lead">${t('Cet appareil est relié au coffre {x}. Chaque modification y est envoyée chiffrée, et vos autres appareils la récupèrent en s’ouvrant.', { x: `<b>${esc(st.user)}</b>` })}</p>
     <p style="margin:0 0 12px" id="sync-status">${syncStatusHtml()}</p>
-    <div class="btn-row"><button class="btn" data-action="sync-now">Synchroniser</button><button class="btn" data-action="sync-logout">Déconnecter cet appareil</button></div>
-    <div class="btn-row" style="margin-top:8px"><button class="btn danger" data-action="sync-delete">Supprimer le coffre en ligne</button></div></section>`;
+    <div class="btn-row"><button class="btn" data-action="sync-now">${t('Synchroniser')}</button><button class="btn" data-action="sync-logout">${t('Déconnecter cet appareil')}</button></div>
+    <div class="btn-row" style="margin-top:8px"><button class="btn danger" data-action="sync-delete">${t('Supprimer le coffre en ligne')}</button></div></section>`;
 }
 
 async function syncNow(manual = false) {
   const st = syncState();
   if (!st || ui.syncing) return;
-  if (data.demo) { if (manual) toast('Effacez d’abord les données d’exemple.'); return; }
+  if (data.demo) { if (manual) toast(t('Effacez d’abord les données d’exemple.')); return; }
   clearTimeout(syncTimer);
   ui.syncing = true; ui.syncError = ''; ui.syncLost = false; setSyncUI();
   const rev = editRev;
@@ -973,34 +995,34 @@ async function syncNow(manual = false) {
       catch (e) { if (e.status !== 409) throw e; ok = await syncConflict(st, rev); }
     } else {
       const r = await pullVault(st, st.version);
-      if (r.version !== st.version && rev === editRev) { adoptRemote(r); if (!manual) toast('Données mises à jour depuis un autre appareil.'); }
+      if (r.version !== st.version && rev === editRev) { adoptRemote(r); if (!manual) toast(t('Données mises à jour depuis un autre appareil.')); }
       markSynced(st, rev === editRev ? r.version : st.version, rev);
     }
-    if (manual && ok) toast('Synchronisé.');
+    if (manual && ok) toast(t('Synchronisé.'));
   } catch (e) {
     ui.syncLost = e.status === 404;
-    ui.syncError = ui.syncLost ? 'Le coffre n’existe plus sur le serveur (supprimé depuis un autre appareil, ou base vidée).'
-      : e.status === 401 ? 'Coffre supprimé ou phrase de passe changée : déconnectez cet appareil.' : e.message;
+    ui.syncError = ui.syncLost ? t('Le coffre n’existe plus sur le serveur (supprimé depuis un autre appareil, ou base vidée).')
+      : e.status === 401 ? t('Coffre supprimé ou phrase de passe changée : déconnectez cet appareil.') : e.message;
     if (manual) toast(ui.syncError);
   } finally { ui.syncing = false; setSyncUI(); }
 }
 
 async function syncConflict(st, rev) {
   const r = await pullVault(st);
-  const when = r.updatedAt ? new Date(r.updatedAt).toLocaleString('fr-FR', { dateStyle: 'long', timeStyle: 'short' }) : '';
+  const when = r.updatedAt ? dateTime(new Date(r.updatedAt)) : '';
   const c = await choiceSheet({
-    title: 'Modifié sur deux appareils',
-    text: `Le coffre a été modifié depuis un autre appareil${when ? ' (le ' + esc(when) + ')' : ''}, alors que celui-ci avait aussi des changements non envoyés. Quelle version garder ?`,
-    choices: [['remote', 'Celle du coffre', 'primary'], ['local', 'Celle de cet appareil', '']],
+    title: t('Modifié sur deux appareils'),
+    text: t(when ? 'Le coffre a été modifié depuis un autre appareil (le {when}), alors que celui-ci avait aussi des changements non envoyés. Quelle version garder ?' : 'Le coffre a été modifié depuis un autre appareil, alors que celui-ci avait aussi des changements non envoyés. Quelle version garder ?', { when: esc(when) }),
+    choices: [['remote', t('Celle du coffre'), 'primary'], ['local', t('Celle de cet appareil'), '']],
   });
   if (c === 'remote') { adoptRemote(r); markSynced(st, r.version, editRev); return true; }
   if (c === 'local') { const p = await pushVault(st, r.version, syncPayload(data)); markSynced(st, p.version, rev); return true; }
-  ui.syncError = 'Conflit non résolu : touchez « Synchroniser » pour choisir.';
+  ui.syncError = t('Conflit non résolu : touchez « Synchroniser » pour choisir.');
   return false;
 }
 
-// Coffre disparu du serveur : cet appareil a déjà les clés, il le recrée avec ses données.
-// Les autres appareils connectés le retrouvent à leur prochain relevé.
+// Vault gone from the server: this device already has the keys, so it recreates it with its data.
+// The other connected devices find it again on their next poll.
 async function recreateVault() {
   const st = syncState(); if (!st || ui.syncing || data.demo) return;
   ui.syncing = true; setSyncUI();
@@ -1008,79 +1030,79 @@ async function recreateVault() {
   let taken = false;
   try {
     const r = await pushVault(st, 0, syncPayload(data));
-    markSynced(st, r.version, rev); ui.syncError = ''; ui.syncLost = false; toast('Coffre recréé.');
+    markSynced(st, r.version, rev); ui.syncError = ''; ui.syncLost = false; toast(t('Coffre recréé.'));
   } catch (e) { if (e.status === 409) taken = true; else toast(e.message); }
   finally { ui.syncing = false; setSyncUI(); }
-  if (taken) syncNow(true); // déjà recréé depuis un autre appareil : synchronisation habituelle
+  if (taken) syncNow(true); // already recreated from another device: regular sync
 }
 
 function syncSheet(create) {
-  const label = create ? 'Créer et synchroniser' : 'Se connecter';
-  openSheet(`${sheetHead(create ? 'Créer un coffre' : 'Se connecter', create ? 'Les données de cet appareil y seront envoyées, chiffrées.' : 'Retrouvez les données de vos autres appareils.')}
+  const label = t(create ? 'Créer et synchroniser' : 'Se connecter');
+  openSheet(`${sheetHead(t(create ? 'Créer un coffre' : 'Se connecter'), t(create ? 'Les données de cet appareil y seront envoyées, chiffrées.' : 'Retrouvez les données de vos autres appareils.'))}
     <form class="form">
-      <label class="field"><span>Identifiant</span><input class="input" id="sy-user" name="username" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="40" required><small>3 à 40 caractères : lettres sans accent, chiffres, point, tiret.</small></label>
-      <label class="field"><span>Phrase de passe</span><input class="input" type="password" id="sy-pass" name="password" autocomplete="${create ? 'new-password' : 'current-password'}" required></label>
-      ${create ? `<label class="field"><span>Encore une fois</span><input class="input" type="password" id="sy-pass2" autocomplete="new-password" required></label>
-      <p class="note">Elle chiffre vos données et ne quitte jamais cet appareil. Oubliée, rien ne permet de la retrouver : rangez-la dans un gestionnaire de mots de passe.</p>` : ''}
+      <label class="field"><span>${t('Identifiant')}</span><input class="input" id="sy-user" name="username" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="40" required><small>${t('3 à 40 caractères : lettres sans accent, chiffres, point, tiret.')}</small></label>
+      <label class="field"><span>${t('Phrase de passe')}</span><input class="input" type="password" id="sy-pass" name="password" autocomplete="${create ? 'new-password' : 'current-password'}" required></label>
+      ${create ? `<label class="field"><span>${t('Encore une fois')}</span><input class="input" type="password" id="sy-pass2" autocomplete="new-password" required></label>
+      <p class="note">${t('Elle chiffre vos données et ne quitte jamais cet appareil. Oubliée, rien ne permet de la retrouver : rangez-la dans un gestionnaire de mots de passe.')}</p>` : ''}
       <p class="small neg" id="sy-err" hidden></p>
-      <div class="btn-row"><button class="btn primary" type="submit">${label}</button><button class="btn" type="button" data-close>Annuler</button></div></form>`, {
-    label: create ? 'Créer un coffre' : 'Se connecter',
+      <div class="btn-row"><button class="btn primary" type="submit">${label}</button><button class="btn" type="button" data-close>${t('Annuler')}</button></div></form>`, {
+    label: t(create ? 'Créer un coffre' : 'Se connecter'),
     onMount: (sh, close) => {
       const f = sh.querySelector('form'), err = sh.querySelector('#sy-err'), btn = f.querySelector('[type=submit]');
       const fail = m => { err.textContent = m; err.hidden = false; btn.disabled = false; btn.textContent = label; };
       f.addEventListener('submit', async e => {
         e.preventDefault();
         const user = normUser(sh.querySelector('#sy-user').value), pass = sh.querySelector('#sy-pass').value;
-        if (!USER_RE.test(user)) return fail('Identifiant : 3 à 40 caractères parmi a-z, 0-9, point, tiret et tiret bas.');
-        if (create && pass.length < 10) return fail('Phrase de passe : au moins 10 caractères.');
-        if (create && pass !== sh.querySelector('#sy-pass2').value) return fail('Les deux phrases ne sont pas identiques.');
-        if (create && data.demo) return fail('Effacez d’abord les données d’exemple.');
-        err.hidden = true; btn.disabled = true; btn.textContent = 'Calcul de la clé…';
+        if (!USER_RE.test(user)) return fail(t('Identifiant : 3 à 40 caractères parmi a-z, 0-9, point, tiret et tiret bas.'));
+        if (create && pass.length < 10) return fail(t('Phrase de passe : au moins 10 caractères.'));
+        if (create && pass !== sh.querySelector('#sy-pass2').value) return fail(t('Les deux phrases ne sont pas identiques.'));
+        if (create && data.demo) return fail(t('Effacez d’abord les données d’exemple.'));
+        err.hidden = true; btn.disabled = true; btn.textContent = t('Calcul de la clé…');
         try {
           const acc = await deriveAccount(user, pass);
-          btn.textContent = 'Connexion…';
+          btn.textContent = t('Connexion…');
           if (create) {
             const r = await pushVault(acc, 0, syncPayload(data));
             saveSyncState({ ...acc, version: r.version, at: nowIso() });
-            close(); render(); toast('Coffre créé. Connectez-vous avec le même identifiant sur vos autres appareils.');
+            close(); render(); toast(t('Coffre créé. Connectez-vous avec le même identifiant sur vos autres appareils.'));
             return;
           }
           const r = await pullVault(acc);
           const local = !data.demo && (data.accounts.length || data.lines.length);
           let version = r.version;
           if (local) {
-            const n = (d, k, w) => `${d[k].length} ${w}${d[k].length > 1 ? 's' : ''}`;
+            const n = d => `${tn(d.accounts.length, '{n} compte', '{n} comptes')} ${t('et')} ${tn(d.lines.length, '{n} ligne', '{n} lignes')}`;
             const c = await choiceSheet({
-              title: 'Cet appareil a déjà des données',
-              text: `Le coffre contient ${n(r.data, 'accounts', 'compte')} et ${n(r.data, 'lines', 'ligne')} ; cet appareil, ${n(data, 'accounts', 'compte')} et ${n(data, 'lines', 'ligne')}. Lesquelles garder ? L’autre version sera remplacée.`,
-              choices: [['remote', 'Celles du coffre', 'primary'], ['local', 'Celles de cet appareil', '']],
+              title: t('Cet appareil a déjà des données'),
+              text: t('Le coffre contient {remote} ; cet appareil, {local}. Lesquelles garder ? L’autre version sera remplacée.', { remote: n(r.data), local: n(data) }),
+              choices: [['remote', t('Celles du coffre'), 'primary'], ['local', t('Celles de cet appareil'), '']],
             });
-            if (!c) return fail('Connexion annulée : rien n’a été modifié.');
+            if (!c) return fail(t('Connexion annulée : rien n’a été modifié.'));
             if (c === 'local') version = (await pushVault(acc, r.version, syncPayload(data))).version;
             else adoptRemote(r);
           } else adoptRemote(r);
           saveSyncState({ ...acc, version, at: nowIso() });
-          ui.syncError = ''; close(); render(); toast('Appareil synchronisé.');
+          ui.syncError = ''; close(); render(); toast(t('Appareil synchronisé.'));
         } catch (e2) {
-          if (create && (e2.status === 401 || e2.status === 409)) return fail('Cet identifiant est déjà pris. Choisissez-en un autre, ou connectez-vous.');
-          if (!create && e2.status === 401) return fail('Phrase de passe incorrecte.');
-          fail(e2.message || 'Synchronisation impossible.');
+          if (create && (e2.status === 401 || e2.status === 409)) return fail(t('Cet identifiant est déjà pris. Choisissez-en un autre, ou connectez-vous.'));
+          if (!create && e2.status === 401) return fail(t('Phrase de passe incorrecte.'));
+          fail(e2.message || t('Synchronisation impossible.'));
         }
       });
     },
   });
 }
 
-// ——— Cours ———
+// ——— Prices ———
 async function api(path, timeout = 4000) {
-  const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), timeout);
+  const ctl = new AbortController(); const timer = setTimeout(() => ctl.abort(), timeout);
   try {
     const r = await fetch(path, { cache: 'no-store', signal: ctl.signal, headers: { accept: 'application/json' } });
     if (!r.ok) throw new Error('HTTP ' + r.status);
     const ct = r.headers.get('content-type') || '';
-    if (!ct.includes('json')) throw new Error('Réponse inattendue');
+    if (!ct.includes('json')) throw new Error(t('Réponse inattendue'));
     return await r.json();
-  } finally { clearTimeout(t); }
+  } finally { clearTimeout(timer); }
 }
 async function checkServer() {
   try { const j = await api('api/health', 3000); ui.server = j && j.app === 'carnet' ? 'ok' : 'off'; } catch { ui.server = 'off'; }
@@ -1088,10 +1110,10 @@ async function checkServer() {
   autoCompositions();
 }
 
-// Nouvelles lignes : chaque fonds (ETF, OPCVM) et chaque action hors bibliothèque reçoit
-// automatiquement sa composition (Morningstar, justETF, via le serveur ; seul l'ISIN est envoyé).
-// Nouvel essai après 3 jours si rien n'a été trouvé, mise à jour tous les 30 jours sinon,
-// et tout de suite pour les compositions d'une version précédente (COMP_VERSION).
+// New lines: every fund (ETF, UCITS) and every stock outside the library automatically gets
+// its composition (Morningstar, justETF, through the server; only the ISIN is sent).
+// New attempt after 3 days if nothing was found, update every 30 days otherwise,
+// and right away for compositions from a previous version (COMP_VERSION).
 const ISIN_OK = /^[A-Z]{2}[A-Z0-9]{9}[0-9]$/;
 const COMP_VERSION = 2;
 const COMPOSABLE = l => !isCashLike(l) && ISIN_OK.test(String(l.isin || '').toUpperCase()) && !['crypto', 'non-cote', 'autre-fixe'].includes(l.type) && wantsComposition(l.isin);
@@ -1113,31 +1135,31 @@ async function autoCompositions() {
         const j = await api('api/composition?isin=' + isin, 65000);
         data.compositions = { ...(data.compositions || {}), [isin]: { ...j, at: new Date().toISOString(), v: COMP_VERSION } };
         stored++; if (j.ok) found.push(isin);
-      } catch { /* serveur ou justETF injoignable : nouvel essai au prochain chargement */ }
+      } catch { /* server or justETF unreachable: new attempt on next load */ }
     });
   } finally { composing = false; }
   if (!stored) return;
   const names = found.map(i => shortName(data.lines.find(l => String(l.isin).toUpperCase() === i)));
-  commit(!names.length ? '' : names.length <= 3 ? `Composition à jour : ${names.join(', ')}.` : `Compositions à jour pour ${names.length} produits.`);
+  commit(!names.length ? '' : names.length <= 3 ? t('Composition à jour : {x}.', { x: names.join(', ') }) : t('Compositions à jour pour {n} produits.', { n: names.length }));
 }
 function noServerSheet() {
-  openSheet(`${sheetHead('Actualisation indisponible', 'Le serveur Carnet ne répond pas.')}
-    <p class="muted" style="margin-top:0">Les cours sont récupérés par le petit serveur livré avec Carnet, qui interroge Yahoo Finance. Lancez Carnet avec <code>node server.mjs</code> ou déployez-le sur Vercel (voir le README).</p>
-    <p class="muted">En attendant, vous pouvez saisir un cours à la main : touchez une ligne, puis « Modifier ».</p>
-    <div class="btn-row"><button class="btn primary" data-close>Compris</button></div>`, { label: 'Actualisation' });
+  openSheet(`${sheetHead(t('Actualisation indisponible'), t('Le serveur Carnet ne répond pas.'))}
+    <p class="muted" style="margin-top:0">${t('Les cours sont récupérés par le petit serveur livré avec Carnet, qui interroge Yahoo Finance. Lancez Carnet avec {cmd} ou déployez-le sur Vercel (voir le README).', { cmd: '<code>node server.mjs</code>' })}</p>
+    <p class="muted">${t('En attendant, vous pouvez saisir un cours à la main : touchez une ligne, puis « Modifier ».')}</p>
+    <div class="btn-row"><button class="btn primary" data-close>${t('Compris')}</button></div>`, { label: t('Actualisation') });
 }
-// Actualise tout ce qui a une cotation publique : cours du jour + historique (5 ans hebdo, 1 an au jour le jour).
+// Refreshes everything with a public quote: today's price + history (5 years weekly, 1 year daily).
 const QUOTABLE = l => !isCashLike(l) && (l.ticker || l.isin);
 async function pool(items, n, fn) { let i = 0; await Promise.all(Array.from({ length: Math.min(n, items.length) }, async () => { while (i < items.length) await fn(items[i++]); })); }
 function navAt(hist, d) { if (!hist?.length) return null; const after = hist.find(h => h[0] >= d); return after || hist[hist.length - 1]; }
 function refreshLabel() {
-  if (ui.busy) return { short: ui.progress || 'Actualisation…', long: ui.progress || 'Actualisation…' };
+  if (ui.busy) return { short: ui.progress || t('Actualisation…'), long: ui.progress || t('Actualisation…') };
   const at = data.lastRefresh?.at;
-  if (!at) return { short: 'Actualiser', long: 'Actualiser les cours' };
+  if (!at) return { short: t('Actualiser'), long: t('Actualiser les cours') };
   const d = new Date(at);
   const sameDay = d.toDateString() === new Date().toDateString();
-  const when = sameDay ? d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : dateShort(at.slice(0, 10));
-  return { short: when, long: 'Cours mis à jour ' + (sameDay ? 'à ' : 'le ') + when };
+  const when = sameDay ? timeShort(d) : dateShort(at.slice(0, 10));
+  return { short: when, long: t(sameDay ? 'Cours mis à jour à {x}' : 'Cours mis à jour le {x}', { x: when }) };
 }
 function setRefreshUI() {
   const lab = refreshLabel();
@@ -1145,47 +1167,51 @@ function setRefreshUI() {
     b.classList.toggle('spin', ui.busy); b.disabled = ui.busy;
     const sh = b.querySelector('.r-short'), lg = b.querySelector('.r-long');
     if (sh) sh.textContent = lab.short; if (lg) lg.textContent = lab.long;
-    b.title = ui.busy ? 'Actualisation en cours' : 'Actualiser les cours et l’historique de chaque produit';
+    b.title = t(ui.busy ? 'Actualisation en cours' : 'Actualiser les cours et l’historique de chaque produit');
   }
 }
 function progress(msg) { ui.progress = msg; setRefreshUI(); }
 
+// The refresh report is stored: its messages stay French keys (with their value in .arg)
+// and are translated when shown, so changing the language also changes the report.
 async function refreshPrices() {
   if (ui.busy) return;
-  ui.busy = true; progress('Connexion…');
+  ui.busy = true; progress(t('Connexion…'));
   try {
     try { await api('api/health', 4000); ui.server = 'ok'; } catch { ui.server = 'off'; noServerSheet(); return; }
     const targets = heldLines(data).filter(QUOTABLE);
-    if (!targets.length) { toast('Aucun produit coté à actualiser.'); return; }
-    // 0. Symbole corrigé dans la bibliothèque depuis l'import (sauf symbole saisi à la main)
-    for (const l of targets) { const t = libraryFor(l.isin)?.ticker; if (t && !l.customTicker && l.ticker !== t) { l.ticker = t; delete l.tickerAuto; } }
-    // 1. Symbole Yahoo manquant : recherche par ISIN
+    if (!targets.length) { toast(t('Aucun produit coté à actualiser.')); return; }
+    // 0. Symbol corrected in the library since the import (unless the symbol was entered by hand)
+    for (const l of targets) { const tk = libraryFor(l.isin)?.ticker; if (tk && !l.customTicker && l.ticker !== tk) { l.ticker = tk; delete l.tickerAuto; } }
+    // 1. Missing Yahoo symbol: search by ISIN
     const missing = targets.filter(l => !l.ticker && l.isin);
     const searchErr = {};
     if (missing.length) {
-      let n = 0; progress(`Symboles 0/${missing.length}`);
+      let n = 0; progress(t('Symboles {a}/{b}', { a: 0, b: missing.length }));
       await pool(missing, 3, async l => {
         try { const j = await api('api/search?q=' + encodeURIComponent(l.isin), 12000); if (j.symbol) { l.ticker = j.symbol; l.tickerAuto = true; } }
         catch (e) { searchErr[l.id] = e.message; }
-        progress(`Symboles ${++n}/${missing.length}`);
+        progress(t('Symboles {a}/{b}', { a: ++n, b: missing.length }));
       });
     }
-    // 2. Cours et historique, par paquets
+    // 2. Prices and history, in batches
     const syms = [...new Set(targets.map(l => l.ticker).filter(Boolean))];
     const quotes = {};
     for (let i = 0; i < syms.length; i += 5) {
       const chunk = syms.slice(i, i + 5);
-      progress(`Cours ${Math.min(i + 5, syms.length)}/${syms.length}`);
+      progress(t('Cours {a}/{b}', { a: Math.min(i + 5, syms.length), b: syms.length }));
       try { const j = await api('api/quote?range=full&symbols=' + encodeURIComponent(chunk.join(',')), 60000); Object.assign(quotes, j.quotes || {}); }
       catch (e) { for (const s of chunk) quotes[s] = { error: e.name === 'AbortError' ? 'délai dépassé' : e.message }; }
     }
-    // 3. Mise à jour des lignes
+    // 3. Update the lines
     data.priceHistory = data.priceHistory || {};
     const results = [];
     for (const l of targets) {
       const r = { id: l.id, name: shortName(l), symbol: l.ticker || '', ok: false };
       if (!l.ticker) {
-        r.error = searchErr[l.id] ? 'Recherche impossible : ' + searchErr[l.id] : l.type === 'non-cote' ? 'Fonds non coté : pas de cours public' : 'Aucun symbole Yahoo pour l’ISIN ' + l.isin;
+        if (searchErr[l.id]) Object.assign(r, { error: 'Recherche impossible : {x}', arg: searchErr[l.id] });
+        else if (l.type === 'non-cote') r.error = 'Fonds non coté : pas de cours public';
+        else Object.assign(r, { error: 'Aucun symbole Yahoo pour l’ISIN {x}', arg: l.isin });
         results.push(r); continue;
       }
       const q = quotes[l.ticker];
@@ -1200,7 +1226,7 @@ async function refreshPrices() {
         const nav = navAt(q.history, l.since || today());
         const p0 = nav ? nav[1] : q.price;
         l.qty = +(l.cost / p0).toFixed(6); l.estimateFromAmount = false; l.qtyEstimated = true;
-        r.note = `quantité estimée avec la valeur liquidative du ${dateShort(nav ? nav[0] : q.date)}`;
+        Object.assign(r, { note: 'quantité estimée avec la valeur liquidative du {x}', noteDate: nav ? nav[0] : q.date });
       }
       l.price = q.price; l.priceDate = q.date || today(); l.priceSource = 'yahoo';
       Object.assign(r, { ok: true, price: q.price, date: l.priceDate, delta: lineValue(l) - before, points: q.history?.length || 0 });
@@ -1210,29 +1236,33 @@ async function refreshPrices() {
     data.settings.snoozeUntil = '';
     const ok = results.filter(r => r.ok).length, ko = results.length - ok;
     ui.busy = false; ui.progress = '';
-    commit(ko ? `${ok} produit${ok > 1 ? 's' : ''} actualisé${ok > 1 ? 's' : ''} · ${ko} sans cours (détail dans Réglages, Cours)` : `${ok} produit${ok > 1 ? 's' : ''} actualisé${ok > 1 ? 's' : ''}, historique compris.`);
+    commit(ko ? tn(ok, '{n} produit actualisé · {ko} sans cours (détail dans Réglages, Cours)', '{n} produits actualisés · {ko} sans cours (détail dans Réglages, Cours)', { ko })
+      : tn(ok, '{n} produit actualisé, historique compris.', '{n} produits actualisés, historique compris.'));
   } catch (e) {
-    toast('Échec de l’actualisation : ' + (e.name === 'AbortError' ? 'délai dépassé.' : e.message));
+    toast(t('Échec de l’actualisation : {x}', { x: e.name === 'AbortError' ? t('délai dépassé.') : e.message }));
   } finally { ui.busy = false; ui.progress = ''; setRefreshUI(); if (ui.tab === 'donnees') render(); }
 }
 
 function refreshReport() {
   const lr = data.lastRefresh;
-  if (!lr) return '<p class="small muted" style="margin:12px 0 0">Aucune actualisation pour l’instant.</p>';
-  const ok = lr.results.filter(r => r.ok), ko = lr.results.filter(r => !r.ok).sort((a, b) => /non coté|Aucun symbole/.test(a.error) - /non coté|Aucun symbole/.test(b.error));
-  return `<p class="small muted" style="margin:14px 0 6px">Dernière actualisation : ${dateLong(lr.at.slice(0, 10))} à ${new Date(lr.at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} · ${ok.length} à jour, ${ko.length} sans cours.</p>
-    <div class="holdings">${[...ko, ...ok].map(r => `<div class="holding"><span class="r">${r.ok ? '<span class="pos">●</span>' : /non coté|Aucun symbole/.test(r.error) ? '<span class="muted">●</span>' : '<span class="neg">●</span>'}</span><span class="n">${esc(r.name)}</span><span class="a">${r.ok ? eur(r.price) : '—'}</span><span class="w">${r.ok ? `${esc(r.symbol)} · cours du ${dateShort(r.date)} · ${+r.points || 0} points d’historique${r.note ? ' · ' + esc(r.note) : ''}` : esc(r.error)}</span></div>`).join('')}</div>`;
+  if (!lr) return `<p class="small muted" style="margin:12px 0 0">${t('Aucune actualisation pour l’instant.')}</p>`;
+  const quiet = r => /non coté|Aucun symbole/.test(r.error);
+  const ok = lr.results.filter(r => r.ok), ko = lr.results.filter(r => !r.ok).sort((a, b) => quiet(a) - quiet(b));
+  const note = r => r.noteDate ? t(r.note, { x: dateShort(r.noteDate) }) : t(r.note);
+  return `<p class="small muted" style="margin:14px 0 6px">${t('Dernière actualisation : {date} à {time} · {ok} à jour, {ko} sans cours.', { date: dateLong(lr.at.slice(0, 10)), time: timeShort(new Date(lr.at)), ok: ok.length, ko: ko.length })}</p>
+    <div class="holdings">${[...ko, ...ok].map(r => `<div class="holding"><span class="r">${r.ok ? '<span class="pos">●</span>' : quiet(r) ? '<span class="muted">●</span>' : '<span class="neg">●</span>'}</span><span class="n">${esc(r.name)}</span><span class="a">${r.ok ? eur(r.price) : '—'}</span><span class="w">${r.ok ? `${esc(r.symbol)} · ${t('cours du {x}', { x: dateShort(r.date) })} · ${tn(+r.points || 0, '{n} point d’historique', '{n} points d’historique')}${r.note ? ' · ' + esc(note(r)) : ''}` : esc(t(r.error, { x: r.arg }))}</span></div>`).join('')}</div>`;
 }
 
-// ——— Exemple ———
+// ——— Example data ———
 function demoData() {
   const d = emptyData();
   d.demo = true;
   d.profile.firstName = '';
+  d.settings.lang = data.settings.lang;
   d.accounts = [
-    { id: 'd-pea', name: 'Courtier PEA', institution: 'Exemple', kind: 'pea', color: 'orange', source: 'manual' },
-    { id: 'd-cto', name: 'Courtier', institution: 'Exemple', kind: 'cto', color: 'ink', source: 'manual' },
-    { id: 'd-liv', name: 'Livret A', institution: 'Exemple', kind: 'livret', color: 'green', source: 'manual' },
+    { id: 'd-pea', name: t('Courtier PEA'), institution: t('Exemple'), kind: 'pea', color: 'orange', source: 'manual' },
+    { id: 'd-cto', name: t('Courtier'), institution: t('Exemple'), kind: 'cto', color: 'ink', source: 'manual' },
+    { id: 'd-liv', name: 'Livret A', institution: t('Exemple'), kind: 'livret', color: 'green', source: 'manual' },
   ];
   const mk = (id, acc, isin, q, cost, price, extra = {}) => { const lib = libraryFor(isin); return { id, source: 'manual', accountId: acc, envelope: acc === 'd-pea' ? 'PEA' : lib?.type === 'crypto' ? 'Crypto' : 'Compte-titres', type: lib?.type || 'etf', name: lib?.name || isin, isin, ticker: lib?.ticker || '', qty: q, cost, price, priceDate: today(), priceSource: 'manuel', pending: 0, equity: lib?.equity ?? 1, events: [], since: '2025-03-01', ...extra }; };
   const ev = (start, months, qStep, p0, p1) => { const out = []; let q = 0, c = 0; const s = new Date(start); for (let i = 0; i < months; i++) { const dd = new Date(s.getFullYear(), s.getMonth() + i, 5).toISOString().slice(0, 10); const p = p0 + (p1 - p0) * i / Math.max(1, months - 1) + Math.sin(i) * p0 * 0.03; q += qStep; c += qStep * p; out.push([dd, +q.toFixed(4), +c.toFixed(2), +p.toFixed(3)]); } return out; };
@@ -1244,7 +1274,7 @@ function demoData() {
     mk('d4', 'd-cto', 'BTC', 0.004, 300, 61000, { events: [['2025-02-01', 0.004, 300, 75000]] }),
     { id: 'd5', source: 'manual', accountId: 'd-liv', envelope: 'Livrets', type: 'livret', name: 'Livret A', qty: 1, amount: 4200, price: 4200, cost: 4200, priceDate: today(), equity: 0, pending: 0, events: [], since: '2025-01-01' },
   ];
-  // Historique d'exemple : achats tirés des évolutions de chaque ligne, plus un aller-retour vendu
+  // Example history: buys derived from each line's events, plus one sold round trip
   d.transactions = [];
   for (const l of d.lines) {
     if (isCashLike(l)) continue;
@@ -1262,14 +1292,14 @@ function demoData() {
   return d;
 }
 
-// ——— Navigation & événements ———
-// land() change d'onglet sans afficher, pour les actions qui finissent par commit().
+// ——— Navigation & events ———
+// land() switches tab without rendering, for actions that end with commit().
 function land(tab) { ui.tab = tab; ui.section = ''; if (location.hash.slice(1) !== tab) history.replaceState(null, '', '#' + tab); window.scrollTo(0, 0); }
 function go(tab) { land(tab); render(); }
-// Onglet et rubrique des Réglages d'après l'adresse (#donnees/comptes) ; null si ce n'est pas un onglet
+// Tab and Réglages section from the address (#donnees/comptes); null if it is not a tab
 function fromHash() {
   const [tab, section = ''] = location.hash.slice(1).split('/');
-  if (!TABS.some(t => t[0] === tab)) return null;
+  if (!TABS.some(x => x[0] === tab)) return null;
   return { tab, section: tab === 'donnees' && Object.hasOwn(SECTIONS, section) ? section : '' };
 }
 function route() { const r = fromHash(); if (!r) return; Object.assign(ui, r); render(); window.scrollTo(0, 0); }
@@ -1277,10 +1307,10 @@ function openSection(key) { history.pushState({ section: key }, '', '#donnees/' 
 function closeSection() { if (history.state?.section) history.back(); else go('donnees'); }
 
 document.addEventListener('click', async e => {
-  const t = e.target.closest('[data-tab]');
-  if (t) { go(t.dataset.tab); return; }
+  const tabBtn = e.target.closest('[data-tab]');
+  if (tabBtn) { go(tabBtn.dataset.tab); return; }
   const b = e.target.closest('[data-action]'); if (!b) return;
-  if (b.closest('.sheet') && !['open-line'].includes(b.dataset.action)) return; // les fenêtres gèrent leurs boutons
+  if (b.closest('.sheet') && !['open-line'].includes(b.dataset.action)) return; // sheets handle their own buttons
   const a = b.dataset.action, v = b.dataset.v;
   switch (a) {
     case 'range': ui.range = v; render(); break;
@@ -1302,34 +1332,35 @@ document.addEventListener('click', async e => {
     case 'refresh': refreshPrices(); break;
     case 'snooze': data.settings.snoozeUntil = new Date(Date.now() + 86400000).toISOString(); commit(); break;
     case 'theme': data.settings.theme = v; commit(); break;
+    case 'lang': data.settings.lang = v; commit(); break;
     case 'pick-csv': importCsvFlow(); break;
     case 'pick-backup': restoreFlow(); break;
     case 'export-plain': exportFlow(false); break;
     case 'export-enc': exportFlow(true); break;
-    case 'demo': data = demoData(); commit('Données d’exemple chargées.'); break;
-    case 'clear-demo': { const keep = { settings: data.settings }; data = { ...emptyData(), ...keep }; clearAll(); commit('Exemple effacé.'); break; }
+    case 'demo': data = demoData(); commit(t('Données d’exemple chargées.')); break;
+    case 'clear-demo': { const keep = { settings: data.settings }; data = { ...emptyData(), ...keep }; clearAll(); commit(t('Exemple effacé.')); break; }
     case 'wipe':
-      if (await confirmSheet({ title: 'Tout effacer ?', text: `Comptes, lignes, historique et réglages seront supprimés de cet appareil. Cette action ne peut pas être annulée.${syncState() ? ' Cet appareil sera aussi déconnecté du coffre, qui reste intact.' : ''}`, ok: 'Tout effacer', danger: true })) { clearSyncState(); clearAll(); data = emptyData(); land('patrimoine'); commit('Données effacées.'); }
+      if (await confirmSheet({ title: t('Tout effacer ?'), text: t('Comptes, lignes, historique et réglages seront supprimés de cet appareil. Cette action ne peut pas être annulée.') + (syncState() ? ' ' + t('Cet appareil sera aussi déconnecté du coffre, qui reste intact.') : ''), ok: t('Tout effacer'), danger: true })) { clearSyncState(); clearAll(); data = emptyData(); land('patrimoine'); commit(t('Données effacées.')); }
       break;
     case 'sync-create': syncSheet(true); break;
     case 'sync-login': syncSheet(false); break;
     case 'sync-now': syncNow(true); break;
     case 'sync-recreate': recreateVault(); break;
     case 'sync-logout':
-      if (await confirmSheet({ title: 'Déconnecter cet appareil ?', text: 'Les données restent sur cet appareil et dans le coffre ; elles ne seront simplement plus synchronisées ici.', ok: 'Déconnecter' })) { clearSyncState(); ui.syncError = ''; render(); toast('Appareil déconnecté.'); }
+      if (await confirmSheet({ title: t('Déconnecter cet appareil ?'), text: t('Les données restent sur cet appareil et dans le coffre ; elles ne seront simplement plus synchronisées ici.'), ok: t('Déconnecter') })) { clearSyncState(); ui.syncError = ''; render(); toast(t('Appareil déconnecté.')); }
       break;
     case 'sync-delete': {
       const st = syncState(); if (!st) break;
-      if (!await confirmSheet({ title: 'Supprimer le coffre en ligne ?', text: `Le coffre « ${esc(st.user)} » sera effacé du serveur. Les données de cet appareil sont conservées, mais vos autres appareils ne seront plus synchronisés.`, ok: 'Supprimer le coffre', danger: true })) break;
+      if (!await confirmSheet({ title: t('Supprimer le coffre en ligne ?'), text: t('Le coffre « {x} » sera effacé du serveur. Les données de cet appareil sont conservées, mais vos autres appareils ne seront plus synchronisés.', { x: esc(st.user) }), ok: t('Supprimer le coffre'), danger: true })) break;
       try { await deleteVault(st); } catch (e2) { if (e2.status !== 404) { toast(e2.message); break; } }
-      clearSyncState(); ui.syncError = ''; render(); toast('Coffre supprimé.');
+      clearSyncState(); ui.syncError = ''; render(); toast(t('Coffre supprimé.'));
       break;
     }
     case 'sim-mode': ui.sim.mode = v; render(); break;
     case 'sim-by': {
       const s = ui.sim, p = parseNum(s.price);
-      if (v === 'qty' && s.by === 'amount' && p > 0) s.qty = String(+(parseNum(s.amount) / p).toFixed(4)).replace('.', ',');
-      if (v === 'amount' && s.by === 'qty' && p > 0) s.amount = String(+(parseNum(s.qty) * p).toFixed(2)).replace('.', ',');
+      if (v === 'qty' && s.by === 'amount' && p > 0) s.qty = inputNum(parseNum(s.amount) / p, 4);
+      if (v === 'amount' && s.by === 'qty' && p > 0) s.amount = inputNum(parseNum(s.qty) * p, 2);
       s.by = v; render(); break;
     }
   }
@@ -1341,7 +1372,7 @@ document.addEventListener('input', e => {
     const k = el.dataset.sim;
     ui.sim[k] = el.type === 'checkbox' ? el.checked : el.value;
     if (k === 'lineId' || k === 'accountId') {
-      if (k === 'lineId') { const l = lineById(el.value); ui.sim.price = l && l.price ? String(+l.price.toFixed(4)).replace('.', ',') : ''; }
+      if (k === 'lineId') { const l = lineById(el.value); ui.sim.price = l && l.price ? inputNum(l.price, 4) : ''; }
       render(); return;
     }
     const out = $('#sim-out'); if (out) out.innerHTML = simResult();
@@ -1352,16 +1383,17 @@ document.addEventListener('input', e => {
 document.addEventListener('change', e => { if (e.target.dataset.sim === 'useCash') { ui.sim.useCash = e.target.checked; const out = $('#sim-out'); if (out) out.innerHTML = simResult(); } });
 document.addEventListener('submit', e => {
   const f = e.target.closest('[data-form="profile"]'); if (!f) return;
-  e.preventDefault(); data.profile.firstName = f.firstName.value.trim(); commit('Profil enregistré.');
+  e.preventDefault(); data.profile.firstName = f.firstName.value.trim(); commit(t('Profil enregistré.'));
 });
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && sheetStack.length) sheetStack[sheetStack.length - 1].close(); });
 window.addEventListener('hashchange', route);
 let wasWide = isWide();
 window.addEventListener('resize', () => { const w = isWide(); if (w !== wasWide) { wasWide = w; render(); } else if (ui.tab === 'patrimoine') after.patrimoine(); });
 matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', applyTheme);
+window.addEventListener('languagechange', () => { shownLang = ''; render(); });
 window.addEventListener('storage', e => { if (e.key && e.key.startsWith('carnet:data')) { data = load(); render(); } });
 
-// ——— Démarrage ———
+// ——— Start ———
 (function start() {
   Object.assign(ui, fromHash());
   for (const n of document.querySelectorAll('[data-icon]')) n.innerHTML = ICONS[n.dataset.icon] || '';
@@ -1372,6 +1404,6 @@ window.addEventListener('storage', e => { if (e.key && e.key.startsWith('carnet:
   window.addEventListener('online', () => syncNow());
   setInterval(() => { if (document.visibilityState === 'visible') syncNow(); }, 120000);
   if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
-    navigator.serviceWorker.register('sw.js').catch(() => { /* hors ligne indisponible */ });
+    navigator.serviceWorker.register('sw.js').catch(() => { /* offline mode unavailable */ });
   }
 })();

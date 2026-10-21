@@ -21,33 +21,33 @@
 </head>
 <body>
 <div class="app">
-  <aside class="sidebar" aria-label="Navigation">
+  <aside class="sidebar" aria-label="Navigation" data-t-aria>
     <div class="wordmark">Carnet<span class="dot">.</span></div>
-    <button class="side-link" data-tab="patrimoine"><span class="ic" data-icon="patrimoine"></span>Patrimoine</button>
-    <button class="side-link" data-tab="analyse"><span class="ic" data-icon="analyse"></span>Analyse</button>
-    <button class="side-link" data-tab="historique"><span class="ic" data-icon="historique"></span>Historique</button>
-    <button class="side-link" data-tab="simuler"><span class="ic" data-icon="simuler"></span>Simuler</button>
-    <button class="side-link" data-tab="donnees"><span class="ic" data-icon="donnees"></span>Réglages</button>
-    <div class="side-foot"><button class="avatar" data-action="section" data-v="preferences" aria-label="Préférences">C</button><span id="side-name">Votre profil</span></div>
+    <button class="side-link" data-tab="patrimoine"><span class="ic" data-icon="patrimoine"></span><span data-t>Patrimoine</span></button>
+    <button class="side-link" data-tab="analyse"><span class="ic" data-icon="analyse"></span><span data-t>Analyse</span></button>
+    <button class="side-link" data-tab="historique"><span class="ic" data-icon="historique"></span><span data-t>Historique</span></button>
+    <button class="side-link" data-tab="simuler"><span class="ic" data-icon="simuler"></span><span data-t>Simuler</span></button>
+    <button class="side-link" data-tab="donnees"><span class="ic" data-icon="donnees"></span><span data-t>Réglages</span></button>
+    <div class="side-foot"><button class="avatar" data-action="section" data-v="preferences" aria-label="Préférences" data-t-aria>C</button><span id="side-name">Votre profil</span></div>
   </aside>
   <main class="main">
     <header class="topbar">
-      <button class="avatar" data-action="section" data-v="preferences" aria-label="Préférences">C</button>
+      <button class="avatar" data-action="section" data-v="preferences" aria-label="Préférences" data-t-aria>C</button>
       <span class="wordmark">Carnet<span class="dot">.</span></span>
-      <button class="refresh-btn top" data-action="refresh" aria-label="Actualiser les cours et l’historique"><span class="ic" data-icon="refresh"></span><span class="r-short">Actualiser</span><span class="r-long">Actualiser les cours</span></button>
+      <button class="refresh-btn top" data-action="refresh" aria-label="Actualiser les cours et l’historique" data-t-aria><span class="ic" data-icon="refresh"></span><span class="r-short">Actualiser</span><span class="r-long">Actualiser les cours</span></button>
     </header>
     <div id="view" aria-live="polite"></div>
   </main>
-  <nav class="tabbar" aria-label="Onglets">
-    <button class="tab" data-tab="patrimoine"><span class="ic" data-icon="patrimoine"></span><span class="lbl">Patrimoine</span></button>
-    <button class="tab" data-tab="analyse"><span class="ic" data-icon="analyse"></span><span class="lbl">Analyse</span></button>
-    <button class="tab" data-tab="historique"><span class="ic" data-icon="historique"></span><span class="lbl">Historique</span></button>
-    <button class="tab" data-tab="simuler"><span class="ic" data-icon="simuler"></span><span class="lbl">Simuler</span></button>
-    <button class="tab" data-tab="donnees"><span class="ic" data-icon="donnees"></span><span class="lbl">Réglages</span></button>
+  <nav class="tabbar" aria-label="Onglets" data-t-aria>
+    <button class="tab" data-tab="patrimoine"><span class="ic" data-icon="patrimoine"></span><span class="lbl" data-t>Patrimoine</span></button>
+    <button class="tab" data-tab="analyse"><span class="ic" data-icon="analyse"></span><span class="lbl" data-t>Analyse</span></button>
+    <button class="tab" data-tab="historique"><span class="ic" data-icon="historique"></span><span class="lbl" data-t>Historique</span></button>
+    <button class="tab" data-tab="simuler"><span class="ic" data-icon="simuler"></span><span class="lbl" data-t>Simuler</span></button>
+    <button class="tab" data-tab="donnees"><span class="ic" data-icon="donnees"></span><span class="lbl" data-t>Réglages</span></button>
   </nav>
 </div>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
-<noscript><p style="padding:24px">Carnet a besoin de JavaScript.</p></noscript>
+<noscript><p style="padding:24px">Carnet a besoin de JavaScript. · Carnet needs JavaScript.</p></noscript>
 <script type="module" src="js/app.js"></script>
 </body>
 </html>

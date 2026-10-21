@@ -1,5 +1,6 @@
 // Value-over-time chart in SVG, no dependencies.
 import { eur, dateLong, monthShort } from './format.js';
+import { t, locale } from './i18n.js';
 
 const NS = 'http://www.w3.org/2000/svg';
 const el = (tag, attrs = {}) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); return e; };
@@ -13,11 +14,11 @@ function niceTicks(min, max, n = 3) {
   const out = []; for (let v = lo; v <= hi + step / 2; v += step) out.push(v);
   return out;
 }
-const compact = v => Math.abs(v) >= 10000 ? (v / 1000).toLocaleString('fr-FR', { maximumFractionDigits: 1 }) + ' k' : v.toLocaleString('fr-FR', { maximumFractionDigits: Math.abs(v) >= 100 ? 0 : 2 });
+const compact = v => Math.abs(v) >= 10000 ? (v / 1000).toLocaleString(locale(), { maximumFractionDigits: 1 }) + ' k' : v.toLocaleString(locale(), { maximumFractionDigits: Math.abs(v) >= 100 ? 0 : 2 });
 
 export function lineChart(host, points, { onHover } = {}) {
   host.innerHTML = '';
-  if (points.length < 2) { host.innerHTML = '<p class="chart-empty">Pas encore assez d’historique pour tracer une courbe.</p>'; return; }
+  if (points.length < 2) { host.innerHTML = `<p class="chart-empty">${t('Pas encore assez d’historique pour tracer une courbe.')}</p>`; return; }
   const W = Math.max(280, host.clientWidth || 600), H = Math.round(Math.min(260, Math.max(170, W * 0.42)));
   const pad = { l: 4, r: 44, t: 12, b: 26 };
   const vals = points.flatMap(p => [p.value, p.invested]);
@@ -28,7 +29,7 @@ export function lineChart(host, points, { onHover } = {}) {
   const t0 = new Date(points[0].d).getTime(), t1 = new Date(points[points.length - 1].d).getTime();
   const x = d => pad.l + (W - pad.l - pad.r) * ((new Date(d).getTime() - t0) / ((t1 - t0) || 1));
   const y = v => pad.t + (H - pad.t - pad.b) * (1 - (v - min) / ((max - min) || 1));
-  const svg = el('svg', { viewBox: `0 0 ${W} ${H}`, width: W, height: H, class: 'chart', role: 'img', 'aria-label': 'Évolution du patrimoine' });
+  const svg = el('svg', { viewBox: `0 0 ${W} ${H}`, width: W, height: H, class: 'chart', role: 'img', 'aria-label': t('Évolution du patrimoine') });
   const defs = el('defs');
   const gid = 'g' + Math.random().toString(36).slice(2, 7);
   const grad = el('linearGradient', { id: gid, x1: 0, y1: 0, x2: 0, y2: 1 });
@@ -75,4 +76,4 @@ export function lineChart(host, points, { onHover } = {}) {
   svg.addEventListener('pointerleave', leave);
 }
 
-export function hoverText(p) { return p ? `${dateLong(p.d)} · ${eur(p.value, 0)} (investi ${eur(p.invested, 0)})` : ''; }
+export function hoverText(p) { return p ? `${dateLong(p.d)} · ${eur(p.value, 0)} (${t('investi {x}', { x: eur(p.invested, 0) })})` : ''; }

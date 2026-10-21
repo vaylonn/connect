@@ -1,5 +1,7 @@
 // Net-worth calculations. Pure module (no DOM).
 import { libraryFor, SECTORS } from './library.js';
+import { t } from './i18n.js';
+import { eur, num, qty as fqty } from './format.js';
 
 export const CASH_TYPES = new Set(['especes', 'livret', 'fonds-euros']);
 export const isCashLike = l => CASH_TYPES.has(l.type);
@@ -240,17 +242,17 @@ export function simulate(data, sim) {
   const out = { ok: true, warnings: [], realized: 0, tax: 0, taxNote: '' };
   let line = sim.lineId ? clone.lines.find(l => l.id === sim.lineId) : null;
   const qty = +sim.qty || 0, price = +sim.price || 0, fees = +sim.fees || 0;
-  if (!(qty > 0) || !(price > 0)) return { ok: false, error: 'Indiquez une quantité et un prix positifs.' };
+  if (!(qty > 0) || !(price > 0)) return { ok: false, error: t('Indiquez une quantité et un prix positifs.') };
   const gross = qty * price;
 
   if (!line && sim.mode === 'buy') {
     const lib = libraryFor(sim.isin);
     const acc = clone.accounts.find(a => a.id === sim.accountId) || clone.accounts[0];
-    if (!acc) return { ok: false, error: 'Créez d’abord un compte.' };
+    if (!acc) return { ok: false, error: t('Créez d’abord un compte.') };
     line = { id: 'sim-new', accountId: acc.id, envelope: envelopeForAccount(acc), type: lib?.type || 'etf', name: sim.name || lib?.name || sim.isin || 'Nouvelle ligne', isin: sim.isin || '', ticker: lib?.ticker || '', qty: 0, cost: 0, price, priceDate: '', pending: 0, equity: lib ? lib.equity : 1, events: [] };
     clone.lines.push(line);
   }
-  if (!line) return { ok: false, error: 'Choisissez une ligne.' };
+  if (!line) return { ok: false, error: t('Choisissez une ligne.') };
   const prevPru = pru(line), prevQty = line.qty;
   const acc = clone.accounts.find(a => a.id === line.accountId);
   const cashLine = clone.lines.find(l => l.accountId === line.accountId && l.type === 'especes');
@@ -259,14 +261,14 @@ export function simulate(data, sim) {
     line.qty += qty; line.cost += gross + fees;
     if (line.id === 'sim-new') line.price = price;
     if (sim.useCash) {
-      if (!cashLine) out.warnings.push('Ce compte n’a pas d’espèces enregistrées : l’achat est compté comme un nouvel apport.');
+      if (!cashLine) out.warnings.push(t('Ce compte n’a pas d’espèces enregistrées : l’achat est compté comme un nouvel apport.'));
       else {
-        if (cashLine.amount < gross + fees) out.warnings.push('Les espèces du compte ne suffisent pas (' + cashLine.amount.toFixed(2).replace('.', ',') + ' €).');
+        if (cashLine.amount < gross + fees) out.warnings.push(t('Les espèces du compte ne suffisent pas ({x}).', { x: eur(cashLine.amount) }));
         cashLine.amount -= gross + fees;
       }
     }
   } else {
-    if (qty > line.qty + 1e-9) return { ok: false, error: 'Vous ne détenez que ' + String(+line.qty.toFixed(6)).replace('.', ',') + ' parts.' };
+    if (qty > line.qty + 1e-9) return { ok: false, error: t('Vous ne détenez que {n} parts.', { n: fqty(line.qty) }) };
     const share = qty / line.qty;
     const costOut = (line.cost - (line.pending || 0)) * share;
     const proceeds = gross - fees;
@@ -279,9 +281,9 @@ export function simulate(data, sim) {
     }
     const env = line.envelope;
     const rate = (sim.taxRate ?? 31.4) / 100;
-    if (env === 'PEA') { out.tax = 0; out.taxNote = 'Vente à l’intérieur du PEA : pas d’impôt tant que l’argent reste dans le plan.'; }
-    else if (env === 'Assurance-vie') { out.tax = 0; out.taxNote = 'Arbitrage dans l’assurance-vie : pas d’impôt tant que vous ne rachetez pas.'; }
-    else { out.tax = Math.max(0, out.realized) * rate; out.taxNote = 'Estimation au prélèvement forfaitaire unique de ' + String(+(rate * 100).toFixed(1)).replace('.', ',') + ' %, sur la plus-value de cette vente seulement.'; }
+    if (env === 'PEA') { out.tax = 0; out.taxNote = t('Vente à l’intérieur du PEA : pas d’impôt tant que l’argent reste dans le plan.'); }
+    else if (env === 'Assurance-vie') { out.tax = 0; out.taxNote = t('Arbitrage dans l’assurance-vie : pas d’impôt tant que vous ne rachetez pas.'); }
+    else { out.tax = Math.max(0, out.realized) * rate; out.taxNote = t('Estimation au prélèvement forfaitaire unique de {rate} %, sur la plus-value de cette vente seulement.', { rate: num(rate * 100, 1).replace(/[,.]0$/, '') }); }
   }
   const after = { t: totals(clone), lt: lookthrough(clone) };
   out.before = before; out.after = after;
