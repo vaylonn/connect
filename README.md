@@ -36,7 +36,7 @@ Pour installer l'app sur un téléphone : menu du navigateur → *Ajouter à l'�
 ## Vos données
 
 - **Stockées dans le navigateur** (`localStorage`). Effacer les données du site les supprime ; la navigation privée ne les garde pas.
-- **Synchronisation** : la phrase de passe ne quitte jamais l'appareil. Elle sert à chiffrer les données (AES-GCM 256 bits, clé dérivée par PBKDF2, 310 000 itérations). Le serveur ne garde qu'un bloc illisible.
+- **Synchronisation** : la phrase de passe ne quitte jamais l'appareil. Elle sert à chiffrer les données (AES-GCM 256 bits, clé dérivée par PBKDF2, 310 000 itérations). Le serveur ne garde qu'un bloc illisible, et bloque un quart d'heure toute adresse qui enchaîne 20 essais refusés.
   **Phrase oubliée = coffre perdu**, mais les données déjà présentes sur vos appareils restent intactes.
 - **Sauvegarde** : Données → *Exporter* (en clair ou chiffrée), puis *Restaurer* sur un autre appareil.
 - **Seule information envoyée en clair** : les symboles des titres (ex. `WPEA.PA`), pour récupérer les cours. Jamais les quantités ni les montants.
@@ -50,6 +50,8 @@ Pour installer l'app sur un téléphone : menu du navigateur → *Ajouter à l'�
 1. Importez le dépôt sur [vercel.com](https://vercel.com). Aucun réglage à faire : `vercel.json` fixe tout (preset « Other », dossier `public`, fonctions `api/`).
 2. Pour la synchronisation : *Storage → Create Database → Redis* (ou Upstash), reliée au projet pour **Production et Preview**, puis redéployez.
    Carnet accepte `REDIS_URL` comme `KV_REST_API_URL` / `KV_REST_API_TOKEN`, même avec un préfixe. Sans base, l'app fonctionne, seule la synchronisation est désactivée.
+3. Réservez la synchronisation à vos identifiants : variable d'environnement `CARNET_SYNC_USERS` (par exemple `camille`, ou `camille,sam`), puis redéployez.
+   Sans elle, n'importe qui peut créer des coffres sur votre base (5 par heure et par adresse au plus) et la remplir.
 
 Les URL de preview sont protégées par la connexion Vercel (*Settings → Deployment Protection*).
 
@@ -63,7 +65,7 @@ node server.mjs
 
 Ouvrez http://localhost:8080. Les coffres de synchronisation sont rangés dans `./data`.
 
-Options : `PORT=9000`, `HOST=0.0.0.0` (accès depuis le réseau local), `CARNET_PASSWORD="…"` (mot de passe d'accès).
+Options : `PORT=9000`, `HOST=0.0.0.0` (accès depuis le réseau local), `CARNET_PASSWORD="…"` (mot de passe d'accès, 20 essais ratés bloquent l'adresse un quart d'heure), `CARNET_SYNC_USERS="…"` (identifiants autorisés à synchroniser).
 Sous PowerShell : `$env:PORT=9000; node server.mjs`.
 
 ### Docker (NAS, Raspberry Pi)

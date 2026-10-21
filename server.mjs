@@ -7,10 +7,11 @@
 import http from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
 import { timingSafeEqual, createHash } from 'node:crypto';
-import { extname, join, normalize, dirname } from 'node:path';
+import { extname, join, normalize, dirname, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { handleApi } from './lib/handlers.mjs';
 import { handleSync, readJson } from './lib/vault.mjs';
+import { clientKey, memoryCounter } from './lib/limits.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), 'public');
 const PORT = +(process.env.PORT || 8080);
@@ -26,6 +27,7 @@ const SECURITY = {
   'cross-origin-opener-policy': 'same-origin',
 };
 const digest = s => createHash('sha256').update(s).digest();
+const authFails = memoryCounter(); // mots de passe refusés, par adresse : 20 en 15 minutes bloquent l'accès
 
 function authorized(req) {
   if (!PASSWORD) return true;
@@ -43,13 +45,18 @@ function send(res, status, body, headers = {}) {
 
 const server = http.createServer(async (req, res) => {
   try {
-    if (!authorized(req)) return send(res, 401, 'Mot de passe requis.', { 'www-authenticate': 'Basic realm="Carnet", charset="UTF-8"', 'content-type': 'text/plain; charset=utf-8' });
+    const who = clientKey(req.socket.remoteAddress);
+    if (PASSWORD && await authFails.count(who) >= 20) return send(res, 429, 'Trop d’essais : réessayez dans un quart d’heure.', { 'content-type': 'text/plain; charset=utf-8' });
+    if (!authorized(req)) {
+      if (req.headers.authorization) await authFails.hit(who, 15 * 60);
+      return send(res, 401, 'Mot de passe requis.', { 'www-authenticate': 'Basic realm="Carnet", charset="UTF-8"', 'content-type': 'text/plain; charset=utf-8' });
+    }
     const url = new URL(req.url, 'http://localhost');
     if (url.pathname === '/api/sync') {
       const json = { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' };
       try {
         const body = req.method === 'PUT' ? await readJson(req) : null;
-        const [status, out] = await handleSync(req.method, req.headers, body);
+        const [status, out] = await handleSync(req.method, req.headers, body, req.socket.remoteAddress);
         return send(res, status, JSON.stringify(out), json);
       } catch (e) {
         return send(res, e.status || 502, JSON.stringify({ error: String(e.message || e) }), json);
@@ -68,7 +75,7 @@ const server = http.createServer(async (req, res) => {
     let path = decodeURIComponent(url.pathname);
     if (path.endsWith('/')) path += 'index.html';
     const file = normalize(join(ROOT, path));
-    if (!file.startsWith(ROOT)) return send(res, 403, 'Interdit');
+    if (!file.startsWith(ROOT + sep)) return send(res, 403, 'Interdit'); // pas un dossier voisin comme « public2 »
     let st;
     try { st = await stat(file); } catch { return send(res, 404, 'Introuvable', { 'content-type': 'text/plain; charset=utf-8' }); }
     if (!st.isFile()) return send(res, 404, 'Introuvable');

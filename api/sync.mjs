@@ -5,7 +5,9 @@ export default async function handler(req, res) {
   res.setHeader('cache-control', 'no-store');
   try {
     const body = req.method === 'PUT' ? await readJson(req) : null;
-    const [status, out] = await handleSync(req.method, req.headers, body);
+    // Adresse du client : Vercel la place dans x-forwarded-for, en remplaçant celle qu'enverrait le client
+    const ip = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.socket?.remoteAddress;
+    const [status, out] = await handleSync(req.method, req.headers, body, ip);
     res.statusCode = status;
     res.end(JSON.stringify(out));
   } catch (e) {

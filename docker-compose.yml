@@ -13,6 +13,8 @@ services:
       # Mot de passe facultatif (identifiant : carnet). Laissez vide pour le désactiver.
       CARNET_PASSWORD: ""
       CARNET_USER: "carnet"
+      # Identifiants autorisés à synchroniser, séparés par des virgules. Vide : tout le monde.
+      CARNET_SYNC_USERS: ""
 
 volumes:
   carnet-data:
