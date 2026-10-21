@@ -15,6 +15,7 @@ def restore(pg, f, choice=None):
     fc.value.set_files(f); pg.wait_for_timeout(600)
     if choice: pg.locator(f'.sheet [data-choice="{choice}"]').click(); pg.wait_for_timeout(600)
 def tab(pg, t): pg.locator(f'[data-tab="{t}"]:visible').first.click(); pg.wait_for_timeout(300)
+def section(pg, key): tab(pg, 'donnees'); pg.locator(f'#view [data-action="section"][data-v="{key}"]').click(); pg.wait_for_timeout(300)
 with sync_playwright() as p:
     b = p.chromium.launch()
     for name, vp, scheme in [('m', {'width': 390, 'height': 844}, 'light'), ('d', {'width': 1440, 'height': 900}, 'dark')]:
@@ -22,7 +23,7 @@ with sync_playwright() as p:
         pg = ctx.new_page(); watch(pg)
         pg.goto(BASE + '/'); pg.wait_for_load_state('networkidle')
         restore(pg, BACKUP)
-        tab(pg, 'donnees'); restore(pg, ADD, 'merge')
+        section(pg, 'import'); restore(pg, ADD, 'merge')
         res[f'{name}_total_apres_ajout'] = pg.locator('.hero .big').inner_text().replace('\n', ' ')
         res[f'{name}_bouton_visible'] = pg.locator('.refresh-btn.top').is_visible()
         res[f'{name}_bouton_label_avant'] = pg.locator('.refresh-btn.top').inner_text()
@@ -46,7 +47,7 @@ with sync_playwright() as p:
         res[f'{name}_fonds_estime'] = pg.locator('.sheet .callout').first.inner_text()[:90]
         pg.screenshot(path=f'{OUT}/{name}-4-fonds.png')
         pg.keyboard.press('Escape'); pg.wait_for_timeout(400)
-        tab(pg, 'donnees'); pg.screenshot(path=f'{OUT}/{name}-5-donnees.png', full_page=True)
+        section(pg, 'cours'); pg.screenshot(path=f'{OUT}/{name}-5-cours.png', full_page=True)
         res[f'{name}_rapport'] = pg.locator('.card', has_text='Dernière actualisation').locator('p.small').inner_text()
         res[f'{name}_debordement'] = pg.evaluate('document.documentElement.scrollWidth') > vp['width'] + 1
         ctx.close()

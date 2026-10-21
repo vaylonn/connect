@@ -21,6 +21,11 @@ def tab(page, name):
     page.locator(f'[data-tab="{name}"]:visible').first.click()
     page.wait_for_timeout(300)
 
+def section(page, key):
+    tab(page, 'donnees')
+    page.locator(f'#view [data-action="section"][data-v="{key}"]').click()
+    page.wait_for_timeout(300)
+
 def overflow(page):
     return page.evaluate('document.documentElement.scrollWidth') > page.viewport_size['width'] + 1
 
@@ -42,7 +47,7 @@ with sync_playwright() as p:
     page.locator('.sheet [data-ok]').click()
     page.wait_for_timeout(600)
     # profil
-    tab(page, 'donnees')
+    section(page, 'preferences')
     page.fill('#pf-name', 'Valentin'); page.get_by_role('button', name='Enregistrer').first.click()
     tab(page, 'patrimoine')
     results['title'] = page.locator('h1.title').inner_text()
@@ -82,7 +87,7 @@ with sync_playwright() as p:
     page.fill('#sim-price', '5,5'); page.fill('#sim-amount', '500'); page.wait_for_timeout(300)
     results['sim_buy_new'] = page.locator('#sim-out').inner_text()[:300]
     # ajout d'un compte Caisse d'Épargne avec solde
-    tab(page, 'donnees')
+    section(page, 'comptes')
     page.get_by_role('button', name='Ajouter un compte').click(); page.wait_for_selector('.sheet.open')
     page.fill('#ac-name', 'Caisse d’Épargne'); page.fill('#ac-bal', '1 234,56')
     shot(page, 'm-light-09-nouveau-compte', full=False)
@@ -97,7 +102,7 @@ with sync_playwright() as p:
     page.locator('.sheet button[type=submit]').click(); page.wait_for_timeout(400)
     tab(page, 'patrimoine'); results['total_after_manual'] = page.locator('.hero .big').inner_text()
     # export clair + chiffré, effacement, restauration chiffrée
-    tab(page, 'donnees')
+    section(page, 'import')
     with page.expect_download() as dl:
         page.get_by_role('button', name='Exporter en clair').click()
     plain = f'{OUT}/export-clair.json'; dl.value.save_as(plain)
@@ -108,6 +113,7 @@ with sync_playwright() as p:
     enc = f'{OUT}/export-chiffre.json'; dl2.value.save_as(enc)
     encj = json.load(open(enc)); results['encrypted_has_plain_names'] = ('Valentin' in open(enc).read()) or ('MSCI' in open(enc).read())
     results['encrypted_keys'] = sorted(encj.keys())
+    tab(page, 'donnees')
     page.get_by_role('button', name='Effacer toutes les données').click(); page.wait_for_selector('.sheet.open')
     page.locator('.sheet [data-ok]').click(); page.wait_for_timeout(500)
     results['after_wipe_empty'] = page.locator('.empty').count()

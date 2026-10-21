@@ -18,7 +18,7 @@ const ui = {
   sim: { mode: 'buy', lineId: '', newIsin: '', newName: '', accountId: '', by: 'amount', amount: '1000', qty: '', price: '', fees: '1', useCash: true },
 };
 const TABS = [
-  ['patrimoine', 'Patrimoine'], ['analyse', 'Analyse'], ['historique', 'Historique'], ['simuler', 'Simuler'], ['donnees', 'Données'],
+  ['patrimoine', 'Patrimoine'], ['analyse', 'Analyse'], ['historique', 'Historique'], ['simuler', 'Simuler'], ['donnees', 'Réglages'],
 ];
 const COLORS = ['ink', 'orange', 'blue', 'pink', 'lilac', 'green'];
 const KINDS = [['courant', 'Compte courant'], ['livret', 'Livret d’épargne'], ['cto', 'Compte-titres'], ['pea', 'PEA'], ['av', 'Assurance-vie'], ['per', 'PER'], ['crypto', 'Crypto'], ['autre', 'Autre']];
@@ -30,7 +30,12 @@ const ICONS = {
   analyse: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 3.5V12l6 6"/></svg>',
   historique: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 12a8.5 8.5 0 1 0 2.6-6.1"/><path d="M3.5 4.5V9H8"/><path d="M12 7.5V12l3 2"/></svg>',
   simuler: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2.2"/><circle cx="10" cy="17" r="2.2"/></svg>',
-  donnees: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><ellipse cx="12" cy="6" rx="7.5" ry="2.8"/><path d="M4.5 6v6c0 1.5 3.4 2.8 7.5 2.8s7.5-1.3 7.5-2.8V6"/><path d="M4.5 12v6c0 1.5 3.4 2.8 7.5 2.8s7.5-1.3 7.5-2.8v-6"/></svg>',
+  donnees: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>',
+  compte: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5.5" width="18" height="14" rx="2.5"/><path d="M3 10h18M15.5 15h2"/></svg>',
+  transfert: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 20V4M3 8l4-4 4 4M17 4v16M13 16l4 4 4-4"/></svg>',
+  nuage: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 18.5a4.5 4.5 0 1 1 .9-8.9 6 6 0 0 1 11.6 1.9 3.5 3.5 0 0 1-1.5 7z"/></svg>',
+  cours: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/></svg>',
+  profil: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.5"/><path d="M5 20c1.2-3.6 4-5.5 7-5.5s5.8 1.9 7 5.5"/></svg>',
   refresh: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></svg>',
   close: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>',
   plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>',
@@ -452,57 +457,73 @@ function simResult() {
     <p class="note">Parts calculées hors espèces, avec la composition indicative des fonds.</p></div>` : ''}`;
 }
 
-// ——— Onglet Données ———
+// ——— Onglet Réglages ———
+// Une liste de rubriques, chacune sur sa page (#donnees/comptes…) : le retour du téléphone ramène à la liste.
+const THEMES = { auto: 'Automatique', light: 'Clair', dark: 'Sombre' };
+const SECTIONS = {
+  comptes: { title: 'Comptes', sub: 'Ajoutez, modifiez ou supprimez vos comptes.', icon: 'compte', body: sectionAccounts,
+    summary: () => { const n = data.accounts.length; return n ? `${n} compte${n > 1 ? 's' : ''} · ${eur(totals(data).total, 0)}` : 'Aucun compte'; } },
+  import: { title: 'Import et sauvegarde', sub: 'Trade Republic, et vos fichiers de sauvegarde.', icon: 'transfert', body: sectionImport,
+    summary: () => data.imports?.length ? 'Dernier import le ' + dateLong(data.imports[data.imports.length - 1].at?.slice(0, 10)) : 'Trade Republic, fichier de sauvegarde' },
+  sync: { title: 'Synchronisation', sub: 'Le même carnet sur tous vos appareils.', icon: 'nuage', body: syncCard,
+    summary: () => syncState() ? 'Coffre ' + syncState().user : 'Désactivée' },
+  cours: { title: 'Cours', sub: 'Yahoo Finance, sans jamais vos montants.', icon: 'cours', body: sectionPrices,
+    summary: () => ui.server === 'off' ? 'Serveur absent : actualisation indisponible' : data.lastRefresh ? refreshLabel().long : 'Jamais actualisés' },
+  preferences: { title: 'Préférences', sub: 'Prénom, thème et impôt.', icon: 'profil', body: sectionPreferences,
+    summary: () => [data.profile.firstName || 'Sans prénom', 'thème ' + THEMES[data.settings.theme]?.toLowerCase(), 'impôt ' + num(data.settings.taxRate, 1) + ' %'].join(' · ') },
+};
+
 function viewData() {
-  const st = data.trStats;
-  const server = { ok: '<span class="status ok"><i></i>Serveur Carnet joignable</span>', off: '<span class="status off"><i></i>Serveur Carnet absent : actualisation indisponible</span>', preview: '<span class="status off"><i></i>Aperçu en ligne : pas de serveur, actualisation indisponible</span>', unknown: '<span class="status"><i></i>Vérification du serveur…</span>' }[ui.server];
-  const th = data.settings.theme;
+  const s = SECTIONS[ui.section];
+  if (s) return `<button class="linkish back" data-action="section-close">‹ Réglages</button>
+    <h1 class="title">${s.title}.<em>${s.sub}</em></h1><div class="settings">${s.body()}</div>`;
+  const rows = Object.entries(SECTIONS).filter(([k]) => k !== 'sync' || !PREVIEW).map(([k, x]) => `<button class="line" data-action="section" data-v="${k}">
+    <span class="mono">${ICONS[x.icon]}</span><span class="n">${x.title}</span><span class="v chev" aria-hidden="true">›</span><span class="s">${esc(x.summary())}</span><span class="g"></span></button>`).join('');
   return `<h1 class="title">Vos données, chez vous.<em>${syncState() ? 'Chiffrées avant de partir.' : 'Rien ne quitte cet appareil.'}</em></h1>
-  <div class="data-grid">
-    <div class="col">
-      <section class="card"><h3>Profil</h3><p class="lead">Le prénom s’affiche dans le titre de l’accueil.</p>
-        <form class="form" data-form="profile"><label class="field"><span>Prénom</span><input class="input" id="pf-name" name="firstName" value="${esc(data.profile.firstName)}" autocomplete="given-name" maxlength="40"></label>
-        <div class="btn-row"><button class="btn primary sm" type="submit">Enregistrer</button></div></form></section>
+    <div class="settings"><div class="lines">${rows}</div>
+      <div><button class="btn danger" data-action="wipe">Effacer toutes les données</button>
+      <p class="note">Carnet ${VERSION}. ${storageWorks() ? 'Stockage local actif.' : 'Stockage local bloqué par le navigateur : les données ne survivront pas à la fermeture.'}</p></div></div>`;
+}
 
-      <section class="card"><h3>Apparence</h3><p class="lead">Le mode automatique suit le réglage de l’appareil.</p>
-        <div class="seg" role="group" aria-label="Thème">${[['auto', 'Automatique'], ['light', 'Clair'], ['dark', 'Sombre']].map(([k, l]) => `<button data-action="theme" data-v="${k}" aria-pressed="${th === k}">${l}</button>`).join('')}</div></section>
+function sectionAccounts() {
+  return `<section class="card"><p class="lead">Un solde (compte courant, livret) ou des lignes (assurance-vie, PER, autre courtier).</p>
+    <div class="list">${data.accounts.map(a => { const v = data.lines.filter(l => l.accountId === a.id).reduce((s, l) => s + lineValue(l), 0); return `<div class="list-item"><span class="tile c-${esc(a.color || 'ink')}">${esc(initials(a.name))}</span><span><span class="n">${esc(a.name)}</span><br><span class="s">${esc(KINDS.find(k => k[0] === a.kind)?.[1] || '')} · ${eur(v, 0)}</span></span><button class="btn sm" data-action="edit-account" data-id="${esc(a.id)}">Modifier</button></div>`; }).join('') || '<p class="muted small">Aucun compte.</p>'}</div>
+    <div class="btn-row" style="margin-top:12px"><button class="btn" data-action="add-account">${ICONS.plus}Ajouter un compte</button><button class="btn" data-action="add-line" ${data.accounts.length ? '' : 'disabled'}>${ICONS.plus}Ajouter une ligne</button></div></section>`;
+}
 
-      <section class="card"><h3>Trade Republic</h3>
-        <p class="lead">Exportez vos transactions depuis Trade Republic au format CSV (« Exportation de transactions »), puis importez le fichier ici. Un nouvel import remplace les lignes Trade Republic et garde vos lignes manuelles.</p>
-        <div class="btn-row"><button class="btn primary" data-action="pick-csv">${ICONS.upload}Importer le CSV</button></div>
-        ${st ? `<dl class="kv"><dt>Dernier import</dt><dd>${dateLong(data.imports?.[data.imports.length - 1]?.at?.slice(0, 10))}</dd>
-          <dt>Opérations lues</dt><dd>${num(st.rows, 0)}</dd><dt>Période</dt><dd>${dateLong(st.from)} → ${dateLong(st.to)}</dd>
-          ${Object.entries(st.cash || {}).map(([id, v]) => `<dt>Espèces ${esc(accById(id)?.name || id)}</dt><dd>${eur(v)}</dd>`).join('')}</dl>
-          <p class="note">Le solde espèces est recalculé à partir de toutes les opérations (montant + frais + taxes). Comparez-le avec le solde affiché dans l’app Trade Republic.</p>` : ''}
-      </section>
+function sectionImport() {
+  const st = data.trStats;
+  return `<section class="card"><h3>Trade Republic</h3>
+      <p class="lead">Exportez vos transactions depuis Trade Republic au format CSV (« Exportation de transactions »), puis importez le fichier ici. Un nouvel import remplace les lignes Trade Republic et garde vos lignes manuelles.</p>
+      <div class="btn-row"><button class="btn primary" data-action="pick-csv">${ICONS.upload}Importer le CSV</button></div>
+      ${st ? `<dl class="kv"><dt>Dernier import</dt><dd>${dateLong(data.imports?.[data.imports.length - 1]?.at?.slice(0, 10))}</dd>
+        <dt>Opérations lues</dt><dd>${num(st.rows, 0)}</dd><dt>Période</dt><dd>${dateLong(st.from)} → ${dateLong(st.to)}</dd>
+        ${Object.entries(st.cash || {}).map(([id, v]) => `<dt>Espèces ${esc(accById(id)?.name || id)}</dt><dd>${eur(v)}</dd>`).join('')}</dl>
+        <p class="note">Le solde espèces est recalculé à partir de toutes les opérations (montant + frais + taxes). Comparez-le avec le solde affiché dans l’app Trade Republic.</p>` : ''}
+    </section>
+    <section class="card"><h3>Sauvegarde</h3><p class="lead">Un fichier à garder de côté, ou à restaurer sur un appareil sans synchronisation.</p>
+      <div class="btn-row"><button class="btn" data-action="export-plain" ${data.lines.length ? '' : 'disabled'}>${ICONS.download}Exporter en clair</button><button class="btn" data-action="export-enc" ${data.lines.length ? '' : 'disabled'}>${ICONS.lock}Exporter chiffrée</button></div>
+      <div class="btn-row" style="margin-top:8px"><button class="btn primary" data-action="pick-backup">${ICONS.upload}Restaurer une sauvegarde</button></div>
+      <p class="note">La sauvegarde chiffrée utilise AES-GCM 256 bits avec une clé tirée de votre phrase de passe (PBKDF2, 310 000 itérations). Sans la phrase, le fichier est illisible : rien ne permet de la retrouver.</p>
+    </section>`;
+}
 
-      <section class="card"><h3>Cours</h3><p class="lead">Le bouton d’actualisation récupère sur Yahoo Finance, via le serveur Carnet, le cours du jour et l’historique (5 ans) de chaque produit coté. Seuls les symboles sont envoyés, jamais vos quantités ni vos montants.</p>
-        <p style="margin:0 0 12px">${server}</p>
-        <div class="btn-row"><button class="btn refresh-btn" data-action="refresh" ${ui.busy ? 'disabled' : ''}><span class="ic">${ICONS.refresh}</span><span class="r-long">Actualiser les cours</span></button></div>
-        ${refreshReport()}
-        <label class="field" style="margin-top:14px"><span>Taux d’imposition des plus-values hors PEA (%)</span><input class="input" id="tax-rate" data-setting="taxRate" inputmode="decimal" value="${num(data.settings.taxRate, 1)}"><small>31,4 % en 2026 (prélèvement forfaitaire unique). Utilisé par le simulateur.</small></label>
-      </section>
-    </div>
-    <div class="col">
-      <section class="card"><h3>Comptes</h3><p class="lead">Ajoutez par exemple vos comptes Caisse d’Épargne (solde) ou votre assurance-vie Linxea (lignes).</p>
-        <div class="list">${data.accounts.map(a => { const v = data.lines.filter(l => l.accountId === a.id).reduce((s, l) => s + lineValue(l), 0); return `<div class="list-item"><span class="tile c-${esc(a.color || 'ink')}">${esc(initials(a.name))}</span><span><span class="n">${esc(a.name)}</span><br><span class="s">${esc(KINDS.find(k => k[0] === a.kind)?.[1] || '')} · ${eur(v, 0)}</span></span><button class="btn sm" data-action="edit-account" data-id="${esc(a.id)}">Modifier</button></div>`; }).join('') || '<p class="muted small">Aucun compte.</p>'}</div>
-        <div class="btn-row" style="margin-top:12px"><button class="btn" data-action="add-account">${ICONS.plus}Ajouter un compte</button><button class="btn" data-action="add-line" ${data.accounts.length ? '' : 'disabled'}>${ICONS.plus}Ajouter une ligne</button></div>
-      </section>
+function sectionPrices() {
+  const server = { ok: '<span class="status ok"><i></i>Serveur Carnet joignable</span>', off: '<span class="status off"><i></i>Serveur Carnet absent : actualisation indisponible</span>', preview: '<span class="status off"><i></i>Aperçu en ligne : pas de serveur, actualisation indisponible</span>', unknown: '<span class="status"><i></i>Vérification du serveur…</span>' }[ui.server];
+  return `<section class="card"><p class="lead">L’actualisation récupère sur Yahoo Finance, via le serveur Carnet, le cours du jour et l’historique (5 ans) de chaque produit coté. Seuls les symboles sont envoyés, jamais vos quantités ni vos montants.</p>
+    <p style="margin:0 0 12px">${server}</p>
+    <div class="btn-row"><button class="btn refresh-btn" data-action="refresh" ${ui.busy ? 'disabled' : ''}><span class="ic">${ICONS.refresh}</span><span class="r-long">Actualiser les cours</span></button></div>
+    ${refreshReport()}</section>`;
+}
 
-      ${syncCard()}
-
-      <section class="card"><h3>Sauvegarde</h3><p class="lead">Un fichier à garder de côté, ou à restaurer sur un appareil sans synchronisation.</p>
-        <div class="btn-row"><button class="btn" data-action="export-plain" ${data.lines.length ? '' : 'disabled'}>${ICONS.download}Exporter en clair</button><button class="btn" data-action="export-enc" ${data.lines.length ? '' : 'disabled'}>${ICONS.lock}Exporter chiffrée</button></div>
-        <div class="btn-row" style="margin-top:8px"><button class="btn primary" data-action="pick-backup">${ICONS.upload}Restaurer une sauvegarde</button></div>
-        <p class="note">La sauvegarde chiffrée utilise AES-GCM 256 bits avec une clé tirée de votre phrase de passe (PBKDF2, 310 000 itérations). Sans la phrase, le fichier est illisible : rien ne permet de la retrouver.</p>
-      </section>
-
-      <section class="card"><h3>Effacer</h3><p class="lead">Supprime toutes les données de Carnet sur cet appareil. Pensez à exporter avant.</p>
-        <button class="btn danger" data-action="wipe">Effacer toutes les données</button>
-        <p class="note">Carnet ${VERSION}. ${storageWorks() ? 'Stockage local actif.' : 'Stockage local bloqué par le navigateur : les données ne survivront pas à la fermeture.'}</p>
-      </section>
-    </div>
-  </div>`;
+function sectionPreferences() {
+  return `<section class="card"><h3>Prénom</h3><p class="lead">Il s’affiche dans le titre de l’accueil.</p>
+      <form class="form" data-form="profile"><label class="field"><span class="sr">Prénom</span><input class="input" id="pf-name" name="firstName" value="${esc(data.profile.firstName)}" autocomplete="given-name" maxlength="40"></label>
+      <div class="btn-row"><button class="btn primary sm" type="submit">Enregistrer</button></div></form></section>
+    <section class="card"><h3>Thème</h3><p class="lead">Le mode automatique suit le réglage de l’appareil.</p>
+      <div class="seg" role="group" aria-label="Thème">${Object.entries(THEMES).map(([k, l]) => `<button data-action="theme" data-v="${k}" aria-pressed="${data.settings.theme === k}">${l}</button>`).join('')}</div></section>
+    <section class="card"><h3>Impôt sur les plus-values</h3><p class="lead">Utilisé par le simulateur pour les ventes hors PEA et assurance-vie.</p>
+      <label class="field"><span>Taux (%)</span><input class="input" id="tax-rate" data-setting="taxRate" inputmode="decimal" value="${num(data.settings.taxRate, 1)}"><small>31,4 % en 2026 (prélèvement forfaitaire unique).</small></label></section>`;
 }
 
 // ——— Fenêtres du bas ———
@@ -830,7 +851,7 @@ async function importCsvFlow() {
     label: 'Import',
     onMount: (sh, close) => sh.querySelector('[data-ok]').addEventListener('click', () => {
       if (data.demo) { const keep = { profile: data.profile, settings: data.settings }; data = { ...emptyData(), ...keep }; }
-      data = mergeImport(data, imp); close(); ui.tab = 'patrimoine'; history.replaceState(null, '', '#patrimoine'); window.scrollTo(0, 0);
+      data = mergeImport(data, imp); close(); land('patrimoine');
       commit(`${held.length} lignes importées.`);
     }),
   });
@@ -871,7 +892,7 @@ async function restoreFlow() {
       if (!data.profile.firstName && nd.profile.firstName) data.profile.firstName = nd.profile.firstName;
       if (!data.trStats && nd.trStats) data.trStats = nd.trStats;
     }
-    ui.tab = 'patrimoine'; history.replaceState(null, '', '#patrimoine'); window.scrollTo(0, 0); commit(mode === 'replace' ? 'Sauvegarde restaurée.' : `${what} ajoutés.`);
+    land('patrimoine'); commit(mode === 'replace' ? 'Sauvegarde restaurée.' : `${what} ajoutés.`);
   } catch (e) { toast(e.message || 'Restauration impossible.'); }
 }
 
@@ -916,10 +937,10 @@ function setSyncUI() { const el = $('#sync-status'); if (el) el.innerHTML = sync
 function syncCard() {
   if (PREVIEW) return '';
   const st = syncState();
-  if (!st) return `<section class="card"><h3>Synchronisation</h3><p class="lead">Retrouvez vos données sur l’ordinateur et le téléphone. Elles sont chiffrées dans ce navigateur avant d’être envoyées : le serveur ne garde qu’un bloc illisible.</p>
+  if (!st) return `<section class="card"><p class="lead">Retrouvez vos données sur l’ordinateur et le téléphone. Elles sont chiffrées dans ce navigateur avant d’être envoyées : le serveur ne garde qu’un bloc illisible.</p>
     <div class="btn-row"><button class="btn primary" data-action="sync-create">Créer un coffre</button><button class="btn" data-action="sync-login">Se connecter</button></div>
     <p class="note">Un identifiant et une phrase de passe, sans e-mail. La phrase n’est jamais envoyée : si vous l’oubliez, personne ne peut ouvrir le coffre, mais les données de vos appareils restent intactes.</p></section>`;
-  return `<section class="card"><h3>Synchronisation</h3><p class="lead">Cet appareil est relié au coffre <b>${esc(st.user)}</b>. Chaque modification y est envoyée chiffrée, et vos autres appareils la récupèrent en s’ouvrant.</p>
+  return `<section class="card"><p class="lead">Cet appareil est relié au coffre <b>${esc(st.user)}</b>. Chaque modification y est envoyée chiffrée, et vos autres appareils la récupèrent en s’ouvrant.</p>
     <p style="margin:0 0 12px" id="sync-status">${syncStatusHtml()}</p>
     <div class="btn-row"><button class="btn" data-action="sync-now">Synchroniser</button><button class="btn" data-action="sync-logout">Déconnecter cet appareil</button></div>
     <div class="btn-row" style="margin-top:8px"><button class="btn danger" data-action="sync-delete">Supprimer le coffre en ligne</button></div></section>`;
@@ -1178,7 +1199,7 @@ async function refreshPrices() {
     data.settings.snoozeUntil = '';
     const ok = results.filter(r => r.ok).length, ko = results.length - ok;
     ui.busy = false; ui.progress = '';
-    commit(ko ? `${ok} produit${ok > 1 ? 's' : ''} actualisé${ok > 1 ? 's' : ''} · ${ko} sans cours (détail dans Données)` : `${ok} produit${ok > 1 ? 's' : ''} actualisé${ok > 1 ? 's' : ''}, historique compris.`);
+    commit(ko ? `${ok} produit${ok > 1 ? 's' : ''} actualisé${ok > 1 ? 's' : ''} · ${ko} sans cours (détail dans Réglages, Cours)` : `${ok} produit${ok > 1 ? 's' : ''} actualisé${ok > 1 ? 's' : ''}, historique compris.`);
   } catch (e) {
     toast('Échec de l’actualisation : ' + (e.name === 'AbortError' ? 'délai dépassé.' : e.message));
   } finally { ui.busy = false; ui.progress = ''; setRefreshUI(); if (ui.tab === 'donnees') render(); }
@@ -1231,7 +1252,18 @@ function demoData() {
 }
 
 // ——— Navigation & événements ———
-function go(tab) { ui.tab = tab; if (location.hash.slice(1) !== tab) history.replaceState(null, '', '#' + tab); render(); window.scrollTo(0, 0); }
+// land() change d'onglet sans afficher, pour les actions qui finissent par commit().
+function land(tab) { ui.tab = tab; ui.section = ''; if (location.hash.slice(1) !== tab) history.replaceState(null, '', '#' + tab); window.scrollTo(0, 0); }
+function go(tab) { land(tab); render(); }
+// Onglet et rubrique des Réglages d'après l'adresse (#donnees/comptes) ; null si ce n'est pas un onglet
+function fromHash() {
+  const [tab, section = ''] = location.hash.slice(1).split('/');
+  if (!TABS.some(t => t[0] === tab)) return null;
+  return { tab, section: tab === 'donnees' && Object.hasOwn(SECTIONS, section) ? section : '' };
+}
+function route() { const r = fromHash(); if (!r) return; Object.assign(ui, r); render(); window.scrollTo(0, 0); }
+function openSection(key) { history.pushState({ section: key }, '', '#donnees/' + key); route(); }
+function closeSection() { if (history.state?.section) history.back(); else go('donnees'); }
 
 document.addEventListener('click', async e => {
   const t = e.target.closest('[data-tab]');
@@ -1248,6 +1280,8 @@ document.addEventListener('click', async e => {
     case 'hist-more': { ui.hist.limit += 150; const y = window.scrollY; $('#hist-body').innerHTML = histBody(); window.scrollTo(0, y); break; }
     case 'open-split': openSplit(v); break;
     case 'go': go(v); break;
+    case 'section': openSection(v); break;
+    case 'section-close': closeSection(); break;
     case 'open-line': openLine(b.dataset.id); break;
     case 'open-account': openAccount(b.dataset.id); break;
     case 'add-line': lineForm(null); break;
@@ -1263,7 +1297,7 @@ document.addEventListener('click', async e => {
     case 'demo': data = demoData(); commit('Données d’exemple chargées.'); break;
     case 'clear-demo': { const keep = { settings: data.settings }; data = { ...emptyData(), ...keep }; clearAll(); commit('Exemple effacé.'); break; }
     case 'wipe':
-      if (await confirmSheet({ title: 'Tout effacer ?', text: `Comptes, lignes, historique et réglages seront supprimés de cet appareil. Cette action ne peut pas être annulée.${syncState() ? ' Cet appareil sera aussi déconnecté du coffre, qui reste intact.' : ''}`, ok: 'Tout effacer', danger: true })) { clearSyncState(); clearAll(); data = emptyData(); commit('Données effacées.'); go('patrimoine'); }
+      if (await confirmSheet({ title: 'Tout effacer ?', text: `Comptes, lignes, historique et réglages seront supprimés de cet appareil. Cette action ne peut pas être annulée.${syncState() ? ' Cet appareil sera aussi déconnecté du coffre, qui reste intact.' : ''}`, ok: 'Tout effacer', danger: true })) { clearSyncState(); clearAll(); data = emptyData(); land('patrimoine'); commit('Données effacées.'); }
       break;
     case 'sync-create': syncSheet(true); break;
     case 'sync-login': syncSheet(false); break;
@@ -1309,7 +1343,7 @@ document.addEventListener('submit', e => {
   e.preventDefault(); data.profile.firstName = f.firstName.value.trim(); commit('Profil enregistré.');
 });
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && sheetStack.length) sheetStack[sheetStack.length - 1].close(); });
-window.addEventListener('hashchange', () => { const h = location.hash.slice(1); if (TABS.some(t => t[0] === h) && h !== ui.tab) { ui.tab = h; render(); } });
+window.addEventListener('hashchange', route);
 let wasWide = isWide();
 window.addEventListener('resize', () => { const w = isWide(); if (w !== wasWide) { wasWide = w; render(); } else if (ui.tab === 'patrimoine') after.patrimoine(); });
 matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', applyTheme);
@@ -1317,8 +1351,7 @@ window.addEventListener('storage', e => { if (e.key && e.key.startsWith('carnet:
 
 // ——— Démarrage ———
 (function start() {
-  const h = location.hash.slice(1);
-  if (TABS.some(t => t[0] === h)) ui.tab = h;
+  Object.assign(ui, fromHash());
   for (const n of document.querySelectorAll('[data-icon]')) n.innerHTML = ICONS[n.dataset.icon] || '';
   render();
   checkServer();

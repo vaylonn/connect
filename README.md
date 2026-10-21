@@ -15,11 +15,11 @@ Suivi de patrimoine personnel : PEA, compte-titres, crypto, livrets, assurance-v
 
 ## Bien démarrer
 
-1. **Importer Trade Republic.** Dans l'app TR : *Exportation de transactions* en CSV, **depuis l'ouverture du compte**. Puis Carnet → Données → *Importer le CSV*.
+1. **Importer Trade Republic.** Dans l'app TR : *Exportation de transactions* en CSV, **depuis l'ouverture du compte**. Puis Carnet → Réglages → Import et sauvegarde → *Importer le CSV*.
    Un export sur une période partielle donne des quantités et des espèces fausses : Carnet reconstruit tout à partir de l'historique complet.
-2. **Ajouter vos autres comptes.** Données → *Ajouter un compte* (livret, assurance-vie, PER…), puis *Ajouter une ligne*.
+2. **Ajouter vos autres comptes.** Réglages → Comptes → *Ajouter un compte* (livret, assurance-vie, PER…), puis *Ajouter une ligne*.
 3. **Actualiser les cours** avec le bouton en haut de l'écran.
-4. **Synchroniser vos appareils** (facultatif). Données → *Créer un coffre* sur le premier appareil, puis *Se connecter* avec les mêmes identifiant et phrase de passe sur les autres.
+4. **Synchroniser vos appareils** (facultatif). Réglages → Synchronisation → *Créer un coffre* sur le premier appareil, puis *Se connecter* avec les mêmes identifiant et phrase de passe sur les autres.
 
 Pour installer l'app sur un téléphone : menu du navigateur → *Ajouter à l'écran d'accueil*.
 
@@ -38,7 +38,7 @@ Pour installer l'app sur un téléphone : menu du navigateur → *Ajouter à l'�
 - **Stockées dans le navigateur** (`localStorage`). Effacer les données du site les supprime ; la navigation privée ne les garde pas.
 - **Synchronisation** : la phrase de passe ne quitte jamais l'appareil. Elle sert à chiffrer les données (AES-GCM 256 bits, clé dérivée par PBKDF2, 310 000 itérations). Le serveur ne garde qu'un bloc illisible, et bloque un quart d'heure toute adresse qui enchaîne 20 essais refusés.
   **Phrase oubliée = coffre perdu**, mais les données déjà présentes sur vos appareils restent intactes.
-- **Sauvegarde** : Données → *Exporter* (en clair ou chiffrée), puis *Restaurer* sur un autre appareil.
+- **Sauvegarde** : Réglages → Import et sauvegarde → *Exporter* (en clair ou chiffrée), puis *Restaurer* sur un autre appareil.
 - **Seule information envoyée en clair** : les symboles des titres (ex. `WPEA.PA`), pour récupérer les cours. Jamais les quantités ni les montants.
 
 ---

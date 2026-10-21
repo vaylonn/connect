@@ -35,6 +35,7 @@ No dependencies and no build step: plain Node (≥ 18.17; CI uses 22) and browse
 
 **Browser app (`public/js/`).** Data is one object in `localStorage` (`carnet:data:v1`), passed through `normalize()` (`store.js`) when loaded, restored or synced.
 - `app.js` is the whole UI: each tab is an HTML template string set with `innerHTML`, a single document-level click handler dispatches on `data-action`, and `commit()` saves, re-renders, schedules a sync and fetches missing compositions.
+- The Réglages tab (internal key `donnees`) is a list of `SECTIONS`, each on its own page at `#donnees/<key>` (pushed to history, so the phone's back button returns to the list).
 - `compute.js` (totals, look-through by sector/country/company, value history, buy/sell simulator) and `importer.js` (Trade Republic CSV → accounts, lines, transactions) are pure modules, also used by `tools/`.
 - `sync.js` does the end-to-end encryption: username + passphrase → PBKDF2 → AES-GCM key + access token; only ciphertext reaches the server.
 - `library.js` lists known products (Yahoo ticker, indicative composition); compositions fetched from the server override it at runtime (`setFetchedLibrary`). A ticker must match the fund **and** its share class (Acc/Dist).
