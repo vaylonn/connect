@@ -617,24 +617,24 @@ function openLine(id) {
   const v = lineValue(l), g = lineGain(l), c = lineCost(l);
   const lib = libraryFor(l.isin);
   const stats = isCashLike(l) ? `<div class="stat"><div class="k">Type</div><div class="v">${esc(TYPE_LABEL[l.type] || l.type)}</div></div><div class="stat"><div class="k">Enveloppe</div><div class="v">${esc(l.envelope || '—')}</div></div>`
-    : `<div class="stat"><div class="k">Quantité</div><div class="v">${fqty(l.qty)}</div></div>
+    : `<div class="stat"><div class="k">Quantité</div><div class="v">${fqty(l.qty)}${l.pending ? `<br><span class="small muted">+ ${eur(l.pending)} en attente</span>` : ''}</div></div>
       <div class="stat"><div class="k">Prix de revient</div><div class="v">${eur(pru(l))}</div></div>
       <div class="stat"><div class="k">Cours</div><div class="v">${eur(l.price)}<br><span class="small muted">${l.priceDate ? dateLong(l.priceDate) : 'jamais actualisé'}${l.priceSource === 'transaction' ? ' · prix de transaction' : l.priceSource === 'yahoo' ? ' · Yahoo' : ''}</span></div></div>
-      <div class="stat"><div class="k">Plus-value</div><div class="v ${Math.abs(g) < 0.5 ? '' : g > 0 ? 'pos' : 'neg'}">${signedEur(g)}<br><span class="small">${c > 0 ? signedPct(g / c) : ''}</span></div></div>
-      ${l.pending ? `<div class="stat"><div class="k">Versements en attente</div><div class="v">${eur(l.pending)}</div></div>` : ''}
-      <div class="stat"><div class="k">Identifiant</div><div class="v small">${esc(l.isin || '—')}${l.ticker ? '<br><span class="muted">' + esc(l.ticker) + '</span>' : ''}</div></div>`;
+      <div class="stat"><div class="k">Plus-value</div><div class="v ${Math.abs(g) < 0.5 ? '' : g > 0 ? 'pos' : 'neg'}">${signedEur(g)}<br><span class="small">${c > 0 ? signedPct(g / c) : ''}</span></div></div>`;
+  // Nom complet du fonds, ISIN et symbole sur une ligne sous le titre, plutôt qu’une case de plus.
+  const ids = [lib && lib.name !== shortName(l) ? lib.name : '', l.isin, l.ticker].filter(Boolean);
   const holdings = comp ? `<div class="section-head" style="margin-top:22px"><h2>Principales entreprises</h2><span class="aside">${esc(comp.index)}</span></div>
     <div class="holdings">${comp.holdings.map((h, i) => `<div class="holding"><span class="r">${i + 1}</span><span class="n">${esc(h.name)}</span><span class="a">${eur(h.amount)}</span><span class="w">${pct(h.weight)} du fonds · ${esc(h.sector)} · ${esc(h.country)}</span></div>`).join('')}</div>
     <div class="section-head"><h2>Pays</h2></div><div class="bars" style="margin-top:0">${comp.countries.slice(0, 6).map(x => `<div class="barrow"><span class="n">${esc(x.name)}</span><span class="p"><b>${eur(v * x.pct, 0)}</b>${pct(x.pct)}</span><span class="track"><i style="width:${(100 * x.pct / comp.countries[0].pct).toFixed(1)}%"></i></span></div>`).join('')}</div>
     <p class="note">${COMPOSITION_NOTE}</p>`
     : (!isCashLike(l) && l.type === 'etf' ? '<p class="note">Composition non disponible pour ce fonds.</p>' : '');
   openSheet(`${sheetHead(esc(shortName(l)), esc((acc?.name || '') + ' · ' + (l.envelope || '')))}
-    ${lib && lib.name !== shortName(l) ? `<p class="small muted" style="margin:-8px 0 10px">${esc(lib.name)}</p>` : ''}
+    ${ids.length ? `<p class="small muted" style="margin:-8px 0 10px">${ids.map(esc).join(' · ')}</p>` : ''}
     <div class="detail-big">${eur(v)}</div>
     ${l.qtyEstimated || l.estimateFromAmount ? `<div class="callout" style="margin-top:12px">${l.estimateFromAmount ? 'Montant investi connu, quantité pas encore calculée : elle le sera à la prochaine actualisation, avec la valeur liquidative du jour de souscription.' : 'Quantité estimée à partir du montant investi et de la valeur liquidative du jour de souscription. Remplacez-la par celle de votre relevé quand vous l’aurez (Modifier).'}</div>` : ''}
     <div class="stat-grid">${stats}</div>
     ${priceSection(l)}
-    <div class="btn-row"><button class="btn primary sm" data-act="edit">Modifier</button>${isCashLike(l) ? '' : '<button class="btn sm" data-act="sim">Simuler un achat ou une vente</button>'}<button class="btn sm danger" data-act="del">Supprimer</button></div>
+    <div class="btn-row"><button class="btn primary sm" data-act="edit">Modifier</button>${isCashLike(l) ? '' : '<button class="btn sm" data-act="sim">Simuler</button>'}<button class="btn sm danger" data-act="del">Supprimer</button></div>
     ${holdings}`, {
     label: shortName(l),
     onMount: (sh, close) => { drawLineChart(sh, l); sh.addEventListener('click', async e => {
