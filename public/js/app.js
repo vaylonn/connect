@@ -242,20 +242,16 @@ function viewAnalyse() {
   const top10 = lt.companies.slice(0, 10).reduce((s, c) => s + c.value, 0);
   const first = lt.companies[0];
   const st = data.trStats;
-  const tiles = [
-    { k: 'Patrimoine total', v: eur(t.total, 0), d: `${t.count} ligne${t.count > 1 ? 's' : ''}`, feature: true },
-    { k: 'Plus-value latente', v: signedEur(t.gain, 0), d: t.cost > 0 ? signedPct(t.gainPct) + ' sur ' + eur(t.cost, 0) : '—', cls: t.gain >= 0 ? 'pos' : 'neg' },
+  // Total, plus-value et espèces sont déjà sur l’accueil : ici, seulement ce qui éclaire la répartition.
+  const sums = [
     { k: 'Part en actions', v: pct(t.equityPct, 0), d: eur(t.equity, 0) },
-    { k: 'Espèces et livrets', v: eur(t.liquid, 0), d: pct(t.total ? t.liquid / t.total : 0, 0) + ' du total' },
-    { k: 'Première entreprise', v: first ? esc(first.name) : '—', d: first ? `${eur(first.value, 0)} · ${pct(t.total ? first.value / t.total : 0)} du total` : '' },
-    { k: '10 premières entreprises', v: pct(t.total ? top10 / t.total : 0), d: eur(top10, 0) + ' au total' },
-    { k: 'Dividendes reçus', v: st ? eur(st.dividends) : '—', d: st ? 'Trade Republic, nets de retenue' : 'Après un import Trade Republic' },
-    { k: 'Frais payés', v: st ? eur(st.fees) : '—', d: st ? `Trade Republic, depuis ${dateLong(st.from)}` : 'Après un import Trade Republic' },
+    { k: '10 premières entreprises', v: pct(t.total ? top10 / t.total : 0), d: first ? `dont ${esc(first.name)} ${pct(t.total ? first.value / t.total : 0)}` : '' },
+    ...st ? [{ k: 'Dividendes reçus', v: eur(st.dividends), d: 'nets de retenue' }, { k: 'Frais payés', v: eur(st.fees), d: `depuis ${dateLong(st.from)}` }] : [],
   ];
   const list = { sectors: lt.sectors, countries: lt.countries, companies: lt.companies.slice(0, 15) }[ui.analyse];
   const max = Math.max(...list.map(x => x.value), 1);
-  return `<h1 class="title">Où va votre argent.<em>Secteurs, pays et entreprises, à travers vos fonds.</em></h1>
-    <div class="tiles">${tiles.map(x => `<div class="tile-k ${x.feature ? 'feature' : ''}"><span class="k">${x.k}</span><span class="v ${x.cls || ''}">${x.v}</span><span class="d">${x.d}</span></div>`).join('')}</div>
+  return `<h1 class="title">Où va votre argent.<em>À travers vos fonds.</em></h1>
+    ${sumsCard(sums)}
     <div class="section-head"><h2>Répartition</h2><span class="aside">hors espèces · ${eur(lt.base, 0)}</span></div>
     <div class="card">
       <div class="seg" role="group" aria-label="Répartition">${[['sectors', 'Secteurs'], ['countries', 'Pays'], ['companies', 'Entreprises']].map(([k, l]) => `<button data-action="analyse" data-v="${k}" aria-pressed="${ui.analyse === k}">${l}</button>`).join('')}</div>
@@ -295,6 +291,11 @@ function openSplit(i) {
     <div class="detail-big">${eur(x.value)}</div>
     ${body}
     <p class="note">${COMPOSITION_NOTE}</p>`, { label: x.name });
+}
+
+// Quelques chiffres clés dans une seule carte.
+function sumsCard(sums) {
+  return `<div class="card sums">${sums.map(x => `<div><span class="k">${x.k}</span><span class="v ${x.cls || ''}">${x.v}</span><span class="d">${x.d}</span></div>`).join('')}</div>`;
 }
 
 function emptyHint() {
@@ -362,7 +363,7 @@ function histBody() {
   const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
   // Le compte n’apparaît sur chaque opération que s’il y en a plusieurs, qu’aucun n’est choisi et que l’écran est assez large.
   const showAcc = ui.hist.acc === 'all' && new Set(ts.map(t => t.accountId)).size > 1;
-  return `<div class="card hist-sum">${sums.map(x => `<div><span class="k">${x.k}</span><span class="v ${x.cls || ''}">${x.v}</span><span class="d">${x.d}</span></div>`).join('')}</div>
+  return `${sumsCard(sums)}
     <p class="hist-count">${ts.length} opération${ts.length > 1 ? 's' : ''}, ${first === last ? 'le ' + dateLong(first) : `du ${dateLong(first)} au ${dateLong(last)}`}</p>
     <div class="lines hist-list">${months.map(({ m, ops }) => {
       const net = ops.reduce((s, t) => s + (isBuy(t) || t.kind === 'SELL' ? t.amount : 0), 0);

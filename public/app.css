@@ -255,12 +255,6 @@ button { cursor: pointer; }
 .hist-acc { flex: 0 1 auto; min-width: 0; max-width: 55%; }
 .hist-acc .input { width: auto; max-width: 100%; }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-.hist-sum { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 16px; padding: 14px 16px; margin-top: 6px; }
-@media (min-width: 640px) { .hist-sum { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
-.hist-sum > div { display: grid; gap: 1px; min-width: 0; }
-.hist-sum .k { font-size: 12px; font-weight: 600; color: var(--muted); }
-.hist-sum .v { font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; }
-.hist-sum .d { font-size: 12px; color: var(--muted); }
 .hist-count { margin: 18px 4px 8px; font-size: 13px; color: var(--muted); }
 /* Une seule liste : les mois en intertitres, le détail peut passer à la ligne plutôt qu’être coupé. */
 .hist-month { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 9px 16px 7px; background: var(--bg-2); border-top: 1px solid var(--line); font-size: 13px; font-weight: 700; color: var(--ink-2); }
@@ -272,15 +266,15 @@ button { cursor: pointer; }
 .line.static:hover { background: none; }
 .line .v.in { color: var(--pos); }
 
+/* ——— Chiffres clés (Analyse, Historique) : deux colonnes sur téléphone, une par chiffre au-delà ——— */
+.sums { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 16px; padding: 14px 16px; }
+@media (min-width: 640px) { .sums { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); } }
+.sums > div { display: grid; gap: 1px; min-width: 0; align-content: start; }
+.sums .k { font-size: 12px; font-weight: 600; color: var(--muted); }
+.sums .v { font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.sums .d { font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+
 /* ——— Analyse ——— */
-.tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-@media (min-width: 760px) { .tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
-.tile-k { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); padding: 14px 14px 13px; min-width: 0; display: grid; gap: 6px; align-content: start; }
-.tile-k .k { font-size: 12px; color: var(--muted); font-weight: 600; }
-.tile-k .v { font-family: var(--serif); font-size: 24px; font-weight: 500; line-height: 1.1; font-variant-numeric: lining-nums tabular-nums; overflow-wrap: anywhere; }
-.tile-k .d { font-size: 12px; color: var(--muted); }
-.tile-k.feature { background: var(--hero); color: var(--hero-ink); border: 0; }
-.tile-k.feature .k, .tile-k.feature .d { color: inherit; opacity: .72; }
 .seg { display: inline-flex; gap: 4px; background: var(--bg-2); border-radius: 999px; padding: 4px; max-width: 100%; overflow-x: auto; }
 .seg button { border: 0; background: none; border-radius: 999px; padding: 8px 14px; font-weight: 600; font-size: 13.5px; color: var(--muted); white-space: nowrap; }
 .seg button[aria-pressed="true"] { background: var(--surface); color: var(--ink); box-shadow: 0 1px 3px rgba(0, 0, 0, .08); }
