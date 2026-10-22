@@ -49,6 +49,21 @@ function lineType(cls, isin) {
   return 'autre';
 }
 
+// Kind of a cash movement, from Trade Republic's type (only a few are documented: match by words).
+// External flows (DEPOSIT, WITHDRAWAL, CARD, CASH_OTHER) are money entering or leaving the account;
+// the others (DIVIDEND, INTEREST, BONUS, TAX, FEE) are part of its return.
+export function cashKind(type, delta) {
+  const ty = String(type || '').toUpperCase();
+  if (/DIVIDEND|DISTRIBUTION/.test(ty)) return 'DIVIDEND';
+  if (/INTEREST/.test(ty)) return 'INTEREST';
+  if (/SAVEBACK|BENEFIT|BONUS|CASHBACK|REWARD/.test(ty)) return 'BONUS';
+  if (/CARD/.test(ty)) return 'CARD';
+  if (/TAX/.test(ty)) return 'TAX';
+  if (/FEE/.test(ty)) return 'FEE';
+  if (/INBOUND|DEPOSIT|OUTBOUND|WITHDRAW|PAYOUT|TRANSFER/.test(ty)) return delta >= 0 ? 'DEPOSIT' : 'WITHDRAWAL';
+  return 'CASH_OTHER';
+}
+
 export function importTradeRepublic(text) {
   const rows = parseCSV(text);
   if (!rows.length) throw new Error(t('Le fichier est vide.'));
@@ -61,6 +76,8 @@ export function importTradeRepublic(text) {
   const cash = new Map();    // account -> { bal, byDay: Map }: balance at the end of each day with movements
   const stats = { rows: rows.length, from: rows[0].date || rows[0].datetime.slice(0, 10), to: '', dividends: 0, interest: 0, fees: 0, taxes: 0, saveback: 0, unknownTypes: {} };
   const known = new Set(['BUY', 'SELL', 'SPLIT', 'BONUS_ISSUE', 'FREE_RECEIPT', 'PRIVATE_MARKET_BUY']);
+  const moves = [];          // cash movements, for the history and the performance
+  const cards = new Map();   // card payments summed per account and month
 
   const P = (acct, x) => {
     const k = acct + '|' + x.symbol;
@@ -95,7 +112,20 @@ export function importTradeRepublic(text) {
     stats.taxes += toNum(x.tax);
 
     const t = x.type;
-    if (!x.symbol || !known.has(t)) continue;
+    if (!known.has(t)) { // cash movement: deposit, withdrawal, dividend, interest…
+      if (Math.abs(delta) < 0.005) continue;
+      const kind = cashKind(t, delta);
+      // Dividends and interest keep the withheld tax apart (net = amount + tax); other movements are net.
+      const gross = kind === 'DIVIDEND' || kind === 'INTEREST';
+      const move = { source: 'tr', date, acct, kind, category: x.category || '', type_: t, isin: x.symbol || '', name: x.name || '', cls: x.asset_class || '', amount: r2(gross ? delta - toNum(x.tax) : delta), fee: toNum(x.fee), tax: gross ? toNum(x.tax) : 0 };
+      if (kind !== 'CARD') { moves.push(move); continue; }
+      // Card payments: one entry per account and month, or they would bury everything else
+      const k = acct + '|' + date.slice(0, 7);
+      const c = cards.get(k);
+      if (c) { c.amount = r2(c.amount + delta); c.count++; c.date = date; } else cards.set(k, { ...move, count: 1 });
+      continue;
+    }
+    if (!x.symbol) continue;
     const p = P(acct, x);
     const q = toNum(x.shares);
     const trade = { source: 'tr', date, acct, isin: x.symbol, name: x.name || p.name, cls: x.asset_class || p.cls, kind: t, category: x.category || '', shares: Math.abs(q), price: Math.abs(toNum(x.price)), amount: toNum(x.amount), fee: toNum(x.fee), tax: toNum(x.tax) };
@@ -178,6 +208,7 @@ export function importTradeRepublic(text) {
   }
 
   const transactions = trades.map((x, i) => ({ id: 'tr-op-' + i, ...x, accountId: accIds[x.acct], envelope: x.acct === 'PEA' ? 'PEA' : x.cls === 'CRYPTO' ? 'Crypto' : 'Compte-titres', type: lineType(x.cls, x.isin) }));
+  [...moves, ...cards.values()].forEach(({ type_, ...x }, i) => transactions.push({ id: 'tr-cash-' + i, ...x, trType: type_, accountId: accIds[x.acct], envelope: x.acct === 'PEA' ? 'PEA' : 'Compte-titres', type: x.kind === 'DIVIDEND' && x.isin ? lineType(x.cls, x.isin) : 'especes' }));
 
   stats.dividends = r2(stats.dividends); stats.interest = r2(stats.interest);
   stats.fees = r2(-stats.fees); stats.taxes = r2(-stats.taxes); stats.saveback = r2(stats.saveback);
@@ -186,7 +217,7 @@ export function importTradeRepublic(text) {
 }
 
 // Merges an import into existing data: replaces what came from Trade Republic,
-// keeps manually entered lines and per-line settings (name, symbol, more recent price).
+// keeps manually entered lines and per-line settings (name, symbol, more recent price, target, note).
 export function mergeImport(data, imp) {
   const old = new Map(data.lines.filter(l => l.source === 'tr').map(l => [l.id, l]));
   const lines = imp.lines.map(l => {
@@ -197,10 +228,12 @@ export function mergeImport(data, imp) {
     if (o.ticker && o.customTicker) { n.ticker = o.ticker; n.customTicker = true; }
     if (l.type !== 'especes' && o.priceDate && o.priceDate > l.priceDate) { n.price = o.price; n.priceDate = o.priceDate; n.priceSource = o.priceSource; }
     if (o.lookthrough) n.lookthrough = o.lookthrough;
+    if (o.target) n.target = o.target;
+    if (o.note) n.note = o.note;
     return n;
   });
   const oldAcc = new Map(data.accounts.map(a => [a.id, a]));
-  const accounts = imp.accounts.map(a => oldAcc.has(a.id) ? { ...a, name: oldAcc.get(a.id).name, color: oldAcc.get(a.id).color } : a);
+  const accounts = imp.accounts.map(a => { const o = oldAcc.get(a.id); return o ? { ...a, name: o.name, color: o.color, ...(o.note ? { note: o.note } : {}) } : a; });
   return {
     ...data,
     accounts: [...accounts, ...data.accounts.filter(a => a.source !== 'tr')],

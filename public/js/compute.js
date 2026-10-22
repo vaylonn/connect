@@ -308,3 +308,89 @@ function diffLists(a, b) {
 export function envelopeForAccount(acc) {
   return { pea: 'PEA', cto: 'Compte-titres', av: 'Assurance-vie', per: 'PER', crypto: 'Crypto', livret: 'Livrets', courant: 'Espèces' }[acc?.kind] || 'Autre';
 }
+
+// ——— Real performance ———
+// Cash movements kept at import: external flows (money in or out of the account) and income.
+export const FLOW_KINDS = new Set(['DEPOSIT', 'WITHDRAWAL', 'CARD', 'CASH_OTHER']);
+export const INCOME_KINDS = new Set(['DIVIDEND', 'INTEREST', 'BONUS']);
+export const netAmount = tr => (+tr.amount || 0) + (INCOME_KINDS.has(tr.kind) ? +tr.tax || 0 : 0);
+
+// Money-weighted annual rate (XIRR) of dated flows [{ d: 'YYYY-MM-DD', v }], seen from the investor:
+// deposits negative, withdrawals and today's value positive. null when it has no solution.
+export function xirr(flows) {
+  if (flows.length < 2) return null;
+  const t0 = Date.parse(flows[0].d);
+  const ys = flows.map(f => (Date.parse(f.d) - t0) / (365 * 86400000));
+  const npv = r => flows.reduce((s, f, i) => s + f.v / Math.pow(1 + r, ys[i]), 0);
+  let lo = -0.9999, hi = 10;
+  let flo = npv(lo), fhi = npv(hi);
+  if (!isFinite(flo) || !isFinite(fhi) || flo * fhi > 0) return null;
+  for (let i = 0; i < 200 && hi - lo > 1e-10; i++) {
+    const mid = (lo + hi) / 2, fm = npv(mid);
+    if (fm * flo > 0) { lo = mid; flo = fm; } else hi = mid;
+  }
+  return (lo + hi) / 2;
+}
+
+// Performance of the accounts whose deposits are known (imported with their history):
+// what was paid in, what it is worth today, and the annual rate that links the two.
+// The gain includes dividends, interest, realized gains, fees and taxes.
+export function performance(data, now = new Date(), onlyAccount = null) {
+  const accIds = new Set((data.accounts || []).map(a => a.id));
+  const txs = (data.transactions || []).filter(tr => accIds.has(tr.accountId) && (!onlyAccount || tr.accountId === onlyAccount));
+  const flowsTx = txs.filter(tr => FLOW_KINDS.has(tr.kind)).sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+  const ids = new Set(flowsTx.map(tr => tr.accountId));
+  const deposits = flowsTx.reduce((s, tr) => s + Math.max(0, tr.amount), 0);
+  if (!ids.size || deposits <= 0) return null;
+  const withdrawals = flowsTx.reduce((s, tr) => s - Math.min(0, tr.amount), 0);
+  const value = heldLines(data).filter(l => ids.has(l.accountId)).reduce((s, l) => s + lineValue(l), 0);
+  const today = iso(now);
+  const from = flowsTx[0].date;
+  const days = Math.max(0, (Date.parse(today) - Date.parse(from)) / 86400000);
+  const rate = xirr([...flowsTx.map(tr => ({ d: tr.date, v: -tr.amount })), { d: today, v: value }]);
+  const sum = kind => txs.filter(tr => ids.has(tr.accountId) && tr.kind === kind).reduce((s, tr) => s + netAmount(tr), 0);
+  return {
+    accounts: [...ids], from, days, deposits, withdrawals, net: deposits - withdrawals, value, gain: value - deposits + withdrawals,
+    rate, periodRate: rate == null ? null : Math.pow(1 + rate, days / 365) - 1,
+    count: flowsTx.filter(tr => tr.kind === 'DEPOSIT').length,
+    income: { dividends: sum('DIVIDEND'), interest: sum('INTEREST'), bonus: sum('BONUS') },
+  };
+}
+
+// ——— Target allocation ———
+// Each held line can carry a target share (l.target, in %); the lines with a target form the portfolio
+// it is measured on, so a target can cover one account as well as everything.
+export function allocation(data) {
+  const ls = heldLines(data).filter(l => +l.target > 0);
+  if (!ls.length) return null;
+  const base = ls.reduce((s, l) => s + lineValue(l), 0);
+  const sumTarget = ls.reduce((s, l) => s + +l.target, 0);
+  const rows = ls.map(l => {
+    const value = lineValue(l), target = +l.target / sumTarget, cur = base > 0 ? value / base : 0;
+    return { line: l, value, pct: cur, target, gap: cur - target, gapEur: value - target * base };
+  }).sort((a, b) => b.target - a.target || b.value - a.value);
+  return { base, sumTarget, rows, drift: Math.max(...rows.map(r => Math.abs(r.gap))) };
+}
+
+// How to move toward the target with `amount` of new money. Without selling, the money goes
+// to the lines furthest below their target (levelling their shortfall); with selling, every line
+// is brought exactly to its target. Amounts below 1 € are dropped.
+export function rebalance(data, amount = 0, sell = false) {
+  const a = allocation(data);
+  if (!a) return null;
+  const add = Math.max(0, +amount || 0);
+  const total = a.base + add;
+  const want = a.rows.map(r => r.target * total - r.value);
+  let moves;
+  if (sell) moves = want;
+  else {
+    // shortfall levelling: x_i = max(0, want_i − μ), with μ ≥ 0 such that Σ x_i = add
+    let lo = 0, hi = Math.max(0, ...want);
+    const spent = mu => want.reduce((s, w) => s + Math.max(0, w - mu), 0);
+    for (let i = 0; i < 100; i++) { const mid = (lo + hi) / 2; if (spent(mid) > add) lo = mid; else hi = mid; }
+    moves = want.map(w => Math.max(0, w - hi));
+  }
+  const rows = a.rows.map((r, i) => ({ ...r, move: Math.round(moves[i]), after: total > 0 ? (r.value + moves[i]) / total : 0 }))
+    .filter(r => Math.abs(r.move) >= 1);
+  return { ...a, add, total, rows };
+}

@@ -1,0 +1,583 @@
+{
+ "app": "carnet",
+ "schema": 1,
+ "exportedAt": "2026-10-22T10:00:00.000Z",
+ "profile": {
+  "firstName": "Cible"
+ },
+ "settings": {
+  "theme": "auto",
+  "lang": "auto",
+  "taxRate": 31.4,
+  "staleDays": 4,
+  "snoozeUntil": ""
+ },
+ "accounts": [
+  {
+   "id": "tr-cto",
+   "name": "Trade Republic",
+   "institution": "Trade Republic",
+   "kind": "cto",
+   "color": "ink",
+   "source": "tr"
+  },
+  {
+   "id": "tr-pea",
+   "name": "Trade Republic PEA",
+   "institution": "Trade Republic",
+   "kind": "pea",
+   "color": "orange",
+   "source": "tr",
+   "note": "Ouvert le 2 janvier 2025"
+  }
+ ],
+ "lines": [
+  {
+   "id": "tr-default-us0378331005",
+   "source": "tr",
+   "accountId": "tr-cto",
+   "envelope": "Compte-titres",
+   "type": "action",
+   "name": "Apple",
+   "isin": "US0378331005",
+   "ticker": "AAPL",
+   "qty": 12,
+   "cost": 1200.6,
+   "price": 250,
+   "priceDate": "2025-03-10",
+   "priceSource": "transaction",
+   "pending": 0,
+   "equity": 1,
+   "events": [
+    [
+     "2025-01-10",
+     10,
+     2001,
+     200
+    ],
+    [
+     "2025-03-10",
+     6,
+     1200.6,
+     250
+    ],
+    [
+     "2025-04-01",
+     12,
+     1200.6,
+     250
+    ]
+   ],
+   "target": 20,
+   "note": "Achetée pour le dividende"
+  },
+  {
+   "id": "tr-pea-ie0002xzsho1",
+   "source": "tr",
+   "accountId": "tr-pea",
+   "envelope": "PEA",
+   "type": "etf",
+   "name": "iShares MSCI World Swap PEA",
+   "isin": "IE0002XZSHO1",
+   "ticker": "WPEA.PA",
+   "qty": 200,
+   "cost": 1250,
+   "price": 6.5,
+   "priceDate": "2025-02-15",
+   "priceSource": "transaction",
+   "pending": 0,
+   "equity": 1,
+   "events": [
+    [
+     "2025-01-15",
+     100,
+     600,
+     6
+    ],
+    [
+     "2025-02-15",
+     200,
+     1250,
+     6.5
+    ]
+   ],
+   "target": 70
+  },
+  {
+   "id": "tr-default-xf000btc0017",
+   "source": "tr",
+   "accountId": "tr-cto",
+   "envelope": "Crypto",
+   "type": "crypto",
+   "name": "Bitcoin",
+   "isin": "XF000BTC0017",
+   "ticker": "",
+   "qty": 0.01,
+   "cost": 601,
+   "price": 60000,
+   "priceDate": "2025-04-05",
+   "priceSource": "transaction",
+   "pending": 0,
+   "equity": 0,
+   "events": [
+    [
+     "2025-04-05",
+     0.01,
+     601,
+     60000
+    ]
+   ],
+   "target": 10
+  },
+  {
+   "id": "tr-default-lu9999999999",
+   "source": "tr",
+   "accountId": "tr-cto",
+   "envelope": "Compte-titres",
+   "type": "non-cote",
+   "name": "Fonds privé, Elevate · LU9999…",
+   "isin": "LU9999999999",
+   "ticker": "",
+   "qty": 8,
+   "cost": 1000,
+   "price": 100,
+   "priceDate": "2025-05-20",
+   "priceSource": "transaction",
+   "pending": 200,
+   "equity": 0,
+   "events": [
+    [
+     "2025-04-20",
+     0,
+     1000,
+     0
+    ],
+    [
+     "2025-05-20",
+     8,
+     1000,
+     100
+    ]
+   ]
+  },
+  {
+   "id": "tr-default-cash",
+   "source": "tr",
+   "accountId": "tr-cto",
+   "envelope": "Espèces",
+   "type": "especes",
+   "name": "Espèces",
+   "isin": "",
+   "ticker": "",
+   "qty": 1,
+   "cost": 2361.37,
+   "price": 2361.37,
+   "amount": 2361.37,
+   "priceDate": "2025-05-20",
+   "priceSource": "transaction",
+   "pending": 0,
+   "equity": 0,
+   "events": [
+    [
+     "2025-01-02",
+     1,
+     5000,
+     5000
+    ],
+    [
+     "2025-01-10",
+     1,
+     2999,
+     2999
+    ],
+    [
+     "2025-03-01",
+     1,
+     3001.97,
+     3001.97
+    ],
+    [
+     "2025-03-10",
+     1,
+     3990.97,
+     3990.97
+    ],
+    [
+     "2025-04-01",
+     1,
+     3990.97,
+     3990.97
+    ],
+    [
+     "2025-04-05",
+     1,
+     3389.97,
+     3389.97
+    ],
+    [
+     "2025-04-20",
+     1,
+     2389.97,
+     2389.97
+    ],
+    [
+     "2025-05-01",
+     1,
+     2398.47,
+     2398.47
+    ],
+    [
+     "2025-05-02",
+     1,
+     2403.47,
+     2403.47
+    ],
+    [
+     "2025-05-03",
+     1,
+     2361.37,
+     2361.37
+    ],
+    [
+     "2025-05-04",
+     1,
+     2361.37,
+     2361.37
+    ],
+    [
+     "2025-05-20",
+     1,
+     2361.37,
+     2361.37
+    ]
+   ]
+  },
+  {
+   "id": "tr-pea-cash",
+   "source": "tr",
+   "accountId": "tr-pea",
+   "envelope": "Espèces",
+   "type": "especes",
+   "name": "Espèces",
+   "isin": "",
+   "ticker": "",
+   "qty": 1,
+   "cost": 1750,
+   "price": 1750,
+   "amount": 1750,
+   "priceDate": "2025-05-20",
+   "priceSource": "transaction",
+   "pending": 0,
+   "equity": 0,
+   "events": [
+    [
+     "2025-01-02",
+     1,
+     3000,
+     3000
+    ],
+    [
+     "2025-01-15",
+     1,
+     2400,
+     2400
+    ],
+    [
+     "2025-02-15",
+     1,
+     1750,
+     1750
+    ]
+   ]
+  }
+ ],
+ "priceHistory": {},
+ "trStats": {
+  "rows": 15,
+  "from": "2025-01-02",
+  "to": "2025-05-20",
+  "dividends": 2.97,
+  "interest": 8.5,
+  "fees": 3,
+  "taxes": 14.43,
+  "saveback": 5,
+  "unknownTypes": {},
+  "cash": {
+   "tr-cto": 2361.37,
+   "tr-pea": 1750
+  }
+ },
+ "imports": [
+  {
+   "at": "2026-10-22T09:00:00.000Z",
+   "source": "tr",
+   "rows": 15,
+   "from": "2025-01-02",
+   "to": "2025-05-20"
+  }
+ ],
+ "transactions": [
+  {
+   "id": "tr-op-0",
+   "source": "tr",
+   "date": "2025-01-10",
+   "acct": "DEFAULT",
+   "isin": "US0378331005",
+   "name": "Apple Inc., \"Common\"",
+   "cls": "STOCK",
+   "kind": "BUY",
+   "category": "TRADING",
+   "shares": 10,
+   "price": 200,
+   "amount": -2000,
+   "fee": -1,
+   "tax": 0,
+   "accountId": "tr-cto",
+   "envelope": "Compte-titres",
+   "type": "action"
+  },
+  {
+   "id": "tr-op-1",
+   "source": "tr",
+   "date": "2025-01-15",
+   "acct": "PEA",
+   "isin": "IE0002XZSHO1",
+   "name": "iShares MSCI World Swap PEA",
+   "cls": "FUND",
+   "kind": "BUY",
+   "category": "SAVINGS_PLAN",
+   "shares": 100,
+   "price": 6,
+   "amount": -600,
+   "fee": 0,
+   "tax": 0,
+   "accountId": "tr-pea",
+   "envelope": "PEA",
+   "type": "etf"
+  },
+  {
+   "id": "tr-op-2",
+   "source": "tr",
+   "date": "2025-02-15",
+   "acct": "PEA",
+   "isin": "IE0002XZSHO1",
+   "name": "iShares MSCI World Swap PEA",
+   "cls": "FUND",
+   "kind": "BUY",
+   "category": "SAVINGS_PLAN",
+   "shares": 100,
+   "price": 6.5,
+   "amount": -650,
+   "fee": 0,
+   "tax": 0,
+   "accountId": "tr-pea",
+   "envelope": "PEA",
+   "type": "etf"
+  },
+  {
+   "id": "tr-op-3",
+   "source": "tr",
+   "date": "2025-03-10",
+   "acct": "DEFAULT",
+   "isin": "US0378331005",
+   "name": "Apple Inc., \"Common\"",
+   "cls": "STOCK",
+   "kind": "SELL",
+   "category": "TRADING",
+   "shares": 4,
+   "price": 250,
+   "amount": 1000,
+   "fee": -1,
+   "tax": -10,
+   "realized": 198.6,
+   "accountId": "tr-cto",
+   "envelope": "Compte-titres",
+   "type": "action"
+  },
+  {
+   "id": "tr-op-4",
+   "source": "tr",
+   "date": "2025-04-01",
+   "acct": "DEFAULT",
+   "isin": "US0378331005",
+   "name": "Apple Inc., \"Common\"",
+   "cls": "STOCK",
+   "kind": "SPLIT",
+   "category": "CORPORATE_ACTION",
+   "shares": 6,
+   "price": 0,
+   "amount": 0,
+   "fee": 0,
+   "tax": 0,
+   "accountId": "tr-cto",
+   "envelope": "Compte-titres",
+   "type": "action"
+  },
+  {
+   "id": "tr-op-5",
+   "source": "tr",
+   "date": "2025-04-05",
+   "acct": "DEFAULT",
+   "isin": "XF000BTC0017",
+   "name": "Bitcoin",
+   "cls": "CRYPTO",
+   "kind": "BUY",
+   "category": "TRADING",
+   "shares": 0.01,
+   "price": 60000,
+   "amount": -600,
+   "fee": -1,
+   "tax": 0,
+   "accountId": "tr-cto",
+   "envelope": "Crypto",
+   "type": "crypto"
+  },
+  {
+   "id": "tr-op-6",
+   "source": "tr",
+   "date": "2025-04-20",
+   "acct": "DEFAULT",
+   "isin": "LU9999999999",
+   "name": "Fonds privé, Elevate",
+   "cls": "PRIVATE_FUND",
+   "kind": "PRIVATE_MARKET_BUY",
+   "category": "TRADING",
+   "shares": 0,
+   "price": 0,
+   "amount": -1000,
+   "fee": 0,
+   "tax": 0,
+   "accountId": "tr-cto",
+   "envelope": "Compte-titres",
+   "type": "non-cote"
+  },
+  {
+   "id": "tr-op-7",
+   "source": "tr",
+   "date": "2025-05-20",
+   "acct": "DEFAULT",
+   "isin": "LU9999999999",
+   "name": "Fonds privé, Elevate",
+   "cls": "PRIVATE_FUND",
+   "kind": "BUY",
+   "category": "TRADING",
+   "shares": 8,
+   "price": 100,
+   "amount": 0,
+   "fee": 0,
+   "tax": 0,
+   "accountId": "tr-cto",
+   "envelope": "Compte-titres",
+   "type": "non-cote"
+  },
+  {
+   "id": "tr-cash-0",
+   "source": "tr",
+   "date": "2025-01-02",
+   "acct": "DEFAULT",
+   "kind": "DEPOSIT",
+   "category": "CASH",
+   "isin": "",
+   "name": "",
+   "cls": "",
+   "amount": 5000,
+   "fee": 0,
+   "tax": 0,
+   "trType": "CUSTOMER_INBOUND",
+   "accountId": "tr-cto",
+   "envelope": "Compte-titres",
+   "type": "especes"
+  },
+  {
+   "id": "tr-cash-1",
+   "source": "tr",
+   "date": "2025-01-02",
+   "acct": "PEA",
+   "kind": "DEPOSIT",
+   "category": "CASH",
+   "isin": "",
+   "name": "",
+   "cls": "",
+   "amount": 3000,
+   "fee": 0,
+   "tax": 0,
+   "trType": "CUSTOMER_INBOUND",
+   "accountId": "tr-pea",
+   "envelope": "PEA",
+   "type": "especes"
+  },
+  {
+   "id": "tr-cash-2",
+   "source": "tr",
+   "date": "2025-03-01",
+   "acct": "DEFAULT",
+   "kind": "DIVIDEND",
+   "category": "CASH",
+   "isin": "US0378331005",
+   "name": "Apple Inc., \"Common\"",
+   "cls": "STOCK",
+   "amount": 3.5,
+   "fee": 0,
+   "tax": -0.53,
+   "trType": "DIVIDEND",
+   "accountId": "tr-cto",
+   "envelope": "Compte-titres",
+   "type": "action"
+  },
+  {
+   "id": "tr-cash-3",
+   "source": "tr",
+   "date": "2025-05-01",
+   "acct": "DEFAULT",
+   "kind": "INTEREST",
+   "category": "CASH",
+   "isin": "",
+   "name": "",
+   "cls": "",
+   "amount": 12.4,
+   "fee": 0,
+   "tax": -3.9,
+   "trType": "INTEREST_PAYMENT",
+   "accountId": "tr-cto",
+   "envelope": "Compte-titres",
+   "type": "especes"
+  },
+  {
+   "id": "tr-cash-4",
+   "source": "tr",
+   "date": "2025-05-02",
+   "acct": "DEFAULT",
+   "kind": "BONUS",
+   "category": "CASH",
+   "isin": "",
+   "name": "",
+   "cls": "",
+   "amount": 5,
+   "fee": 0,
+   "tax": 0,
+   "trType": "BENEFITS_SAVEBACK",
+   "accountId": "tr-cto",
+   "envelope": "Compte-titres",
+   "type": "especes"
+  },
+  {
+   "id": "tr-cash-5",
+   "source": "tr",
+   "date": "2025-05-03",
+   "acct": "DEFAULT",
+   "kind": "CARD",
+   "category": "CASH",
+   "isin": "",
+   "name": "",
+   "cls": "",
+   "amount": -42.1,
+   "fee": 0,
+   "tax": 0,
+   "count": 1,
+   "trType": "CARD_TRANSACTION",
+   "accountId": "tr-cto",
+   "envelope": "Compte-titres",
+   "type": "especes"
+  }
+ ]
+}

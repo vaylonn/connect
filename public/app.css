@@ -422,3 +422,21 @@ textarea.input { height: auto; min-height: 110px; padding: 12px 14px; font-famil
 /* ——— Import source: dropdown and its button on one row ——— */
 .import-pick { display: flex; gap: 8px; align-items: center; margin-bottom: 4px; }
 .import-pick .field { flex: 1; min-width: 0; }
+
+/* Notes on a holding or an account */
+textarea.input.plain { font-family: inherit; font-size: 16px; min-height: 72px; resize: vertical; }
+.note-text { white-space: pre-wrap; overflow-wrap: anywhere; margin: 14px 0; padding: 12px 14px; border-radius: var(--r-sm); background: var(--bg-2); font-size: 14px; }
+
+/* Target allocation */
+.target-list { display: grid; gap: 2px; }
+.target-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 6px 0; border-top: 1px solid var(--line); }
+.target-row .n { display: grid; font-size: 14px; font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
+.target-row .s { font-size: 12px; font-weight: 400; color: var(--muted); }
+.target-in { display: flex; align-items: center; gap: 6px; }
+.target-in .input { width: 84px; text-align: right; }
+.target-sum { margin: 4px 0 0; font-size: 14px; font-weight: 600; }
+.reb-tools { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; margin-bottom: 6px; }
+.reb-tools .field { flex: 0 1 180px; }
+.reb-row { width: 100%; background: none; border: 0; border-top: 1px solid var(--line); text-align: left; cursor: pointer; color: inherit; }
+.compare .reb-row:first-child { border-top: 0; }
+.reb-row:hover .k { text-decoration: underline; }

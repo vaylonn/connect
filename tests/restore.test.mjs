@@ -3,12 +3,13 @@
 //   backup-v1.0.json            first format: no history, no import log, lines without pending/events
 //   backup-v1.3.json            Trade Republic import with history, statistics and language setting
 //   backup-v1.3-encrypted.json  the same, encrypted with « phrase de test des sauvegardes »
+//   backup-v1.4.json            cash movements in the history, targets and notes (tests/tr-export.mjs)
 //   partial-accounts.json       a few accounts to add to existing data (« partial »)
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { validateBackup, decryptBackup, backupPayload } from '../public/js/store.js';
-import { totals, heldLines, history } from '../public/js/compute.js';
+import { totals, heldLines, history, performance, allocation } from '../public/js/compute.js';
 
 const fixture = name => JSON.parse(readFileSync(new URL('./fixtures/' + name, import.meta.url), 'utf8'));
 const total = d => Math.round(totals(d).total * 100) / 100;
@@ -42,6 +43,18 @@ test('an encrypted v1.3 backup decrypts to the same data', async () => {
   await assert.rejects(decryptBackup(enc, 'mauvaise phrase'), /Phrase de passe incorrecte/);
 });
 
+test('a v1.4 backup keeps cash movements, targets and notes', () => {
+  const d = validateBackup(fixture('backup-v1.4.json'));
+  assert.deepEqual(d.transactions.filter(x => x.kind === 'DEPOSIT').map(x => x.amount), [5000, 3000]);
+  const p = performance(d, new Date('2026-05-20T12:00:00Z'));
+  assert.deepEqual([p.deposits, Math.round(p.value * 100) / 100], [8000, 10011.37]);
+  assert.deepEqual(allocation(d).rows.map(r => [r.line.id, r.target]), [['tr-pea-ie0002xzsho1', 0.7], ['tr-default-us0378331005', 0.2], ['tr-default-xf000btc0017', 0.1]]);
+  assert.equal(d.lines.find(l => l.id === 'tr-default-us0378331005').note, 'Achetée pour le dividende');
+  assert.equal(d.accounts.find(a => a.id === 'tr-pea').note, 'Ouvert le 2 janvier 2025');
+  // an older backup has no cash movement: no performance, no failure
+  assert.equal(performance(validateBackup(fixture('backup-v1.3.json'))), null);
+});
+
 test('a partial file is flagged so the app adds it instead of replacing', () => {
   const d = validateBackup(fixture('partial-accounts.json'));
   assert.equal(d.partial, true);
@@ -49,11 +62,13 @@ test('a partial file is flagged so the app adds it instead of replacing', () => 
 });
 
 test('exporting a restored backup gives a file that restores the same way', () => {
-  for (const name of ['backup-v1.0.json', 'backup-v1.3.json']) {
+  for (const name of ['backup-v1.0.json', 'backup-v1.3.json', 'backup-v1.4.json']) {
     const d = validateBackup(fixture(name));
     const again = validateBackup(JSON.parse(JSON.stringify(backupPayload(d))));
     assert.equal(total(again), total(d), name);
     assert.deepEqual(again.transactions, d.transactions, name);
+    assert.deepEqual(again.lines, d.lines, name);
+    assert.deepEqual(again.accounts, d.accounts, name);
   }
 });
 

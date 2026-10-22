@@ -1,33 +1,11 @@
-// Trade Republic import on a realistic export: BOM, quoted names with commas, unsorted rows, both
-// accounts, savings plan, dividend and interest with withholding tax, unsigned sale, split, crypto,
-// private market fund paid in advance, card payment and an unknown movement type.
-// The CSV lives here rather than in a file: .gitignore excludes *.csv (personal exports).
+// Trade Republic import on a realistic export (tests/tr-export.mjs).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { importTradeRepublic, mergeImport } from '../public/js/importer.js';
 import { emptyData } from '../public/js/store.js';
 import { totals, heldLines } from '../public/js/compute.js';
+import { HEAD, ROWS, CSV } from './tr-export.mjs';
 
-const HEAD = 'datetime,date,account_type,category,type,asset_class,name,symbol,shares,price,amount,fee,tax,currency,description,transaction_id';
-const ROWS = [
-  // Out of order on purpose: the importer sorts by datetime
-  '2025-03-10T09:30:00Z,2025-03-10,DEFAULT,TRADING,SELL,STOCK,"Apple Inc., ""Common""",US0378331005,4,250,1000,-1,-10,EUR,Sell,t07',
-  '2025-01-02T08:00:00Z,2025-01-02,DEFAULT,CASH,CUSTOMER_INBOUND,,,,,,5000,,,EUR,Deposit,t01',
-  '2025-01-02T08:05:00Z,2025-01-02,PEA,CASH,CUSTOMER_INBOUND,,,,,,3000,,,EUR,Deposit,t02',
-  '2025-01-10T10:00:00Z,2025-01-10,DEFAULT,TRADING,BUY,STOCK,"Apple Inc., ""Common""",US0378331005,10,200,-2000,-1,,EUR,Buy,t03',
-  '2025-01-15T07:00:00Z,2025-01-15,PEA,SAVINGS_PLAN,BUY,FUND,iShares MSCI World Swap PEA,IE0002XZSHO1,100,6,-600,,,EUR,Savings plan,t04',
-  '2025-02-15T07:00:00Z,2025-02-15,PEA,SAVINGS_PLAN,BUY,FUND,iShares MSCI World Swap PEA,IE0002XZSHO1,100,6.5,-650,,,EUR,Savings plan,t05',
-  '2025-03-01T06:00:00Z,2025-03-01,DEFAULT,CASH,DIVIDEND,STOCK,"Apple Inc., ""Common""",US0378331005,10,,3.5,,-0.53,EUR,Dividend,t06',
-  '2025-04-01T06:00:00Z,2025-04-01,DEFAULT,CORPORATE_ACTION,SPLIT,STOCK,"Apple Inc., ""Common""",US0378331005,6,,0,,,EUR,Split,t08',
-  '2025-04-05T12:00:00Z,2025-04-05,DEFAULT,TRADING,BUY,CRYPTO,Bitcoin,XF000BTC0017,0.01,60000,-600,-1,,EUR,Buy,t09',
-  '2025-04-20T12:00:00Z,2025-04-20,DEFAULT,TRADING,PRIVATE_MARKET_BUY,PRIVATE_FUND,"Fonds privé, Elevate",LU9999999999,,,-1000,,,EUR,Subscription,t10',
-  '2025-05-20T12:00:00Z,2025-05-20,DEFAULT,TRADING,BUY,PRIVATE_FUND,"Fonds privé, Elevate",LU9999999999,8,100,0,,,EUR,Execution,t11',
-  '2025-05-01T06:00:00Z,2025-05-01,DEFAULT,CASH,INTEREST_PAYMENT,,,,,,12.4,,-3.9,EUR,Interest,t12',
-  '2025-05-02T06:00:00Z,2025-05-02,DEFAULT,CASH,BENEFITS_SAVEBACK,,,,,,5,,,EUR,Saveback,t13',
-  '2025-05-03T18:00:00Z,2025-05-03,DEFAULT,CASH,CARD_TRANSACTION,,,,,,-42.10,,,EUR,Card payment,t14',
-  '2025-05-04T18:00:00Z,2025-05-04,DEFAULT,CASH,SOMETHING_NEW,,,,,,0,,,EUR,Unknown,t15',
-];
-const CSV = '﻿' + [HEAD, ...ROWS].join('\r\n') + '\r\n';
 const line = (imp, id) => imp.lines.find(l => l.id === id);
 
 test('realistic export: positions, cost basis, cash and statistics', () => {
@@ -58,15 +36,43 @@ test('realistic export: positions, cost basis, cash and statistics', () => {
   assert.deepEqual([imp.stats.dividends, imp.stats.interest, imp.stats.saveback, imp.stats.fees, imp.stats.taxes], [2.97, 8.5, 5, 3, 14.43]);
 });
 
+const CASH_KINDS = new Set(['DEPOSIT', 'WITHDRAWAL', 'CARD', 'CASH_OTHER', 'DIVIDEND', 'INTEREST', 'BONUS', 'TAX', 'FEE']);
+const trades = imp => imp.transactions.filter(x => !CASH_KINDS.has(x.kind));
+
 test('realistic export: history of security transactions', () => {
   const imp = importTradeRepublic(CSV);
-  assert.deepEqual(imp.transactions.map(x => x.kind), ['BUY', 'BUY', 'BUY', 'SELL', 'SPLIT', 'BUY', 'PRIVATE_MARKET_BUY', 'BUY'],
-    'no deposits, dividends, interest, card payments or unknown types');
+  assert.deepEqual(trades(imp).map(x => x.kind), ['BUY', 'BUY', 'BUY', 'SELL', 'SPLIT', 'BUY', 'PRIVATE_MARKET_BUY', 'BUY']);
   const sell = imp.transactions.find(x => x.kind === 'SELL');
   assert.equal(sell.realized, 198.6, '1000 − 1 fee − 800.40 cost of the 4 shares sold');
   assert.equal(sell.shares, 4);
   assert.equal(imp.transactions.filter(x => /SAVING/.test(x.category)).length, 2);
   assert.ok(imp.transactions.every(x => x.accountId === 'tr-cto' || x.accountId === 'tr-pea'));
+});
+
+test('realistic export: cash movements for the history and the performance', () => {
+  const imp = importTradeRepublic(CSV);
+  const cash = imp.transactions.filter(x => CASH_KINDS.has(x.kind));
+  assert.deepEqual(cash.map(x => [x.kind, x.accountId, x.amount, x.tax]), [
+    ['DEPOSIT', 'tr-cto', 5000, 0], ['DEPOSIT', 'tr-pea', 3000, 0],
+    ['DIVIDEND', 'tr-cto', 3.5, -0.53], ['INTEREST', 'tr-cto', 12.4, -3.9], ['BONUS', 'tr-cto', 5, 0],
+    ['CARD', 'tr-cto', -42.1, 0],
+  ], 'gross dividend and interest with their tax apart; the zero-amount unknown row is left out');
+  assert.equal(cash.find(x => x.kind === 'DIVIDEND').isin, 'US0378331005');
+  assert.equal(cash.find(x => x.kind === 'CARD').count, 1);
+  // Every movement is accounted for: the operations add up to the recomputed cash of each account
+  for (const [id, bal] of Object.entries(imp.stats.cash)) {
+    const sum = imp.transactions.filter(x => x.accountId === id).reduce((s, x) => s + x.amount + (CASH_KINDS.has(x.kind) ? x.tax : x.fee + x.tax), 0);
+    assert.equal(Math.round(sum * 100) / 100, bal, id);
+  }
+});
+
+test('card payments are summed per account and month; movement kinds follow the type', () => {
+  const rows = ['2025-05-03', '2025-05-20', '2025-06-01'].map((d, i) => `${d}T18:00:00Z,${d},DEFAULT,CASH,CARD_TRANSACTION,,,,,,-10,,,EUR,Card,c${i}`);
+  rows.push('2025-06-02T08:00:00Z,2025-06-02,DEFAULT,CASH,CUSTOMER_OUTBOUND_REQUEST,,,,,,-100,,,EUR,Withdrawal,w1');
+  const imp = importTradeRepublic([HEAD, ...rows].join('\n'));
+  assert.deepEqual(imp.transactions.map(x => [x.kind, x.date, x.amount, x.count]), [
+    ['WITHDRAWAL', '2025-06-02', -100, undefined], ['CARD', '2025-05-20', -20, 2], ['CARD', '2025-06-01', -10, 1],
+  ]);
 });
 
 test('a semicolon export with decimal commas gives the same positions', () => {
@@ -79,14 +85,17 @@ test('a semicolon export with decimal commas gives the same positions', () => {
 test('a new import replaces Trade Republic lines and keeps manual data and overrides', () => {
   let data = mergeImport(emptyData(), importTradeRepublic(CSV));
   const apple = data.lines.find(l => l.id === 'tr-default-us0378331005');
-  Object.assign(apple, { name: 'Mon Apple', customName: true });
+  Object.assign(apple, { name: 'Mon Apple', customName: true, target: 40, note: 'Achetée pour le dividende' });
+  data.accounts.find(a => a.id === 'tr-pea').note = 'Ouvert le 2 janvier 2025';
   data.accounts.push({ id: 'acc-livret', name: 'Livret', kind: 'livret', source: 'manual' });
   data.lines.push({ id: 'ln-livret', source: 'manual', accountId: 'acc-livret', type: 'livret', envelope: 'Livrets', name: 'Livret', qty: 1, amount: 500, price: 500, cost: 500, events: [] });
   data = mergeImport(data, importTradeRepublic(CSV));
-  assert.equal(data.lines.find(l => l.id === 'tr-default-us0378331005').name, 'Mon Apple');
+  const again = data.lines.find(l => l.id === 'tr-default-us0378331005');
+  assert.deepEqual([again.name, again.target, again.note], ['Mon Apple', 40, 'Achetée pour le dividende'], 'name, target and note kept');
+  assert.equal(data.accounts.find(a => a.id === 'tr-pea').note, 'Ouvert le 2 janvier 2025');
   assert.equal(data.lines.filter(l => l.id === 'tr-default-us0378331005').length, 1, 'no duplicate');
   assert.ok(data.lines.some(l => l.id === 'ln-livret'));
-  assert.equal(data.transactions.length, 8, 'history replaced, not appended');
+  assert.equal(data.transactions.length, 14, 'history replaced, not appended: 8 trades and 6 cash movements');
   assert.equal(data.imports.length, 2);
   assert.equal(heldLines(data).length, 7, '4 positions, cash on both TR accounts, the manual savings account');
   // 12 × 250 + 200 × 6.5 + 0.01 × 60000 + (8 × 100 + 200 pending) + 2361.37 + 1750 + 500

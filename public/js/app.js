@@ -6,16 +6,17 @@ import { t, tn, setLang, lang } from './i18n.js';
 import { load, save, clearAll, emptyData, normalize, validateBackup, encryptBackup, decryptBackup, backupPayload, storageWorks } from './store.js';
 import { syncState, saveSyncState, clearSyncState, deriveAccount, pullVault, pushVault, deleteVault, normUser, USER_RE } from './sync.js';
 import { importTradeRepublic, mergeImport } from './importer.js';
-import { totals, staleLines, lookthrough, DIRECT, heldLines, isHeld, lineComposition, history as buildHistory, lineValue, lineCost, lineGain, pru, isCashLike, NEEDS_PRICE, simulate, envelopeForAccount, ENVELOPE_ORDER } from './compute.js';
+import { totals, staleLines, lookthrough, DIRECT, heldLines, isHeld, lineComposition, history as buildHistory, lineValue, lineCost, lineGain, pru, isCashLike, NEEDS_PRICE, simulate, envelopeForAccount, ENVELOPE_ORDER, FLOW_KINDS, INCOME_KINDS, netAmount, performance, allocation, rebalance } from './compute.js';
 import { libraryFor, libraryChoices, SECTORS, COMPOSITION_NOTE, setFetchedLibrary, wantsComposition } from './library.js';
 import { lineChart, hoverText } from './chart.js';
 
-const VERSION = '1.3.0';
+const VERSION = '1.4.0';
 let data = load();
 const ui = {
   tab: 'patrimoine', range: '1A', filter: 'all', group: 'accounts', analyse: 'sectors', server: 'unknown', busy: false, progress: '', lineRange: '1A',
   hist: { kind: 'all', acc: 'all', q: '', limit: 150 },
   sim: { mode: 'buy', lineId: '', newIsin: '', newName: '', accountId: '', by: 'amount', amount: '1000', qty: '', price: '', fees: '1', useCash: true },
+  reb: { amount: '500', sell: false },
 };
 const TABS = [
   ['patrimoine', 'Patrimoine'], ['analyse', 'Analyse'], ['historique', 'Historique'], ['simuler', 'Simuler'], ['donnees', 'Réglages'],
@@ -262,22 +263,108 @@ function viewAnalyse() {
   const top10 = lt.companies.slice(0, 10).reduce((s, c) => s + c.value, 0);
   const first = lt.companies[0];
   const st = data.trStats;
+  const perf = performance(data);
   // Total, gain and cash are already on the home screen: here, only what sheds light on the breakdown.
   const sums = [
     { k: t('Part en actions'), v: pct(tot.equityPct, 0), d: eur(tot.equity, 0) },
     { k: t('10 premières entreprises'), v: pct(tot.total ? top10 / tot.total : 0), d: first ? t('dont {name} {p}', { name: esc(first.name), p: pct(tot.total ? first.value / tot.total : 0) }) : '' },
-    ...st ? [{ k: t('Dividendes reçus'), v: eur(st.dividends), d: t('nets de retenue') }, { k: t('Frais payés'), v: eur(st.fees), d: t('depuis le {x}', { x: dateLong(st.from) }) }] : [],
+    ...st && !perf ? [{ k: t('Dividendes reçus'), v: eur(st.dividends), d: t('nets de retenue') }, { k: t('Frais payés'), v: eur(st.fees), d: t('depuis le {x}', { x: dateLong(st.from) }) }] : [],
   ];
   const list = { sectors: lt.sectors, countries: lt.countries, companies: lt.companies.slice(0, 15) }[ui.analyse];
   const max = Math.max(...list.map(x => x.value), 1);
   return `<h1 class="title">${t('Où va votre argent.')}<em>${t('À travers vos fonds.')}</em></h1>
     ${sumsCard(sums)}
+    ${perfSection(perf)}
     <div class="section-head"><h2>${t('Répartition')}</h2><span class="aside">${t('hors espèces · {x}', { x: eur(lt.base, 0) })}</span></div>
     <div class="card">
       <div class="seg" role="group" aria-label="${t('Répartition')}">${[['sectors', 'Secteurs'], ['countries', 'Pays'], ['companies', 'Entreprises']].map(([k, l]) => `<button data-action="analyse" data-v="${k}" aria-pressed="${ui.analyse === k}">${t(l)}</button>`).join('')}</div>
       <div class="bars">${list.map((x, i) => `<button class="barrow" data-action="open-split" data-v="${i}" aria-label="${t('{name} : détail', { name: esc(t(x.name)) })}"><span class="n">${esc(t(x.name))}</span><span class="p"><b>${eur(x.value, 0)}</b>${pct(x.pct)}</span><span class="track"><i style="width:${(100 * x.value / max).toFixed(1)}%"></i></span></button>`).join('') || `<p class="muted">${t('Rien à afficher.')}</p>`}</div>
       <p class="note">${ui.analyse === 'companies' ? t('Montants détenus à travers vos ETF (principales positions de chaque fonds) et en direct.') + ' ' : ''}${t('{p} des placements sont ventilés ; le reste (non coté, fonds inconnus) apparaît en « Non ventilé » ou « Capital-investissement ».', { p: pct(lt.coverage, 0) })} ${t(COMPOSITION_NOTE)}</p>
-    </div>`;
+    </div>
+    ${targetSection()}`;
+}
+
+// Real performance of the imported accounts: what was paid in, what it is worth, and the annual rate.
+const gainCls = x => x > 0.5 ? 'pos' : x < -0.5 ? 'neg' : '';
+function perfSection(p) {
+  const head = names => `<div class="section-head"><h2>${t('Performance')}</h2>${names ? `<span class="aside">${esc(names)}</span>` : ''}</div>`;
+  if (!p) return noCashHistory() ? head('') + reimportCard() : '';
+  const year = p.days >= 365;
+  const r = year ? p.rate : p.periodRate;
+  const income = p.income.dividends + p.income.interest + p.income.bonus;
+  const st = data.trStats;
+  return `${head(p.accounts.length === 1 ? accById(p.accounts[0])?.name : tn(p.accounts.length, '{n} compte avec historique', '{n} comptes avec historique'))}
+    ${sumsCard([
+      { k: t('Versé'), v: eur(p.net, 0), d: t('net des retraits, depuis le {x}', { x: dateLong(p.from) }) },
+      { k: t('Gain réel'), v: signedEur(p.gain, 0), d: t('valeur aujourd’hui : {x}', { x: eur(p.value, 0) }), cls: gainCls(p.gain) },
+      { k: t(year ? 'Rendement annualisé' : 'Rendement'), v: r == null ? '—' : signedPct(r), d: t(year ? 'par an, selon les dates de vos versements' : 'sur la période (moins d’un an)'), cls: r == null ? '' : r > 0.0005 ? 'pos' : r < -0.0005 ? 'neg' : '' },
+      { k: t('Revenus'), v: eur(income), d: t('dividendes, intérêts, bonus nets') },
+      ...st ? [{ k: t('Frais payés'), v: eur(st.fees), d: t('achats et ventes') }] : [],
+    ])}
+    <p class="note">${t('Sur les comptes importés, à partir de vos versements datés. Le gain réel inclut plus-values, dividendes, intérêts, frais et impôts ; le rendement annualisé tient compte de la date de chaque versement.')}</p>`;
+}
+
+// Target allocation: the gap of each line with a target, measured on the lines that have one.
+// Cash lines all read « Espèces »: their account tells them apart.
+const allocName = l => isCashLike(l) ? `${shortName(l)} · ${accById(l.accountId)?.name || ''}` : shortName(l);
+function targetSection() {
+  const a = allocation(data);
+  const head = `<div class="section-head"><h2>${t('Allocation cible')}</h2>${a ? `<button class="linkish" data-action="targets">${t('Modifier')}</button>` : ''}</div>`;
+  if (!a) return `${head}<div class="card"><p class="lead" style="margin:0 0 12px">${t('Fixez la part visée de chaque ligne : Carnet montre l’écart, et le simulateur propose comment rééquilibrer.')}</p>
+    <div class="btn-row"><button class="btn" data-action="targets">${t('Définir ma cible')}</button></div></div>`;
+  return `${head}<div class="card">
+    <div class="compare tight">${a.rows.map(r => `<div class="cmp"><span class="k">${esc(allocName(r.line))}</span><span class="v"><span class="from">${pct(r.pct)}</span>→ ${pct(r.target)}</span><span class="x ${Math.abs(r.gap) < 0.01 ? '' : r.gap > 0 ? 'pos' : 'neg'}">${pts(r.gap)}</span></div>`).join('')}</div>
+    <p class="note">${t('Part actuelle → cible, et l’écart en points. Mesuré sur les lignes qui ont une cible ({x}).', { x: eur(a.base, 0) })}</p>
+    <div class="btn-row"><button class="btn sm" data-action="go-rebalance">${t('Rééquilibrer')}</button></div></div>`;
+}
+
+function targetSheet() {
+  const ls = heldLines(data).filter(l => lineValue(l) > 0);
+  const order = new Map(data.accounts.map((a, i) => [a.id, i]));
+  ls.sort((x, y) => (order.get(x.accountId) - order.get(y.accountId)) || lineValue(y) - lineValue(x));
+  const had = ls.some(l => +l.target > 0);
+  const groups = [...new Set(ls.map(l => l.accountId))].map(id => `<div class="section-head" style="margin-top:12px"><h2>${esc(accById(id)?.name || '')}</h2></div>
+    ${ls.filter(l => l.accountId === id).map(l => `<label class="target-row"><span class="n">${esc(shortName(l))}<span class="s">${eur(lineValue(l), 0)}</span></span>
+      <span class="target-in"><input class="input" inputmode="decimal" data-tid="${esc(l.id)}" value="${+l.target > 0 ? inputNum(l.target, 1) : ''}" placeholder="0" aria-label="${t('Cible de {name} (%)', { name: esc(shortName(l)) })}"><span>%</span></span></label>`).join('')}`).join('');
+  openSheet(`${sheetHead(t('Allocation cible'), t('La part visée de chaque ligne, sur 100 %. Laissez vide les lignes hors cible.'))}
+    <form class="form" autocomplete="off" novalidate>
+      <div class="target-list">${groups}</div>
+      <p class="target-sum" id="tg-sum" aria-live="polite"></p>
+      <div class="btn-row"><button class="btn primary" type="submit">${t('Enregistrer')}</button><button class="btn" type="button" data-fill>${t('Partir de la répartition actuelle')}</button>${had ? `<button class="btn danger" type="button" data-clear>${t('Effacer la cible')}</button>` : ''}</div>
+    </form>`, {
+    label: t('Allocation cible'),
+    onMount: (sh, close) => {
+      const inputs = [...sh.querySelectorAll('[data-tid]')];
+      const total = () => inputs.reduce((s, i) => s + (parseNum(i.value) || 0), 0);
+      const n1 = x => num(x, Math.abs(x - Math.round(x)) < 0.05 ? 0 : 1);
+      const show = () => {
+        const x = total(), el = sh.querySelector('#tg-sum');
+        el.className = 'target-sum ' + (Math.abs(x - 100) <= 0.05 ? 'pos' : x ? 'neg' : '');
+        el.textContent = !x ? t('Aucune cible.') : Math.abs(x - 100) <= 0.05 ? t('Total : 100 %.') : x < 100 ? t('Total : {x} %, il manque {y} points.', { x: n1(x), y: n1(100 - x) }) : t('Total : {x} %, {y} points de trop.', { x: n1(x), y: n1(x - 100) });
+      };
+      sh.addEventListener('input', show); show();
+      // Current shares, among the lines that already have a target (all lines otherwise), rounded to 0.1 %.
+      sh.querySelector('[data-fill]').addEventListener('click', () => {
+        const pick = inputs.filter(i => parseNum(i.value) > 0);
+        const use = pick.length ? pick : inputs;
+        const vals = use.map(i => lineValue(lineById(i.dataset.tid)));
+        const sum = vals.reduce((a, b) => a + b, 0) || 1;
+        const r = vals.map(v => Math.round(1000 * v / sum) / 10);
+        const k = r.indexOf(Math.max(...r)); r[k] = Math.round((r[k] + 100 - r.reduce((a, b) => a + b, 0)) * 10) / 10;
+        use.forEach((i, j) => { i.value = r[j] ? inputNum(r[j], 1) : ''; });
+        show();
+      });
+      sh.querySelector('[data-clear]')?.addEventListener('click', () => { for (const l of data.lines) delete l.target; close(); commit(t('Cible effacée.')); });
+      sh.querySelector('form').addEventListener('submit', e => {
+        e.preventDefault();
+        const x = total();
+        if (inputs.some(i => i.value.trim() && !(parseNum(i.value) >= 0))) { toast(t('Indiquez des pourcentages, par exemple 70 ou 12,5.')); return; }
+        if (x && Math.abs(x - 100) > 0.05) { toast(t('Les cibles doivent faire 100 % au total.')); return; }
+        for (const i of inputs) { const l = lineById(i.dataset.tid); const v = parseNum(i.value); if (v > 0) l.target = Math.round(v * 10) / 10; else delete l.target; }
+        close(); commit(t(x ? 'Cible enregistrée.' : 'Cible effacée.'));
+      });
+    },
+  });
 }
 // Detail of one breakdown entry: what makes up the amount, largest first
 const SPLIT_WORD = { sectors: '{p} du secteur', countries: '{p} du pays', companies: '{p} de la position' };
@@ -323,25 +410,30 @@ function emptyHint() {
 }
 
 // ——— Historique tab ———
-// Security transactions kept at import (buys, sells, splits…), without cash movements
-// (deposits, withdrawals, interest, dividends, card payments).
-const OP_LABEL = { BUY: 'Achat', SELL: 'Vente', SPLIT: 'Division', BONUS_ISSUE: 'Attribution gratuite', FREE_RECEIPT: 'Réception de titres', PRIVATE_MARKET_BUY: 'Souscription' };
-const HIST_KINDS = [['all', 'Toutes'], ['BUY', 'Achats'], ['SELL', 'Ventes'], ['other', 'Autres']];
+// Operations kept at import: security transactions (buys, sells, splits…) and cash movements
+// (deposits, withdrawals, dividends, interest; card payments summed per month).
+const OP_LABEL = { BUY: 'Achat', SELL: 'Vente', SPLIT: 'Division', BONUS_ISSUE: 'Attribution gratuite', FREE_RECEIPT: 'Réception de titres', PRIVATE_MARKET_BUY: 'Souscription', DIVIDEND: 'Dividende', INTEREST: 'Intérêts', BONUS: 'Bonus', DEPOSIT: 'Versement', WITHDRAWAL: 'Retrait', CARD: 'Paiements par carte', CASH_OTHER: 'Autre mouvement', TAX: 'Impôt', FEE: 'Frais' };
+const HIST_KINDS = [['all', 'Toutes'], ['BUY', 'Achats'], ['SELL', 'Ventes'], ['income', 'Revenus'], ['flows', 'Versements'], ['other', 'Autres']];
 const isBuy = tr => tr.kind === 'BUY' || tr.kind === 'PRIVATE_MARKET_BUY';
-const opName = tr => { const s = libraryFor(tr.isin)?.short; return s ? t(s) : tr.name || tr.isin; };
+const isTrade = tr => isBuy(tr) || tr.kind === 'SELL';
+const histGroup = tr => isBuy(tr) ? 'BUY' : tr.kind === 'SELL' ? 'SELL' : INCOME_KINDS.has(tr.kind) ? 'income' : FLOW_KINDS.has(tr.kind) ? 'flows' : 'other';
+const isCashMove = tr => INCOME_KINDS.has(tr.kind) || FLOW_KINDS.has(tr.kind) || tr.kind === 'TAX' || tr.kind === 'FEE';
+const opName = tr => { const s = libraryFor(tr.isin)?.short; return s ? t(s) : tr.name || tr.isin || t(OP_LABEL[tr.kind] || tr.kind); };
+// Imports before 1.4 kept only security transactions: deposits and dividends need a new import.
+const noCashHistory = () => !!data.trStats && (data.transactions || []).some(tr => tr.source === 'tr') && !(data.transactions || []).some(isCashMove);
 
 function histFiltered() {
   const h = ui.hist;
   const q = h.q.trim().toLowerCase();
   return (data.transactions || [])
-    .filter(tr => h.kind === 'all' || (h.kind === 'other' ? !isBuy(tr) && tr.kind !== 'SELL' : h.kind === 'BUY' ? isBuy(tr) : tr.kind === h.kind))
+    .filter(tr => h.kind === 'all' || histGroup(tr) === h.kind)
     .filter(tr => h.acc === 'all' || tr.accountId === h.acc)
     .filter(tr => !q || opName(tr).toLowerCase().includes(q) || String(tr.name || '').toLowerCase().includes(q) || String(tr.isin || '').toLowerCase().includes(q))
     .map((tr, i) => [tr, i]).sort((a, b) => (a[0].date < b[0].date ? 1 : a[0].date > b[0].date ? -1 : b[1] - a[1])).map(x => x[0]);
 }
 
 function viewHistorique() {
-  const title = `<h1 class="title">${t('Vos opérations.')}<em>${t('Achats et ventes, sans les mouvements d’espèces.')}</em></h1>`;
+  const title = `<h1 class="title">${t('Vos opérations.')}<em>${t('Achats, ventes, revenus et versements.')}</em></h1>`;
   const all = data.transactions || [];
   if (!all.length) {
     if (!data.trStats) return title + emptyHint();
@@ -353,6 +445,7 @@ function viewHistorique() {
   if (h.acc !== 'all' && !accs.some(a => a.id === h.acc)) h.acc = 'all';
   const manual = data.lines.some(l => l.source !== 'tr' && !isCashLike(l) && isHeld(l));
   return `${title}
+    ${noCashHistory() ? reimportCard() : ''}
     <div class="hist-tools">
       <label class="hist-search"><span class="sr">${t('Rechercher')}</span><input class="input" type="search" id="hist-q" data-hist="q" value="${esc(h.q)}" placeholder="${t('Produit ou ISIN')}" autocomplete="off"></label>
       ${accs.length > 1 ? `<label class="hist-acc"><span class="sr">${t('Compte')}</span><select class="input" id="hist-acc" data-hist="acc"><option value="all">${t('Tous les comptes')}</option>${accs.map(a => `<option value="${esc(a.id)}" ${h.acc === a.id ? 'selected' : ''}>${esc(a.name)}</option>`).join('')}</select></label>` : ''}
@@ -361,21 +454,51 @@ function viewHistorique() {
     <div id="hist-body">${histBody()}</div>
     ${manual && !data.demo ? `<p class="note">${t('Les lignes ajoutées à la main n’ont pas d’historique d’opérations.')}</p>` : ''}`;
 }
+function reimportCard() {
+  return `<div class="callout" style="margin:0 0 14px">${t('Réimportez votre export Trade Republic pour voir aussi vos versements, dividendes et intérêts, et calculer votre performance réelle.')}
+    <div class="btn-row" style="margin-top:10px"><button class="btn sm" data-action="pick-csv">${ICONS.upload}${t('Importer le CSV')}</button></div></div>`;
+}
 
-function histBody() {
-  const ts = histFiltered();
-  if (!ts.length) return `<div class="card"><p class="muted" style="margin:0">${t('Aucune opération ne correspond.')}</p></div>`;
+// Key figures of the shown operations, chosen for the filter.
+function histSums(ts, kind) {
   const sum = f => ts.reduce((s, tr) => s + (f(tr) || 0), 0);
+  const of = (...kinds) => tr => kinds.includes(tr.kind) ? netAmount(tr) : 0;
+  const count = (...kinds) => ts.filter(tr => kinds.includes(tr.kind)).length;
+  if (kind === 'income') {
+    const tax = sum(tr => INCOME_KINDS.has(tr.kind) ? tr.tax : 0);
+    return [
+      { k: t('Dividendes'), v: eur(sum(of('DIVIDEND'))), d: tn(count('DIVIDEND'), '{n} versement', '{n} versements') },
+      { k: t('Intérêts'), v: eur(sum(of('INTEREST'))), d: tn(count('INTEREST'), '{n} versement', '{n} versements') },
+      { k: t('Bonus'), v: eur(sum(of('BONUS'))), d: t('saveback, primes') },
+      { k: t('Impôts retenus'), v: eur(Math.abs(tax)), d: t('à la source, déjà déduits') },
+    ];
+  }
+  if (kind === 'flows') {
+    const dep = sum(tr => FLOW_KINDS.has(tr.kind) && tr.amount > 0 ? tr.amount : 0), out = sum(tr => FLOW_KINDS.has(tr.kind) && tr.amount < 0 ? -tr.amount : 0);
+    return [
+      { k: t('Versé'), v: eur(dep, 0), d: tn(count('DEPOSIT'), '{n} versement', '{n} versements') },
+      { k: t('Retiré'), v: eur(out, 0), d: t('retraits et paiements par carte') },
+      { k: t('Net versé'), v: signedEur(dep - out, 0), d: t('ce qui est resté investi') },
+    ];
+  }
   const bought = sum(tr => isBuy(tr) ? Math.abs(tr.amount) : 0), sold = sum(tr => tr.kind === 'SELL' ? Math.abs(tr.amount) : 0);
-  const realized = sum(tr => tr.realized), fees = sum(tr => Math.abs(tr.fee || 0));
+  const realized = sum(tr => tr.realized), fees = sum(tr => isTrade(tr) ? Math.abs(tr.fee || 0) : 0);
   const nBuy = ts.filter(isBuy).length, nSell = ts.filter(tr => tr.kind === 'SELL').length;
-  const first = ts[ts.length - 1].date, last = ts[0].date;
-  const sums = [
+  const income = ts.filter(tr => INCOME_KINDS.has(tr.kind));
+  return [
     { k: t('Investi'), v: eur(bought, 0), d: tn(nBuy, '{n} achat', '{n} achats') },
     { k: t('Vendu'), v: eur(sold, 0), d: tn(nSell, '{n} vente', '{n} ventes') },
     { k: t('Plus-values'), v: signedEur(realized, 0), d: t(nSell ? 'réalisées, frais déduits' : 'aucune vente'), cls: realized > 0.5 ? 'pos' : realized < -0.5 ? 'neg' : '' },
     { k: t('Frais'), v: eur(fees), d: t('achats et ventes') },
+    ...income.length ? [{ k: t('Revenus'), v: eur(income.reduce((s, tr) => s + netAmount(tr), 0)), d: t('dividendes, intérêts, bonus') }] : [],
   ];
+}
+
+function histBody() {
+  const ts = histFiltered();
+  const kind = ui.hist.kind;
+  if (!ts.length) return `<div class="card"><p class="muted" style="margin:0">${t('Aucune opération ne correspond.')}</p></div>`;
+  const first = ts[ts.length - 1].date, last = ts[0].date;
   const shown = ts.slice(0, ui.hist.limit);
   const months = [];
   for (const tr of shown) { const m = tr.date.slice(0, 7); if (!months.length || months[months.length - 1].m !== m) months.push({ m, ops: [] }); months[months.length - 1].ops.push(tr); }
@@ -383,10 +506,12 @@ function histBody() {
   // The account shows on each operation only when there are several, none is selected and the screen is wide enough.
   const showAcc = ui.hist.acc === 'all' && new Set(ts.map(tr => tr.accountId)).size > 1;
   const span = first === last ? t('le {x}', { x: dateLong(first) }) : t('du {a} au {b}', { a: dateLong(first), b: dateLong(last) });
-  return `${sumsCard(sums)}
+  // Month total: money invested or received through buys and sells, or the income / net deposits under those filters
+  const monthNet = ops => ops.reduce((s, tr) => s + (kind === 'income' || kind === 'flows' ? netAmount(tr) : isTrade(tr) ? tr.amount : 0), 0);
+  return `${sumsCard(histSums(ts, kind))}
     <p class="hist-count">${tn(ts.length, '{n} opération, {span}', '{n} opérations, {span}', { span })}</p>
     <div class="lines hist-list">${months.map(({ m, ops }) => {
-      const net = ops.reduce((s, tr) => s + (isBuy(tr) || tr.kind === 'SELL' ? tr.amount : 0), 0);
+      const net = monthNet(ops);
       return `<div class="hist-month"><span>${cap(monthLong(m))}</span><span>${Math.abs(net) >= 0.5 ? signedEur(net, 0) : ''}</span></div>
         ${ops.map(tr => histRow(tr, showAcc)).join('')}`;
     }).join('')}</div>
@@ -396,19 +521,23 @@ function histBody() {
 function histRow(tr, showAcc) {
   const name = opName(tr);
   const acc = accById(tr.accountId);
-  const line = data.lines.find(l => l.accountId === tr.accountId && l.isin === tr.isin && isHeld(l));
+  const line = tr.isin ? data.lines.find(l => l.accountId === tr.accountId && l.isin === tr.isin && isHeld(l)) : null;
   const label = t(OP_LABEL[tr.kind] || tr.kind) + (/SAVING|PLAN/i.test(tr.category || '') ? ' ' + t('programmé') : '');
   const n = +(+tr.shares || 0).toFixed(6);
-  const shares = n ? (tr.price ? `${qtyShort(n)} × ${eur(tr.price)}` : tn(n, '{n} part', '{n} parts', { n: qtyShort(n) })) : '';
+  const cash = isCashMove(tr);
+  const detail = tr.kind === 'CARD' ? tn(tr.count || 1, '{n} paiement', '{n} paiements') : cash ? '' : n ? (tr.price ? `${qtyShort(n)} × ${eur(tr.price)}` : tn(n, '{n} part', '{n} parts', { n: qtyShort(n) })) : '';
   const where = showAcc && (acc?.name || t(tr.envelope || ''));
-  const sub = [dateShort(tr.date), label, shares].filter(Boolean).map(esc).join(' · ') + (where ? `<span class="where"> · ${esc(where)}</span>` : '');
-  const money = isBuy(tr) || tr.kind === 'SELL';
-  const value = money ? signedEur(tr.amount) : n ? '+' + tn(n, '{n} part', '{n} parts', { n: qtyShort(n) }) : '—';
+  // A cash movement without a product is named by its kind: the label would only repeat it.
+  const sub = [dateShort(tr.date), cash && !tr.isin && !tr.name ? '' : label, detail].filter(Boolean).map(esc).join(' · ') + (where ? `<span class="where"> · ${esc(where)}</span>` : '');
+  const money = isTrade(tr) || cash;
+  const amount = cash ? netAmount(tr) : tr.amount;
+  const value = money ? signedEur(amount) : n ? '+' + tn(n, '{n} part', '{n} parts', { n: qtyShort(n) }) : '—';
   const g = tr.kind === 'SELL' && typeof tr.realized === 'number'
     ? `<span class="${tr.realized > 0.005 ? 'pos' : tr.realized < -0.005 ? 'neg' : 'muted'}" title="${t('Plus-value réalisée')}">${signedEur(tr.realized)}</span>`
-    : tr.fee ? `<span class="muted">${t('frais {x}', { x: eur(Math.abs(tr.fee)) })}</span>` : '';
+    : INCOME_KINDS.has(tr.kind) && tr.tax ? `<span class="muted">${t('retenue {x}', { x: eur(Math.abs(tr.tax)) })}</span>`
+    : tr.fee && !cash ? `<span class="muted">${t('frais {x}', { x: eur(Math.abs(tr.fee)) })}</span>` : '';
   const inner = `<span class="mono t-${esc(tr.type || 'etf')}">${esc(initials(name))}</span>
-    <span class="n">${esc(name)}</span><span class="v ${tr.kind === 'SELL' ? 'in' : ''}">${value}</span>
+    <span class="n">${esc(name)}</span><span class="v ${tr.kind === 'SELL' || (cash && amount > 0) ? 'in' : ''}">${value}</span>
     <span class="s">${sub}</span><span class="g">${g}</span>`;
   return line ? `<button class="line" data-action="open-line" data-id="${esc(line.id)}">${inner}</button>` : `<div class="line static">${inner}</div>`;
 }
@@ -456,7 +585,22 @@ function viewSimuler() {
       ${line ? `<p class="small muted" style="margin:0">${t('Vous détenez {n} parts, prix de revient {pru}, cours {price} ({date}).', { n: qtyShort(line.qty), pru: eur(pru(line)), price: eur(line.price), date: dateShort(line.priceDate) })}</p>` : ''}
     </form>
     <div id="sim-out">${simResult()}</div>
-  </div>`;
+  </div>
+  ${allocation(data) ? `<section class="card reb" id="reb" style="margin-top:14px"><h3>${t('Rééquilibrer vers votre cible')}</h3>
+    <p class="lead">${t('Ce qu’il faudrait acheter, ou vendre, pour revenir à votre allocation cible. Touchez une ligne pour la simuler.')}</p>
+    <div class="reb-tools"><label class="field"><span>${t('À investir (€)')}</span><input class="input" id="reb-amount" inputmode="decimal" data-reb="amount" value="${esc(ui.reb.amount)}"></label>
+      <div class="seg" role="group" aria-label="${t('Ventes')}"><button type="button" data-action="reb-sell" data-v="0" aria-pressed="${!ui.reb.sell}">${t('Sans vendre')}</button><button type="button" data-action="reb-sell" data-v="1" aria-pressed="${ui.reb.sell}">${t('Avec ventes')}</button></div></div>
+    <div id="reb-out">${rebalanceRows()}</div></section>` : ''}`;
+}
+function rebalanceRows() {
+  const r = rebalance(data, parseNum(ui.reb.amount) || 0, ui.reb.sell);
+  if (!r) return '';
+  if (!r.rows.length) return `<p class="muted small" style="margin:8px 0 0">${t(r.add || ui.reb.sell ? 'Vous êtes déjà à la cible, à 1 € près.' : 'Indiquez un montant à investir, ou autorisez les ventes.')}</p>`;
+  const what = x => { const cash = isCashLike(x.line); return x.move > 0 ? t(cash ? 'Ajouter {x} aux espèces' : 'Acheter {x}', { x: eur(x.move, 0) }) : t(cash ? 'Utiliser {x} d’espèces' : 'Vendre {x}', { x: eur(-x.move, 0) }); };
+  const row = x => { const inner = `<span class="k">${esc(allocName(x.line))}</span><span class="v ${x.move > 0 ? 'pos' : 'neg'}">${what(x)}</span><span class="x">${t('{a} → {b}, cible {c}', { a: pct(x.pct), b: pct(x.after), c: pct(x.target) })}</span>`;
+    return isCashLike(x.line) ? `<div class="cmp">${inner}</div>` : `<button type="button" class="cmp reb-row" data-action="reb-pick" data-id="${esc(x.line.id)}" data-v="${x.move}">${inner}</button>`; };
+  return `<div class="compare">${r.rows.map(row).join('')}</div>
+    <p class="note">${t(ui.reb.sell ? 'Chaque ligne revient exactement à sa cible ; les ventes hors PEA et assurance-vie peuvent être imposées.' : 'Sans vente, l’argent va d’abord aux lignes les plus en dessous de leur cible.')}</p>`;
 }
 function simParams() {
   const s = ui.sim;
@@ -737,6 +881,7 @@ function openLine(id) {
     <div class="detail-big">${eur(v)}</div>
     ${l.qtyEstimated || l.estimateFromAmount ? `<div class="callout" style="margin-top:12px">${t(l.estimateFromAmount ? 'Montant investi connu, quantité pas encore calculée : elle le sera à la prochaine actualisation, avec la valeur liquidative du jour de souscription.' : 'Quantité estimée à partir du montant investi et de la valeur liquidative du jour de souscription. Remplacez-la par celle de votre relevé quand vous l’aurez (Modifier).')}</div>` : ''}
     <div class="stat-grid">${stats}</div>
+    ${l.note ? `<p class="note-text">${esc(l.note)}</p>` : ''}
     ${priceSection(l)}
     <div class="btn-row"><button class="btn primary sm" data-act="edit">${t('Modifier')}</button>${isCashLike(l) ? '' : `<button class="btn sm" data-act="sim">${t('Simuler')}</button>`}<button class="btn sm danger" data-act="del">${t('Supprimer')}</button></div>
     ${holdings}`, {
@@ -786,8 +931,12 @@ function openAccount(id) {
   const a = accById(id); if (!a) return;
   const ls = data.lines.filter(l => l.accountId === id && isHeld(l)).sort((x, y) => lineValue(y) - lineValue(x));
   const v = ls.reduce((s, l) => s + lineValue(l), 0);
+  const p = performance(data, new Date(), id);
+  const rate = p && (p.days >= 365 ? (p.rate == null ? '' : t('{x} par an', { x: signedPct(p.rate) })) : p.periodRate == null ? '' : t('{x} sur la période', { x: signedPct(p.periodRate) }));
   openSheet(`${sheetHead(esc(a.name), esc(kindLabel(a.kind)))}
     <div class="detail-big">${eur(v)}</div>
+    ${p ? `<p class="small muted" style="margin:4px 0 0">${[t('Versé {x}', { x: eur(p.net, 0) }), t('gain réel {x}', { x: signedEur(p.gain, 0) }), rate].filter(Boolean).join(' · ')}</p>` : ''}
+    ${a.note ? `<p class="note-text">${esc(a.note)}</p>` : ''}
     <div class="lines" style="margin:14px 0">${ls.map(lineRow).join('') || `<p class="muted" style="padding:16px;margin:0">${t('Aucune ligne sur ce compte.')}</p>`}</div>
     <div class="btn-row"><button class="btn primary sm" data-act="add">${ICONS.plus}${t('Ajouter une ligne')}</button><button class="btn sm" data-act="edit">${t('Modifier le compte')}</button></div>`, {
     label: a.name,
@@ -811,6 +960,7 @@ function accountForm(id) {
       <div class="row2"><label class="field"><span>${t('Établissement')}</span><input class="input" id="ac-inst" name="institution" maxlength="60" value="${esc(a?.institution || '')}" placeholder="${t('facultatif')}"></label>
       <label class="field"><span>${t('Type')}</span><select class="input" id="ac-kind" name="kind">${KINDS.map(([k, l]) => `<option value="${k}" ${kind === k ? 'selected' : ''}>${t(l)}</option>`).join('')}</select></label></div>
       <label class="field" id="ac-bal-wrap"><span>${t('Solde actuel (€)')}</span><input class="input" id="ac-bal" name="balance" inputmode="decimal" value="${cash ? inputNum(cash.amount) : ''}" placeholder="${t('0,00')}"><small>${t('Pour un compte courant ou un livret. Pour une assurance-vie ou un compte-titres, ajoutez ensuite des lignes.')}</small></label>
+      <label class="field"><span>${t('Note')}</span><textarea class="input plain" id="ac-note" name="note" maxlength="500" rows="2" placeholder="${t('ex. date d’ouverture du PEA, numéro de contrat')}">${esc(a?.note || '')}</textarea></label>
       <div class="field"><span>${t('Couleur')}</span><div class="swatches">${COLORS.map(c => `<label><input type="radio" name="color" value="${c}" ${(a?.color || 'blue') === c ? 'checked' : ''} aria-label="${c}"><span class="tile c-${c}" style="width:34px;height:34px"></span></label>`).join('')}</div></div>
       <p class="small neg" id="ac-err" hidden></p>
       <div class="btn-row"><button class="btn primary" type="submit">${t(a ? 'Enregistrer' : 'Créer le compte')}</button>${a ? `<button class="btn danger" type="button" data-act="del">${t('Supprimer le compte')}</button>` : ''}</div>
@@ -830,6 +980,7 @@ function accountForm(id) {
         if (balRaw && !isFinite(bal)) { err.textContent = t('Le solde doit être un nombre, par exemple 1 250,40.'); err.hidden = false; return; }
         const acc = a || { id: 'acc-' + Date.now().toString(36), source: 'manual' };
         Object.assign(acc, { name, institution: form.institution.value.trim(), kind: form.kind.value, color: form.color.value });
+        const note = form.note.value.trim(); if (note) acc.note = note; else delete acc.note;
         if (!a) data.accounts.push(acc);
         if (bal !== null) {
           const isLiv = acc.kind === 'livret';
@@ -871,6 +1022,7 @@ function lineForm(id, accountId) {
       <div class="row2" data-show="action"><label class="field"><span>${t('Secteur')}</span><select class="input" id="lf-sector" name="sector"><option value="">—</option>${sectorOpts}</select></label>
       <label class="field"><span>${t('Pays')}</span><input class="input" id="lf-country" name="country" maxlength="40" value="${esc(l?.lookthrough?.country || '')}" placeholder="${t('ex. France')}"></label></div>
       <label class="field"><span>${t('Détenu depuis')}</span><input class="input" type="date" id="lf-since" name="since" value="${esc(l?.since || (l?.events?.[0]?.[0]) || today())}"><small>${t('Sert à placer la ligne sur la courbe d’évolution.')}</small></label>
+      <label class="field"><span>${t('Note')}</span><textarea class="input plain" id="lf-note" name="note" maxlength="500" rows="2" placeholder="${t('ex. numéro de contrat, conseiller, objectif')}">${esc(l?.note || '')}</textarea></label>
       <p class="small neg" id="lf-err" hidden></p>
       <div class="btn-row"><button class="btn primary" type="submit">${t(l ? 'Enregistrer' : 'Ajouter la ligne')}</button><button class="btn" type="button" data-close>${t('Annuler')}</button></div>
     </form>`, {
@@ -894,6 +1046,7 @@ function lineForm(id, accountId) {
         const acc = accById(f.accountId.value);
         const n = l ? { ...l } : { id: 'ln-' + Date.now().toString(36), source: 'manual', events: [], pending: 0 };
         n.accountId = acc.id; n.type = ty; n.name = name; n.since = f.since.value || today();
+        const note = f.note.value.trim(); if (note) n.note = note; else delete n.note;
         if (l && l.name !== name) n.customName = true;
         if (cash) {
           const amt = parseNum(f.amount.value); if (!isFinite(amt)) return fail(t('Indiquez un montant, par exemple 2 500.'));
@@ -1419,6 +1572,12 @@ function demoData() {
     { id: 'd-op-h1', source: 'demo', date: '2025-03-12', accountId: 'd-pea', envelope: 'PEA', isin: 'FR0000052292', name: 'Hermès', type: 'action', kind: 'BUY', shares: 1, price: 2050, amount: -2051, fee: -1, tax: 0 },
     { id: 'd-op-h2', source: 'demo', date: '2025-11-20', accountId: 'd-pea', envelope: 'PEA', isin: 'FR0000052292', name: 'Hermès', type: 'action', kind: 'SELL', shares: 1, price: 2290, amount: 2290, fee: -1, tax: 0, realized: 238 },
   );
+  // Example deposits: each buy paid by a deposit the same day; the sale proceeds withdrawn
+  for (const tr of [...d.transactions]) {
+    if (tr.kind === 'BUY') d.transactions.push({ id: 'd-dep-' + tr.id, source: 'demo', date: tr.date, accountId: tr.accountId, envelope: tr.envelope, type: 'especes', kind: 'DEPOSIT', amount: -tr.amount, fee: 0, tax: 0 });
+  }
+  d.transactions.push({ id: 'd-wd-h2', source: 'demo', date: '2025-11-21', accountId: 'd-pea', envelope: 'PEA', type: 'especes', kind: 'WITHDRAWAL', amount: -2289, fee: 0, tax: 0 });
+  Object.assign(d.lines[0], { target: 60 }); Object.assign(d.lines[1], { target: 20 }); Object.assign(d.lines[2], { target: 15 }); Object.assign(d.lines[3], { target: 5 });
   return d;
 }
 
@@ -1490,6 +1649,15 @@ document.addEventListener('click', async e => {
       break;
     }
     case 'sim-mode': ui.sim.mode = v; render(); break;
+    case 'targets': targetSheet(); break;
+    case 'go-rebalance': go('simuler'); $('#reb')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); break;
+    case 'reb-sell': ui.reb.sell = v === '1'; render(); break;
+    case 'reb-pick': {
+      const l = lineById(b.dataset.id); if (!l) break;
+      const m = +v;
+      Object.assign(ui.sim, { lineId: l.id, mode: m > 0 ? 'buy' : 'sell', by: 'amount', amount: inputNum(Math.abs(m), 0), price: l.price ? inputNum(l.price, 4) : '' });
+      render(); window.scrollTo({ top: 0, behavior: 'smooth' }); break;
+    }
     case 'sim-by': {
       const s = ui.sim, p = parseNum(s.price);
       if (v === 'qty' && s.by === 'amount' && p > 0) s.qty = inputNum(parseNum(s.amount) / p, 4);
@@ -1510,6 +1678,7 @@ document.addEventListener('input', e => {
     }
     const out = $('#sim-out'); if (out) out.innerHTML = simResult();
   }
+  if (el.dataset.reb) { ui.reb[el.dataset.reb] = el.value; const o = $('#reb-out'); if (o) o.innerHTML = rebalanceRows(); }
   if (el.dataset.hist) { ui.hist[el.dataset.hist] = el.value; ui.hist.limit = 150; const b = $('#hist-body'); if (b) b.innerHTML = histBody(); }
   if (el.dataset.setting === 'taxRate') { const n = parseNum(el.value); if (isFinite(n) && n >= 0 && n <= 100) { data.settings.taxRate = n; save(data); scheduleSync(); } }
 });

@@ -11,6 +11,7 @@ import { mkdtempSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { CSV } from './tr-export.mjs';
 
 const { chromium, devices } = createRequire(import.meta.url)('playwright'); // CommonJS lookup also honours NODE_PATH
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -72,7 +73,7 @@ test('Trade Republic import, refresh and every tab', async () => {
   assert.equal(await page.locator('#lines .line').count(), 3);
   for (const name of ['analyse', 'historique', 'simuler']) { await tab(page, name); assert.ok((await page.locator('#view').innerText()).length > 100, name); }
   await tab(page, 'historique');
-  assert.equal(await page.locator('.hist-list .line').count(), 2);
+  assert.equal(await page.locator('.hist-list .line').count(), 3, 'the deposit and both buys');
   await section(page, 'cours');
   assert.match(await page.locator('.card', { hasText: 'Dernière actualisation' }).locator('p.small').innerText(), /2 à jour, 0 sans cours/);
   await done();
@@ -179,6 +180,7 @@ test('old backup files restore through the app: replace, add, encrypted', async 
   assert.match(await total(page), /2,198\.00|^2 198,00/, 'the encrypted v1.3 file replaces everything (it switches to English)');
   await tab(page, 'historique');
   assert.equal(await page.locator('.hist-list .line').count(), 2);
+  assert.equal(await page.locator('#view .callout [data-action="pick-csv"]').count(), 1, 'an import from before 1.4: a new import adds deposits and dividends');
   await done();
 });
 
@@ -193,5 +195,43 @@ test('import sources: a dropdown, then the chosen source’s guide opens the fil
   await page.waitForSelector('.sheet.open'); await page.locator('.sheet [data-ok]').click(); await page.waitForTimeout(400);
   await section(page, 'import');
   assert.match(await page.locator('#view .kv').innerText(), /Trade Republic · /);
+  await done();
+});
+
+test('history of cash movements, real performance, target allocation and notes', async () => {
+  const csv = join(TMP, 'realistic.csv'); writeFileSync(csv, CSV);
+  const { page, done } = await open();
+  await pick(page, page.getByRole('button', { name: 'Importer un CSV Trade Republic' }), csv);
+  await page.waitForSelector('.sheet.open'); await page.locator('.sheet [data-ok]').click(); await page.waitForTimeout(500);
+  await tab(page, 'historique');
+  assert.equal(await page.locator('.hist-list .line').count(), 14);
+  await page.locator('[data-action="hist-kind"][data-v="income"]').click(); await page.waitForTimeout(150);
+  assert.deepEqual(await page.locator('.hist-list .line .n').allInnerTexts(), ['Bonus', 'Intérêts', 'Apple']);
+  await page.locator('[data-action="hist-kind"][data-v="flows"]').click(); await page.waitForTimeout(150);
+  assert.match(await page.locator('.sums').innerText(), /Versé\s+8\s000\s€/);
+  await tab(page, 'analyse');
+  assert.match(await page.locator('.sums').nth(1).innerText(), /Versé\s+7\s958\s€[\s\S]*Gain réel\s+\+2\s053\s€/);
+  // Target: 70 % MSCI World, 30 % Apple
+  await page.locator('#view [data-action="targets"]').click(); await page.waitForSelector('.sheet.open');
+  await page.fill('.sheet [data-tid="tr-pea-ie0002xzsho1"]', '70'); await page.fill('.sheet [data-tid="tr-default-us0378331005"]', '20');
+  assert.match(await page.locator('#tg-sum').innerText(), /il manque 10 points/);
+  await page.locator('.sheet button[type=submit]').click(); await page.waitForTimeout(200);
+  assert.equal(await page.locator('.sheet.open').count(), 1, 'not saved while the total is not 100 %');
+  await page.fill('.sheet [data-tid="tr-default-us0378331005"]', '30'); await page.locator('.sheet button[type=submit]').click(); await page.waitForTimeout(400);
+  assert.equal(await page.locator('#view .compare .cmp').count(), 2);
+  await page.locator('#view [data-action="go-rebalance"]').click(); await page.waitForTimeout(300);
+  // 1300 € MSCI World and 3000 € Apple: 500 € more all go to MSCI World
+  assert.match(await page.locator('#reb-out').innerText(), /Acheter 500\s€/);
+  await page.locator('#reb-out .reb-row').first().click(); await page.waitForTimeout(300);
+  assert.equal(await page.locator('#sim-line').inputValue(), 'tr-pea-ie0002xzsho1');
+  assert.equal(await page.locator('#sim-amount').inputValue(), '500');
+  // Note on a holding, kept after a reload
+  await tab(page, 'patrimoine');
+  await page.locator('#lines [data-id="tr-default-us0378331005"]').click(); await page.waitForSelector('.sheet.open');
+  await page.locator('.sheet [data-act="edit"]').click(); await page.waitForSelector('#lf-note');
+  await page.fill('#lf-note', 'Achetée pour le dividende'); await page.locator('.sheet.open button[type=submit]').click(); await page.waitForTimeout(400);
+  await page.reload(); await page.waitForTimeout(300);
+  await page.locator('#lines [data-id="tr-default-us0378331005"]').click(); await page.waitForSelector('.sheet.open');
+  assert.equal(await page.locator('.sheet .note-text').innerText(), 'Achetée pour le dividende');
   await done();
 });

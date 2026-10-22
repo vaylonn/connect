@@ -6,6 +6,8 @@ Personal net-worth tracker: PEA, brokerage account, crypto, savings accounts, li
 👉 **https://connect-liard-three.vercel.app**
 
 - Net worth, analysis (sectors, countries, companies), buy or sell simulator.
+- Real performance (annualised return on what you paid in), target allocation with rebalancing suggestions.
+- History of buys, sells, dividends, interest and deposits; notes on any holding or account.
 - Trade Republic CSV import, manual entry for any other account.
 - Up-to-date prices from Yahoo Finance.
 - Sync across devices, end-to-end encrypted (optional).
@@ -32,6 +34,12 @@ To install the app: Settings → Install the app shows the steps for your device
   Cash, savings accounts and euro funds are left out of the percentage, as are past sales and dividends. It is not the daily change shown by TR.
 - **Cost basis**: weighted average cost, purchase fees included.
 - **Unlisted** (Private Markets): units × last known price + contributions awaiting execution.
+- **Real performance** (Analysis): on imported accounts, from the dated deposits and withdrawals of the export (card payments count as withdrawals).
+  *Paid in* = deposits − withdrawals; *real gain* = today's value − paid in, so it includes capital gains, dividends, interest, fees and taxes.
+  *Annualised return* is the money-weighted rate (internal rate of return, XIRR): the yearly rate a savings account would have needed to give the same result with the same deposits on the same dates. Under a year, the return over the period is shown instead.
+  Manually added accounts have no dated deposits and are left out.
+- **Target allocation**: a target share per holding (Analysis → *Set my target*), out of 100 %, measured on the holdings that have one.
+  Simulate → *Rebalance* suggests where new money should go (to the holdings furthest below target first) or, with sales, how to get exactly back on target.
 - Small differences with TR are normal: TR shows real-time prices, Yahoo slightly delayed ones.
 
 ## Your data
@@ -106,13 +114,14 @@ lib/            Yahoo Finance client, compositions (Morningstar, justETF), /api 
 public/         the app (HTML, CSS, JS, fonts, icons, PWA)
   js/           UI, CSV import, calculations, storage, sync, chart, ETF library
 tools/          Trade Republic CSV → backup, from the command line
-tests/          calculations, Trade Republic import, restore of old backups, sync API, translations;
-                end-to-end browser tests; fake Yahoo; fixtures (frozen backup files)
+tests/          calculations, Trade Republic import, performance and target allocation, restore of old
+                backups, sync API, translations; end-to-end browser tests; fake Yahoo; a realistic
+                Trade Republic export (tr-export.mjs); fixtures (frozen backup files)
 ```
 
 **ETF library** (`public/js/library.js`): Yahoo symbol, sectors, countries and top companies of known funds, as orders of magnitude (mid-2026).
 
-**History**: the tab lists the securities transactions kept from the Trade Republic import (buys, sells, splits, free share grants), with the realised gain of each sale. Cash movements (deposits, withdrawals, interest, dividends, payments) are not included. A new import replaces the Trade Republic history.
+**History**: the tab lists the operations kept from the Trade Republic import: buys, sells, splits and free share grants (with the realised gain of each sale), and cash movements: deposits, withdrawals, dividends and interest (gross, with the withheld tax), saveback, and card payments summed per month. A new import replaces the Trade Republic history; imports made before version 1.4 kept only securities transactions.
 
 **Automatic compositions**: every ETF, fund (including life-insurance unit-linked funds) and stock gets its composition, fetched by the server (`/api/composition`, only the ISIN is sent). Main source: Morningstar (countries and all 11 sectors, seen through the index even for the PEA's synthetic ETFs, equity share, top holdings). Fallback: justETF (index holdings of synthetic ETFs). Refreshed every 30 days; the library is the fallback when the server finds nothing.
 To add a fund, add an entry with its ISIN. Check that the symbol matches the fund **and the right share class** (Acc or Dist): a neighbouring symbol can give a very different price.

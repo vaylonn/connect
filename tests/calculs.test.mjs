@@ -49,5 +49,5 @@ test('a purchase paid with the account cash is not counted twice', () => {
 
 test('the backup keeps the history transactions', () => {
   const data = load([row('2025-01-02', 'CUSTOMER_INBOUND', { amount: 1000 }), row('2025-01-10', 'BUY', { isin: SP500, shares: 1, price: 500, amount: -500 })]);
-  assert.equal(backupPayload(data).transactions.length, 1);
+  assert.deepEqual(backupPayload(data).transactions.map(x => x.kind), ['BUY', 'DEPOSIT'], 'security transactions, then cash movements');
 });
