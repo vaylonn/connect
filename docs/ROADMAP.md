@@ -5,10 +5,6 @@ What is left to do, most urgent first. When an item ships, delete it from this f
 
 ## Must have — data loss or silent breakage
 
-- **Ask the browser to keep the data (S).** Everything lives in browser storage. Safari on iPhone erases it
-  after about 7 days without a visit when the app is not installed on the home screen, and Chrome can evict it
-  when the device runs low on space. Call `navigator.storage.persist()` at startup, show in Settings whether it
-  was granted, and on iPhone invite the user to install the app.
 - **Backup reminder (S).** Without sync, a browser cleanup loses everything. Show a discreet banner such as
   « Dernière sauvegarde il y a 30 jours ». The app does not record exports yet: store the date of
   the last export (per device, so it should not go into backups).

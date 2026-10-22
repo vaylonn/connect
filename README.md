@@ -22,7 +22,7 @@ Personal net-worth tracker: PEA, brokerage account, crypto, savings accounts, li
 3. **Refresh prices** with the button at the top of the screen.
 4. **Sync your devices** (optional). Settings → Sync → *Create vault* on the first device, then *Sign in* with the same username and passphrase on the others.
 
-To install the app on a phone: browser menu → *Add to Home Screen*.
+To install the app: Settings → Install the app shows the steps for your device (it is also offered on a phone's first visit). Installed, it opens full screen and iOS no longer erases its data after 7 days without a visit.
 
 ## Reading the figures
 

@@ -406,3 +406,11 @@ textarea.input { height: auto; min-height: 110px; padding: 12px 14px; font-famil
 .toast { position: fixed; left: 50%; bottom: calc(var(--tabbar-h) + 30px + env(safe-area-inset-bottom, 0px)); transform: translate(-50%, 20px); background: var(--night); color: var(--night-ink); padding: 11px 16px; border-radius: 16px; font-size: 14px; z-index: 80; opacity: 0; pointer-events: none; transition: opacity .2s, transform .2s; max-width: calc(100vw - 32px); box-shadow: 0 12px 30px -12px rgba(0, 0, 0, .5); }
 .toast.show { opacity: 1; transform: translate(-50%, 0); }
 @media (min-width: 960px) { .toast { bottom: 28px; } }
+
+/* ——— Install tutorial: numbered steps, one icon each ——— */
+.steps { list-style: none; counter-reset: step; margin: 4px 0 18px; padding: 0; display: grid; gap: 14px; }
+.step { counter-increment: step; display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 14px; align-items: center; font-size: 15px; line-height: 1.35; }
+.step-ic { position: relative; width: 44px; height: 44px; border-radius: 14px; background: var(--bg-2); color: var(--ink); display: grid; place-items: center; }
+.step-ic svg { width: 22px; height: 22px; }
+.step-ic::after { content: counter(step); position: absolute; top: -6px; right: -6px; width: 19px; height: 19px; border-radius: 50%; background: var(--orange); color: #fff; font-size: 11px; font-weight: 700; display: grid; place-items: center; }
+.steps .step:only-child .step-ic::after { display: none; }

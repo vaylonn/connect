@@ -43,6 +43,12 @@ const ICONS = {
   upload: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V4M7 9l5-5 5 5"/><path d="M4 15v4a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-4"/></svg>',
   download: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7 10l5 5 5-5"/><path d="M4 15v4a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-4"/></svg>',
   lock: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="5" y="10.5" width="14" height="9.5" rx="2.5"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/></svg>',
+  telephone: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="6.5" y="2.5" width="11" height="19" rx="2.5"/><path d="M10.5 18.5h3"/></svg>',
+  share: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5v11M8 7.5l4-4 4 4"/><path d="M8.5 10.5H6.5a1.5 1.5 0 0 0-1.5 1.5v7a1.5 1.5 0 0 0 1.5 1.5h11a1.5 1.5 0 0 0 1.5-1.5v-7a1.5 1.5 0 0 0-1.5-1.5h-2"/></svg>',
+  addHome: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="4"/><path d="M12 8.5v7M8.5 12h7"/></svg>',
+  dots: '<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5.5" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="12" cy="18.5" r="1.8"/></svg>',
+  check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
+  monitor: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12.5" rx="2"/><path d="M9 20.5h6M12 7.5v5.5M9.5 10.5 12 13l2.5-2.5"/></svg>',
 };
 
 // ——— Utilities ———
@@ -54,7 +60,7 @@ const initials = s => (String(s || '?').replace(/[^\p{L}\p{N}\s&]/gu, ' ').trim(
 const shortName = l => { const s = libraryFor(l.isin)?.short; return s ? t(s) : isCashLike(l) && !l.customName ? t(l.name) : l.name; };
 const isWide = () => matchMedia('(min-width: 1100px)').matches;
 const today = () => new Date().toISOString().slice(0, 10);
-function commit(msg) { data.updatedAt = new Date().toISOString(); if (!save(data) && !commit.warned) { commit.warned = true; toast(t('Stockage du navigateur indisponible : vos changements seront perdus en fermant la page.')); } else if (msg) toast(msg); render(); scheduleSync(); setTimeout(autoCompositions, 0); }
+function commit(msg) { setTimeout(ensurePersist, 0); data.updatedAt = new Date().toISOString(); if (!save(data) && !commit.warned) { commit.warned = true; toast(t('Stockage du navigateur indisponible : vos changements seront perdus en fermant la page.')); } else if (msg) toast(msg); render(); scheduleSync(); setTimeout(autoCompositions, 0); }
 
 let toastTimer;
 function toast(msg) {
@@ -503,6 +509,8 @@ const SECTIONS = {
     summary: () => syncState() ? t('Coffre {x}', { x: syncState().user }) : t('Désactivée') },
   cours: { title: 'Cours', sub: 'Yahoo Finance, sans jamais vos montants.', icon: 'cours', body: sectionPrices,
     summary: () => ui.server === 'off' ? t('Serveur absent : actualisation indisponible') : data.lastRefresh ? refreshLabel().long : t('Jamais actualisés') },
+  appareil: { title: 'Installer l’app', sub: 'Carnet sur l’écran d’accueil, et vos données gardées.', icon: 'telephone', body: sectionDevice,
+    summary: () => t(installed() ? 'Installée sur cet appareil' : 'Pas encore installée') + (ui.persisted === false ? ' · ' + t('données non protégées') : '') },
   preferences: { title: 'Préférences', sub: 'Prénom, langue, thème et impôt.', icon: 'profil', body: sectionPreferences,
     summary: () => [data.profile.firstName || t('Sans prénom'), langLabel(data.settings.lang), t('thème {x}', { x: t(THEMES[data.settings.theme] || 'Automatique').toLowerCase() }), t('impôt {x}', { x: pct(data.settings.taxRate / 100, 1) })].join(' · ') },
 };
@@ -548,6 +556,77 @@ function sectionPrices() {
     <p style="margin:0 0 12px"><span class="status ${server[0]}"><i></i>${t(server[1])}</span></p>
     <div class="btn-row"><button class="btn refresh-btn" data-action="refresh" ${ui.busy ? 'disabled' : ''}><span class="ic">${ICONS.refresh}</span><span class="r-long">${t('Actualiser les cours')}</span></button></div>
     ${refreshReport()}</section>`;
+}
+
+// ——— Install and storage ———
+// Installed (home screen or dock), the app runs full screen and iOS no longer wipes its storage
+// after 7 days without a visit. persist() asks the browser not to evict the data under storage pressure.
+const DEVICE_KEY = 'carnet:device:v1'; // per-device notes, never synced nor exported
+const device = () => { try { return JSON.parse(localStorage.getItem(DEVICE_KEY)) || {}; } catch { return {}; } };
+const setDevice = patch => { try { localStorage.setItem(DEVICE_KEY, JSON.stringify({ ...device(), ...patch })); } catch { /* storage blocked */ } };
+const installed = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+function platform() {
+  const ua = navigator.userAgent;
+  if (/iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1)) return 'ios';
+  if (/Android/.test(ua)) return 'android';
+  if (/Firefox\//.test(ua)) return 'firefox';
+  if (/Safari\//.test(ua) && !/Chrome|Chromium|Edg\//.test(ua)) return 'mac-safari';
+  return 'desktop';
+}
+let installPrompt = null; // Chrome, Edge, Android: the browser's own install dialog
+window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); installPrompt = e; });
+window.addEventListener('appinstalled', () => { installPrompt = null; render(); });
+
+let persistAsked = false;
+async function ensurePersist() {
+  if (persistAsked || !navigator.storage?.persisted) return;
+  // Firefox may ask the user: wait until there is something worth keeping.
+  if (!data.lines.length && !data.accounts.length) return;
+  persistAsked = true;
+  try { ui.persisted = await navigator.storage.persisted() || await navigator.storage.persist(); } catch { ui.persisted = null; }
+  if (ui.tab === 'donnees') render();
+}
+
+function sectionDevice() {
+  const done = installed();
+  const kept = ui.persisted === true || done && platform() === 'ios';
+  return `<section class="card">
+    <p style="margin:0 0 8px"><span class="status ${done ? 'ok' : 'off'}"><i></i>${t(done ? 'Carnet est installée sur cet appareil.' : 'Carnet s’ouvre dans le navigateur.')}</span></p>
+    ${ui.persisted == null && !done ? '' : `<p style="margin:0 0 14px"><span class="status ${kept ? 'ok' : 'off'}"><i></i>${t(kept ? 'Le navigateur garde vos données.' : 'Le navigateur peut effacer vos données s’il manque de place, ou après 7 jours sans visite sur iPhone.')}</span></p>`}
+    ${done ? '' : `<div class="btn-row"><button class="btn primary" data-action="install">${ICONS.telephone}${t('Installer Carnet')}</button></div>`}
+    <p class="note">${t('Installée, Carnet s’ouvre comme une app, en plein écran, et votre iPhone n’efface plus ses données. Pensez quand même aux sauvegardes.')}</p></section>`;
+}
+
+// A short tutorial for this device only: the browser's own dialog when it offers one, else the steps.
+function installSheet() {
+  const p = platform();
+  const step = (icon, title, sub = '') => `<li class="step"><span class="step-ic">${ICONS[icon]}</span><span><b>${title}</b>${sub ? `<br><span class="muted small">${sub}</span>` : ''}</span></li>`;
+  const STEPS = {
+    ios: [step('share', t('Touchez le bouton Partager'), t('En bas de Safari, ou dans le menu ⋯ selon votre version.')), step('addHome', t('Choisissez « Sur l’écran d’accueil »'), t('Faites défiler la liste si vous ne le voyez pas.')), step('check', t('Touchez « Ajouter »'), t('Carnet apparaît sur l’écran d’accueil : ouvrez-la depuis là.'))],
+    android: [step('dots', t('Ouvrez le menu ⋮'), t('En haut à droite du navigateur.')), step('addHome', t('Touchez « Installer l’application »'), t('Ou « Ajouter à l’écran d’accueil », selon le navigateur.')), step('check', t('Confirmez'), t('Carnet apparaît parmi vos applications.'))],
+    desktop: [step('monitor', t('Cliquez sur l’icône d’installation'), t('À droite de la barre d’adresse de Chrome ou Edge.')), step('check', t('Confirmez « Installer »'), t('Carnet s’ouvre dans sa propre fenêtre.'))],
+    'mac-safari': [step('share', t('Menu Fichier, puis « Ajouter au Dock »'), t('Ou le bouton Partager de Safari.')), step('check', t('Confirmez « Ajouter »'), t('Carnet s’ouvre depuis le Dock.'))],
+    firefox: [step('monitor', t('Firefox ne sait pas installer de site'), t('Ouvrez Carnet dans Chrome, Edge ou Safari pour l’installer.'))],
+  };
+  const body = installPrompt
+    ? `<ol class="steps">${step('addHome', t('Un bouton suffit'), t('Votre navigateur ajoute Carnet à vos applications.'))}</ol>
+      <div class="btn-row"><button class="btn primary" data-native>${t('Installer')}</button><button class="btn" data-close>${t('Plus tard')}</button></div>`
+    : `<ol class="steps">${STEPS[p].join('')}</ol><div class="btn-row"><button class="btn primary" data-close>${t('Compris')}</button></div>`;
+  openSheet(`${sheetHead(t('Installer Carnet'), t('Comme une app, en deux secondes.'))}${body}`, {
+    label: t('Installer Carnet'),
+    onMount: (sh, close) => sh.querySelector('[data-native]')?.addEventListener('click', async () => {
+      const ev = installPrompt; installPrompt = null; close();
+      ev.prompt(); const r = await ev.userChoice.catch(() => null);
+      if (r?.outcome === 'accepted') toast(t('Carnet est installée.'));
+    }),
+  });
+}
+// First visit on a phone, once per device.
+function offerInstall() {
+  const p = platform();
+  if (installed() || device().installOffered || !(p === 'ios' || p === 'android') || sheetStack.length) return;
+  setDevice({ installOffered: true });
+  installSheet();
 }
 
 function sectionPreferences() {
@@ -1330,6 +1409,7 @@ document.addEventListener('click', async e => {
     case 'add-account': accountForm(null); break;
     case 'edit-account': accountForm(b.dataset.id); break;
     case 'refresh': refreshPrices(); break;
+    case 'install': installSheet(); break;
     case 'snooze': data.settings.snoozeUntil = new Date(Date.now() + 86400000).toISOString(); commit(); break;
     case 'theme': data.settings.theme = v; commit(); break;
     case 'lang': data.settings.lang = v; commit(); break;
@@ -1400,6 +1480,8 @@ window.addEventListener('storage', e => { if (e.key && e.key.startsWith('carnet:
   render();
   checkServer();
   syncNow();
+  ensurePersist();
+  setTimeout(offerInstall, 1500);
   document.addEventListener('visibilitychange', () => syncNow());
   window.addEventListener('online', () => syncNow());
   setInterval(() => { if (document.visibilityState === 'visible') syncNow(); }, 120000);
