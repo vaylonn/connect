@@ -233,7 +233,7 @@ export function mergeImport(data, imp) {
     return n;
   });
   const oldAcc = new Map(data.accounts.map(a => [a.id, a]));
-  const accounts = imp.accounts.map(a => { const o = oldAcc.get(a.id); return o ? { ...a, name: o.name, color: o.color, ...(o.note ? { note: o.note } : {}) } : a; });
+  const accounts = imp.accounts.map(a => { const o = oldAcc.get(a.id); return o ? { ...a, name: o.name, color: o.color, ...(o.note ? { note: o.note } : {}), ...(o.openedAt ? { openedAt: o.openedAt } : {}) } : a; });
   return {
     ...data,
     accounts: [...accounts, ...data.accounts.filter(a => a.source !== 'tr')],

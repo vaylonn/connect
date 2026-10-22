@@ -235,3 +235,39 @@ test('history of cash movements, real performance, target allocation and notes',
   assert.equal(await page.locator('.sheet .note-text').innerText(), 'Achetée pour le dividende');
   await done();
 });
+
+test('PEA 5-year reminder, chart of one account, anonymous view to share', async () => {
+  const csv = join(TMP, 'comfort.csv'); writeFileSync(csv, CSV);
+  const { page, done } = await open({ device: { viewport: { width: 1280, height: 900 } } });
+  await pick(page, page.getByRole('button', { name: 'Importer un CSV Trade Republic' }), csv);
+  await page.waitForSelector('.sheet.open'); await page.locator('.sheet [data-ok]').click(); await page.waitForTimeout(500);
+  assert.equal(await page.locator('.pea-hint').count(), 0, 'the PEA opened in 2025: nothing to say yet');
+  // First deposit five years ago minus a month: the reminder shows, once
+  const d = new Date(); d.setUTCFullYear(d.getUTCFullYear() - 5); d.setUTCDate(d.getUTCDate() + 30);
+  await page.locator('.acc', { hasText: 'Trade Republic PEA' }).click(); await page.waitForSelector('.sheet.open');
+  assert.match(await page.locator('.sheet').innerText(), /à partir du 2 janv\. 2030/);
+  await page.locator('.sheet [data-act="edit"]').click(); await page.waitForSelector('#ac-open');
+  await page.fill('#ac-open', d.toISOString().slice(0, 10)); await page.locator('.sheet.open button[type=submit]').click(); await page.waitForTimeout(400);
+  assert.match(await page.locator('.pea-hint').innerText(), /Trade Republic PEA aura 5 ans le/);
+  await page.locator('[data-action="pea-seen"]').click(); await page.waitForTimeout(200);
+  await page.reload(); await page.waitForTimeout(300);
+  assert.equal(await page.locator('.pea-hint').count(), 0, 'dismissed for good');
+  // The chart narrows to one account
+  await page.selectOption('#chart-scope', 'acc:tr-pea'); await page.waitForTimeout(200);
+  assert.equal(await page.locator('.scope-label').innerText(), 'Trade Republic PEA');
+  assert.match(await page.locator('#chart-hover').innerText(), /Sur la période/);
+  // Anonymous view: an image and a text without any amount
+  await tab(page, 'analyse');
+  await page.locator('[data-action="share"]').click(); await page.waitForSelector('.sheet.open');
+  await page.waitForFunction(() => document.querySelector('.share-img')?.naturalWidth === 1080);
+  await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+  await page.locator('.sheet [data-copy]').click(); await page.waitForTimeout(200);
+  const text = await page.evaluate(() => navigator.clipboard.readText());
+  assert.match(text, /Enveloppes\n• Espèces : 41 %/);
+  assert.match(text, /• Apple : 30 %/);
+  assert.doesNotMatch(text, /€|10\s?011|2\s?361|3\s?000/, 'no amount');
+  await page.locator('.sheet [data-part="lines"]').click(); await page.waitForTimeout(300);
+  await page.locator('.sheet [data-copy]').click(); await page.waitForTimeout(200);
+  assert.doesNotMatch(await page.evaluate(() => navigator.clipboard.readText()), /Lignes|Apple/, 'holdings left out');
+  await done();
+});

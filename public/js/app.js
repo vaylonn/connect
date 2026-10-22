@@ -6,14 +6,14 @@ import { t, tn, setLang, lang } from './i18n.js';
 import { load, save, clearAll, emptyData, normalize, validateBackup, encryptBackup, decryptBackup, backupPayload, storageWorks } from './store.js';
 import { syncState, saveSyncState, clearSyncState, deriveAccount, pullVault, pushVault, deleteVault, normUser, USER_RE } from './sync.js';
 import { importTradeRepublic, mergeImport } from './importer.js';
-import { totals, staleLines, lookthrough, DIRECT, heldLines, isHeld, lineComposition, history as buildHistory, lineValue, lineCost, lineGain, pru, isCashLike, NEEDS_PRICE, simulate, envelopeForAccount, ENVELOPE_ORDER, FLOW_KINDS, INCOME_KINDS, netAmount, performance, allocation, rebalance } from './compute.js';
+import { totals, staleLines, lookthrough, DIRECT, heldLines, isHeld, lineComposition, history as buildHistory, lineValue, lineCost, lineGain, pru, isCashLike, NEEDS_PRICE, simulate, envelopeForAccount, ENVELOPE_ORDER, FLOW_KINDS, INCOME_KINDS, netAmount, performance, allocation, rebalance, peaStatus } from './compute.js';
 import { libraryFor, libraryChoices, SECTORS, COMPOSITION_NOTE, setFetchedLibrary, wantsComposition } from './library.js';
 import { lineChart, hoverText } from './chart.js';
 
-const VERSION = '1.4.0';
+const VERSION = '1.5.0';
 let data = load();
 const ui = {
-  tab: 'patrimoine', range: '1A', filter: 'all', group: 'accounts', analyse: 'sectors', server: 'unknown', busy: false, progress: '', lineRange: '1A',
+  tab: 'patrimoine', range: '1A', scope: 'all', filter: 'all', group: 'accounts', analyse: 'sectors', server: 'unknown', busy: false, progress: '', lineRange: '1A',
   hist: { kind: 'all', acc: 'all', q: '', limit: 150 },
   sim: { mode: 'buy', lineId: '', newIsin: '', newName: '', accountId: '', by: 'amount', amount: '1000', qty: '', price: '', fees: '1', useCash: true },
   reb: { amount: '500', sell: false },
@@ -100,11 +100,14 @@ function render() {
     const sideName = $('#side-name'); if (sideName) sideName.textContent = name || t('Votre profil');
     const fn = { patrimoine: viewHome, analyse: viewAnalyse, historique: viewHistorique, simuler: viewSimuler, donnees: viewData }[ui.tab] || viewHome;
     v.innerHTML = (data.demo ? demoBanner() : '') + fn();
+    sizeBars(v);
     after[ui.tab]?.();
     setRefreshUI();
   } catch (e) { console.error(e); v.innerHTML = brokenView(e); }
 }
 const after = {};
+// Bar lengths come as data-w (%): the CSP forbids style attributes, not styles set from script.
+function sizeBars(root) { for (const el of root.querySelectorAll('[data-w]')) el.style.width = el.dataset.w + '%'; }
 
 // Unreadable data (damaged or hand-edited backup): a way to export it, then wipe everything
 function brokenView(e) {
@@ -143,9 +146,9 @@ function viewHome() {
     </div>
     <div class="meta">${tot.cost > 0 ? t('Depuis l’achat, sur {x} investis.', { x: eur(tot.cost, 0) }) : t('Ajoutez des placements pour suivre leur plus-value.')}</div>
   </section>`;
-  const stale = staleCard() + backupCard();
+  const stale = staleCard() + peaCard() + backupCard();
   const chart = `<section class="card chart-card" aria-label="${t('Évolution')}">
-    <div class="chart-top"><h3>${t('Évolution')}</h3>
+    <div class="chart-top"><label class="scope"><span class="sr">${t('Courbe de')}</span><span class="scope-label" aria-hidden="true">${esc(scopeLabel())}</span><select class="scope-select" id="chart-scope" data-scope>${scopeOptions()}</select></label>
       <div class="chips" role="group" aria-label="${t('Période')}">${['1M', '6M', '1A', 'Tout'].map(r => `<button class="chip" data-action="range" data-v="${r}" aria-pressed="${ui.range === r}">${t(r)}</button>`).join('')}</div>
     </div>
     <div class="chart-hover" id="chart-hover"></div>
@@ -164,9 +167,29 @@ function viewHome() {
   return `<h1 class="title">${headline(tot)}</h1>
     <div class="grid-home">${hero}${stale}${chart}${lines}${accounts}</div>`;
 }
+// Chart scope: everything, one account (acc:id) or one envelope (env:name)
+function scopeKeep() {
+  const [k, v] = ui.scope.split(/:(.*)/);
+  if (k === 'acc' && accById(v)) return l => l.accountId === v;
+  if (k === 'env') return l => (l.envelope || 'Autre') === v;
+  ui.scope = 'all'; return null;
+}
+// A select shows its widest option's width: the visible title is a label, the select lies over it.
+function scopeLabel() {
+  scopeKeep();
+  const [k, v] = ui.scope.split(/:(.*)/);
+  return k === 'acc' ? accById(v).name : k === 'env' ? t(v) : t('Évolution');
+}
+function scopeOptions() {
+  const keep = scopeKeep();
+  const envs = [...new Set(heldLines(data).map(l => l.envelope || 'Autre'))].sort((a, b) => ENVELOPE_ORDER.indexOf(a) - ENVELOPE_ORDER.indexOf(b));
+  const opt = (v, label) => `<option value="${esc(v)}" ${ui.scope === v ? 'selected' : ''}>${esc(label)}</option>`;
+  return opt('all', t('Évolution')) + (keep || data.accounts.length > 1 ? `<optgroup label="${t('Comptes')}">${data.accounts.map(a => opt('acc:' + a.id, a.name)).join('')}</optgroup>` : '')
+    + (envs.length > 1 ? `<optgroup label="${t('Enveloppes')}">${envs.map(e => opt('env:' + e, t(e))).join('')}</optgroup>` : '');
+}
 after.patrimoine = () => {
   const host = $('#chart-host'); if (!host) return;
-  const pts_ = buildHistory(data);
+  const pts_ = buildHistory(data, new Date(), scopeKeep());
   const days = { '1M': 31, '6M': 183, '1A': 366, 'Tout': 1e6 }[ui.range];
   const from = new Date(Date.now() - days * 86400000).toISOString().slice(0, 10);
   const shown = pts_.filter(p => p.d >= from);
@@ -175,6 +198,28 @@ after.patrimoine = () => {
   hover.textContent = base;
   lineChart(host, shown, { onHover: p => { hover.textContent = p ? hoverText(p) : base; } });
 };
+
+// PEA reminder: from two months before its 5th anniversary until a month after, once per date and device.
+function peaCard() {
+  if (data.demo) return '';
+  const seen = device().peaSeen || {};
+  const due = data.accounts.filter(a => a.kind === 'pea').map(a => ({ a, st: peaStatus(data, a) }))
+    .find(({ a, st }) => st && st.days <= 60 && st.days >= -30 && seen[a.id] !== st.free);
+  if (!due) return '';
+  const { a, st } = due;
+  return `<section class="callout pea-hint" aria-label="${t('PEA')}">
+    <p><b>${t(st.done ? '{name} a 5 ans depuis le {date}.' : '{name} aura 5 ans le {date}.', { name: esc(a.name), date: dateLong(st.free) })}</b> ${t('Vos retraits seront alors exonérés d’impôt sur le revenu ; seuls les prélèvements sociaux restent dus. Un retrait ne ferme plus le plan.')}</p>
+    <div class="btn-row"><button class="btn sm" data-action="pea-seen" data-id="${esc(a.id)}" data-v="${esc(st.free)}">${t('Compris')}</button></div>
+  </section>`;
+}
+// One line on the PEA's 5-year date, for the account sheet and the simulator.
+function peaLine(a) {
+  const st = a?.kind === 'pea' ? peaStatus(data, a) : null;
+  if (!a || a.kind !== 'pea') return '';
+  if (!st) return t('Indiquez la date du premier versement (Modifier le compte) pour connaître la date des 5 ans.');
+  return t(st.done ? 'Retraits exonérés d’impôt sur le revenu depuis le {date}.' : 'Retraits exonérés d’impôt sur le revenu à partir du {date}.', { date: dateLong(st.free) })
+    + ' ' + t(st.guessed ? '5 ans après la première opération connue ({x}).' : '5 ans après le premier versement ({x}).', { x: dateLong(st.start) });
+}
 
 function staleCard() {
   const st = staleLines(data, new Date(), data.settings.staleDays || 4);
@@ -222,7 +267,7 @@ function linesSection() {
       <button class="filter" data-action="filter" data-v="all" aria-pressed="${ui.filter === 'all'}">${t('Toutes')}</button>
       ${envs.map(e => `<button class="filter" data-action="filter" data-v="${esc(e)}" aria-pressed="${ui.filter === e}">${esc(t(e))}</button>`).join('')}
     </div>
-    <div class="lines">${ls.map(lineRow).join('') || `<p class="muted" style="padding:16px">${t('Aucune ligne.')}</p>`}</div></div>`;
+    <div class="lines">${ls.map(lineRow).join('') || `<p class="muted p16">${t('Aucune ligne.')}</p>`}</div></div>`;
 }
 
 function lineRow(l) {
@@ -244,14 +289,14 @@ function emptyState() {
   return `<div class="empty">
     <div class="orb" aria-hidden="true"><i class="ring"></i><i class="core"></i><i class="s1"></i><i class="s2"></i><i class="s3"></i></div>
     <div class="wordmark">Carnet<span class="dot">.</span></div>
-    <h1 class="title" style="text-align:center;margin:6px auto 4px">${t('Votre patrimoine, en un seul endroit.')}<em>${t('Et seulement sur cet appareil.')}</em></h1>
+    <h1 class="title empty-title">${t('Votre patrimoine, en un seul endroit.')}<em>${t('Et seulement sur cet appareil.')}</em></h1>
     <p>${t('Importez l’export de vos transactions Trade Republic, restaurez une sauvegarde, ou ajoutez vos comptes à la main.')}</p>
     <div class="btn-row">
       <button class="btn primary" data-action="pick-csv">${ICONS.upload}${t('Importer un CSV Trade Republic')}</button>
       <button class="btn" data-action="pick-backup">${t('Restaurer une sauvegarde')}</button>
       <button class="btn" data-action="add-account">${ICONS.plus}${t('Ajouter un compte')}</button>
     </div>
-    <button class="linkish" data-action="demo" style="margin-top:14px">${t('Essayer avec des données d’exemple')}</button>
+    <button class="linkish mt14" data-action="demo">${t('Essayer avec des données d’exemple')}</button>
   </div>`;
 }
 
@@ -278,10 +323,11 @@ function viewAnalyse() {
     <div class="section-head"><h2>${t('Répartition')}</h2><span class="aside">${t('hors espèces · {x}', { x: eur(lt.base, 0) })}</span></div>
     <div class="card">
       <div class="seg" role="group" aria-label="${t('Répartition')}">${[['sectors', 'Secteurs'], ['countries', 'Pays'], ['companies', 'Entreprises']].map(([k, l]) => `<button data-action="analyse" data-v="${k}" aria-pressed="${ui.analyse === k}">${t(l)}</button>`).join('')}</div>
-      <div class="bars">${list.map((x, i) => `<button class="barrow" data-action="open-split" data-v="${i}" aria-label="${t('{name} : détail', { name: esc(t(x.name)) })}"><span class="n">${esc(t(x.name))}</span><span class="p"><b>${eur(x.value, 0)}</b>${pct(x.pct)}</span><span class="track"><i style="width:${(100 * x.value / max).toFixed(1)}%"></i></span></button>`).join('') || `<p class="muted">${t('Rien à afficher.')}</p>`}</div>
+      <div class="bars">${list.map((x, i) => `<button class="barrow" data-action="open-split" data-v="${i}" aria-label="${t('{name} : détail', { name: esc(t(x.name)) })}"><span class="n">${esc(t(x.name))}</span><span class="p"><b>${eur(x.value, 0)}</b>${pct(x.pct)}</span><span class="track"><i data-w="${(100 * x.value / max).toFixed(1)}"></i></span></button>`).join('') || `<p class="muted">${t('Rien à afficher.')}</p>`}</div>
       <p class="note">${ui.analyse === 'companies' ? t('Montants détenus à travers vos ETF (principales positions de chaque fonds) et en direct.') + ' ' : ''}${t('{p} des placements sont ventilés ; le reste (non coté, fonds inconnus) apparaît en « Non ventilé » ou « Capital-investissement ».', { p: pct(lt.coverage, 0) })} ${t(COMPOSITION_NOTE)}</p>
     </div>
-    ${targetSection()}`;
+    ${targetSection()}
+    <div class="btn-row mt22"><button class="btn" data-action="share">${ICONS.share}${t('Partager ma répartition, sans montants')}</button></div>`;
 }
 
 // Real performance of the imported accounts: what was paid in, what it is worth, and the annual rate.
@@ -310,7 +356,7 @@ const allocName = l => isCashLike(l) ? `${shortName(l)} · ${accById(l.accountId
 function targetSection() {
   const a = allocation(data);
   const head = `<div class="section-head"><h2>${t('Allocation cible')}</h2>${a ? `<button class="linkish" data-action="targets">${t('Modifier')}</button>` : ''}</div>`;
-  if (!a) return `${head}<div class="card"><p class="lead" style="margin:0 0 12px">${t('Fixez la part visée de chaque ligne : Carnet montre l’écart, et le simulateur propose comment rééquilibrer.')}</p>
+  if (!a) return `${head}<div class="card"><p class="lead m-b12">${t('Fixez la part visée de chaque ligne : Carnet montre l’écart, et le simulateur propose comment rééquilibrer.')}</p>
     <div class="btn-row"><button class="btn" data-action="targets">${t('Définir ma cible')}</button></div></div>`;
   return `${head}<div class="card">
     <div class="compare tight">${a.rows.map(r => `<div class="cmp"><span class="k">${esc(allocName(r.line))}</span><span class="v"><span class="from">${pct(r.pct)}</span>→ ${pct(r.target)}</span><span class="x ${Math.abs(r.gap) < 0.01 ? '' : r.gap > 0 ? 'pos' : 'neg'}">${pts(r.gap)}</span></div>`).join('')}</div>
@@ -323,7 +369,7 @@ function targetSheet() {
   const order = new Map(data.accounts.map((a, i) => [a.id, i]));
   ls.sort((x, y) => (order.get(x.accountId) - order.get(y.accountId)) || lineValue(y) - lineValue(x));
   const had = ls.some(l => +l.target > 0);
-  const groups = [...new Set(ls.map(l => l.accountId))].map(id => `<div class="section-head" style="margin-top:12px"><h2>${esc(accById(id)?.name || '')}</h2></div>
+  const groups = [...new Set(ls.map(l => l.accountId))].map(id => `<div class="section-head mt12"><h2>${esc(accById(id)?.name || '')}</h2></div>
     ${ls.filter(l => l.accountId === id).map(l => `<label class="target-row"><span class="n">${esc(shortName(l))}<span class="s">${eur(lineValue(l), 0)}</span></span>
       <span class="target-in"><input class="input" inputmode="decimal" data-tid="${esc(l.id)}" value="${+l.target > 0 ? inputNum(l.target, 1) : ''}" placeholder="0" aria-label="${t('Cible de {name} (%)', { name: esc(shortName(l)) })}"><span>%</span></span></label>`).join('')}`).join('');
   openSheet(`${sheetHead(t('Allocation cible'), t('La part visée de chaque ligne, sur 100 %. Laissez vide les lignes hors cible.'))}
@@ -373,7 +419,7 @@ function openSplit(i) {
   const lt = lookthrough(data);
   const x = lt[dim]?.[+i]; if (!x) return;
   const row = (p, r, sub) => `<div class="holding"><span class="r">${r}</span><span class="n">${esc(t(p.name))}</span><span class="a">${eur(p.value)}</span>
-    <span class="w">${t(SPLIT_WORD[dim], { p: pct(p.pct) })}${sub ? ' · ' + sub : ''}</span><span class="track"><i style="width:${(100 * Math.min(1, p.pct)).toFixed(1)}%"></i></span></div>`;
+    <span class="w">${t(SPLIT_WORD[dim], { p: pct(p.pct) })}${sub ? ' · ' + sub : ''}</span><span class="track"><i data-w="${(100 * Math.min(1, p.pct)).toFixed(1)}"></i></span></div>`;
   const direct = t('en direct');
   const via = p => {
     if (!p.via.length) return '';
@@ -382,15 +428,15 @@ function openSplit(i) {
   };
   let body;
   if (dim === 'companies') {
-    body = `<div class="section-head" style="margin-top:22px"><h2>${t('Détenue à travers')}</h2><span class="aside">${tn(x.parts.length, '{n} ligne', '{n} lignes')}</span></div>
+    body = `<div class="section-head mt22"><h2>${t('Détenue à travers')}</h2><span class="aside">${tn(x.parts.length, '{n} ligne', '{n} lignes')}</span></div>
       <div class="holdings">${x.parts.map((p, r) => row(p, r + 1, p.kind === 'direct' ? direct : t('{p} du fonds', { p: pct(p.weight) }))).join('')}</div>`;
   } else {
     const named = x.parts.filter(p => p.kind !== 'rest'), rest = x.parts.filter(p => p.kind === 'rest');
     const restSum = rest.reduce((s, p) => s + p.value, 0);
-    body = `${named.length ? `<div class="section-head" style="margin-top:22px"><h2>${t(named.some(p => p.kind === 'company') ? 'Entreprises' : 'Lignes')}</h2><span class="aside">${t('classées par montant')}</span></div>
+    body = `${named.length ? `<div class="section-head mt22"><h2>${t(named.some(p => p.kind === 'company') ? 'Entreprises' : 'Lignes')}</h2><span class="aside">${t('classées par montant')}</span></div>
       <div class="holdings">${named.map((p, r) => row(p, r + 1, p.kind === 'line' ? t('ligne entière') : via(p))).join('')}</div>` : ''}
-      ${rest.length ? `<div class="section-head" style="margin-top:22px"><h2>${t('Reste des fonds')}</h2><span class="aside">${eur(restSum, 0)} · ${pct(x.value ? restSum / x.value : 0)}</span></div>
-      <p class="note" style="margin:0 2px 6px">${t(dim === 'countries' ? 'Autres entreprises de ces fonds dans ce pays, au-delà de leurs principales positions.' : 'Autres entreprises de ces fonds dans ce secteur, au-delà de leurs principales positions.')}</p>
+      ${rest.length ? `<div class="section-head mt22"><h2>${t('Reste des fonds')}</h2><span class="aside">${eur(restSum, 0)} · ${pct(x.value ? restSum / x.value : 0)}</span></div>
+      <p class="note m-x2b6">${t(dim === 'countries' ? 'Autres entreprises de ces fonds dans ce pays, au-delà de leurs principales positions.' : 'Autres entreprises de ces fonds dans ce secteur, au-delà de leurs principales positions.')}</p>
       <div class="holdings">${rest.map(p => row(p, '·', t('autres positions du fonds'))).join('')}</div>` : ''}`;
   }
   const label = t({ sectors: 'Secteur', countries: 'Pays', companies: 'Entreprise' }[dim]);
@@ -406,7 +452,103 @@ function sumsCard(sums) {
 }
 
 function emptyHint() {
-  return `<div class="card"><p class="muted" style="margin:0 0 12px">${t('Aucune donnée pour l’instant.')}</p><div class="btn-row"><button class="btn primary" data-action="go" data-v="donnees">${t('Importer ou ajouter des lignes')}</button></div></div>`;
+  return `<div class="card"><p class="muted m-b12">${t('Aucune donnée pour l’instant.')}</p><div class="btn-row"><button class="btn primary" data-action="go" data-v="donnees">${t('Importer ou ajouter des lignes')}</button></div></div>`;
+}
+
+// ——— Anonymous view ———
+// Percentages only, never an amount: to show one's allocation without showing one's wealth.
+const SHARE_PARTS = [['envelopes', 'Enveloppes'], ['lines', 'Lignes'], ['sectors', 'Secteurs'], ['countries', 'Pays']];
+function shareSections(parts) {
+  const tot = totals(data), lt = lookthrough(data);
+  const top = (list, n) => { const rest = list.slice(n).reduce((s, x) => s + x.pct, 0); return rest >= 0.0005 ? [...list.slice(0, n), { name: t('Autres'), pct: rest }] : list.slice(0, n); };
+  const lines = heldLines(data).filter(l => lineValue(l) > 0).sort((a, b) => lineValue(b) - lineValue(a)).map(l => ({ name: allocName(l), pct: tot.total ? lineValue(l) / tot.total : 0 }));
+  const out = {
+    envelopes: { title: t('Enveloppes'), rows: top(tot.envelopes.filter(e => e.value > 0).map(e => ({ name: t(e.name), pct: e.share })), 6) },
+    lines: { title: t('Lignes'), rows: top(lines, 8) },
+    sectors: { title: t('Secteurs'), sub: t('hors espèces'), rows: top(lt.sectors.map(x => ({ name: t(x.name), pct: x.pct })), 6) },
+    countries: { title: t('Pays'), sub: t('hors espèces'), rows: top(lt.countries.map(x => ({ name: t(x.name), pct: x.pct })), 6) },
+  };
+  return SHARE_PARTS.filter(([k]) => parts[k] && out[k].rows.length).map(([k]) => out[k]);
+}
+const sharePct = x => pct(x, x < 0.0995 ? 1 : 0);
+function shareText(sections) {
+  return [t('Ma répartition, sans montants · Carnet, {date}', { date: dateLong(today()) }),
+    ...sections.map(sec => `${sec.title}${sec.sub ? ` (${sec.sub})` : ''}\n${sec.rows.map(r => `• ${r.name} : ${sharePct(r.pct)}`).join('\n')}`)].join('\n\n');
+}
+// The same, drawn as an image (light colours whatever the theme).
+async function shareImage(sections) {
+  const W = 1080, P = 72, ROW = 74, HEAD = 86;
+  const serif = "'Lora', Georgia, serif", sans = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif";
+  try { await document.fonts.load(`500 56px Lora`); } catch { /* system serif */ }
+  const H = 230 + sections.reduce((s, sec) => s + HEAD + sec.rows.length * ROW + 30, 0) + 70;
+  const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+  const c = cv.getContext('2d');
+  const C = { bg: '#F5F1EB', ink: '#1A1613', muted: '#857A70', track: '#E2D8CB', bars: ['#1A1613', '#EE6418', '#3E63F2', '#2F8F6A'] };
+  const bar = (x, w) => { c.beginPath(); if (c.roundRect) c.roundRect(x, 0, w, 10, 5); else c.rect(x, 0, w, 10); c.fill(); };
+  const fit = (text, max) => { if (c.measureText(text).width <= max) return text; let s = text; while (s.length > 1 && c.measureText(s + '…').width > max) s = s.slice(0, -1); return s + '…'; };
+  c.fillStyle = C.bg; c.fillRect(0, 0, W, H);
+  c.fillStyle = C.ink; c.font = `500 56px ${serif}`; c.textBaseline = 'alphabetic';
+  c.fillText(t('Ma répartition'), P, 120);
+  c.fillStyle = C.muted; c.font = `400 28px ${sans}`;
+  c.fillText(t('En pourcentages, sans aucun montant · {date}', { date: dateLong(today()) }), P, 168);
+  let y = 230;
+  sections.forEach((sec, i) => {
+    c.fillStyle = C.ink; c.font = `500 38px ${serif}`; c.fillText(sec.title, P, y + 44);
+    if (sec.sub) { const w = c.measureText(sec.title).width; c.fillStyle = C.muted; c.font = `400 24px ${sans}`; c.fillText(sec.sub, P + w + 16, y + 44); }
+    y += HEAD;
+    const max = Math.max(...sec.rows.map(r => r.pct), 0.0001);
+    for (const r of sec.rows) {
+      c.font = `700 30px ${sans}`; const p = sharePct(r.pct); const pw = c.measureText(p).width;
+      c.fillStyle = C.ink; c.fillText(p, W - P - pw, y + 30);
+      c.font = `400 30px ${sans}`; c.fillText(fit(r.name, W - 2 * P - pw - 24), P, y + 30);
+      const bw = W - 2 * P;
+      c.save(); c.translate(0, y + 46);
+      c.fillStyle = C.track; bar(P, bw);
+      c.fillStyle = C.bars[i % C.bars.length]; bar(P, Math.max(10, bw * r.pct / max)); c.restore();
+      y += ROW;
+    }
+    y += 30;
+  });
+  c.fillStyle = C.muted; c.font = `400 24px ${sans}`; c.fillText('Carnet.', P, H - 44);
+  return new Promise(res => cv.toBlob(res, 'image/png'));
+}
+function shareSheet() {
+  const parts = { envelopes: true, lines: true, sectors: true, countries: true };
+  let blob = null, url = '';
+  const file = () => new File([blob], 'carnet-repartition.png', { type: 'image/png' });
+  let canFiles = false;
+  try { canFiles = !!navigator.canShare?.({ files: [new File([''], 'x.png', { type: 'image/png' })] }); } catch { /* no file sharing */ }
+  openSheet(`${sheetHead(t('Partager ma répartition'), t('En pourcentages, sans aucun montant.'))}
+    <div class="chips share-parts" role="group" aria-label="${t('Contenu')}">${SHARE_PARTS.map(([k, l]) => `<button class="chip" data-part="${k}" aria-pressed="true">${t(l)}</button>`).join('')}</div>
+    <img class="share-img" alt="${t('Aperçu de l’image partagée')}">
+    <div class="btn-row"><button class="btn primary" data-share>${ICONS.share}${t(canFiles ? 'Partager l’image' : 'Télécharger l’image')}</button><button class="btn" data-copy>${t('Copier le texte')}</button></div>
+    <p class="note">${t('Les noms de vos lignes apparaissent ; décochez « Lignes » pour ne montrer que les grandes masses.')}</p>`, {
+    label: t('Partager ma répartition'),
+    onClose: () => { if (url) URL.revokeObjectURL(url); },
+    onMount: (sh) => {
+      const img = sh.querySelector('.share-img');
+      const build = async () => {
+        const secs = shareSections(parts);
+        sh.querySelector('[data-share]').disabled = !secs.length; sh.querySelector('[data-copy]').disabled = !secs.length;
+        img.hidden = !secs.length; if (!secs.length) return;
+        blob = await shareImage(secs);
+        if (url) URL.revokeObjectURL(url);
+        url = URL.createObjectURL(blob); img.src = url;
+      };
+      build();
+      sh.addEventListener('click', async e => {
+        const part = e.target.closest('[data-part]');
+        if (part) { parts[part.dataset.part] = !parts[part.dataset.part]; part.setAttribute('aria-pressed', parts[part.dataset.part]); build(); return; }
+        if (e.target.closest('[data-copy]')) {
+          try { await navigator.clipboard.writeText(shareText(shareSections(parts))); toast(t('Copié.')); } catch { toast(t('Copie impossible ici.')); }
+        }
+        if (e.target.closest('[data-share]') && blob) {
+          if (canFiles) { try { await navigator.share({ files: [file()], title: t('Ma répartition') }); } catch { /* cancelled */ } return; }
+          const a = document.createElement('a'); a.href = url; a.download = 'carnet-repartition.png'; document.body.append(a); a.click(); a.remove();
+        }
+      });
+    },
+  });
 }
 
 // ——— Historique tab ———
@@ -437,7 +579,7 @@ function viewHistorique() {
   const all = data.transactions || [];
   if (!all.length) {
     if (!data.trStats) return title + emptyHint();
-    return title + `<div class="card"><p class="muted" style="margin:0 0 12px">${t('L’historique se remplit à l’import. Réimportez votre export Trade Republic : les imports précédents ne gardaient que les positions, pas le détail des opérations.')}</p>
+    return title + `<div class="card"><p class="muted m-b12">${t('L’historique se remplit à l’import. Réimportez votre export Trade Republic : les imports précédents ne gardaient que les positions, pas le détail des opérations.')}</p>
       <div class="btn-row"><button class="btn primary" data-action="pick-csv">${ICONS.upload}${t('Importer le CSV')}</button></div></div>`;
   }
   const h = ui.hist;
@@ -455,8 +597,8 @@ function viewHistorique() {
     ${manual && !data.demo ? `<p class="note">${t('Les lignes ajoutées à la main n’ont pas d’historique d’opérations.')}</p>` : ''}`;
 }
 function reimportCard() {
-  return `<div class="callout" style="margin:0 0 14px">${t('Réimportez votre export Trade Republic pour voir aussi vos versements, dividendes et intérêts, et calculer votre performance réelle.')}
-    <div class="btn-row" style="margin-top:10px"><button class="btn sm" data-action="pick-csv">${ICONS.upload}${t('Importer le CSV')}</button></div></div>`;
+  return `<div class="callout m-b14">${t('Réimportez votre export Trade Republic pour voir aussi vos versements, dividendes et intérêts, et calculer votre performance réelle.')}
+    <div class="btn-row mt10"><button class="btn sm" data-action="pick-csv">${ICONS.upload}${t('Importer le CSV')}</button></div></div>`;
 }
 
 // Key figures of the shown operations, chosen for the filter.
@@ -497,7 +639,7 @@ function histSums(ts, kind) {
 function histBody() {
   const ts = histFiltered();
   const kind = ui.hist.kind;
-  if (!ts.length) return `<div class="card"><p class="muted" style="margin:0">${t('Aucune opération ne correspond.')}</p></div>`;
+  if (!ts.length) return `<div class="card"><p class="muted m0">${t('Aucune opération ne correspond.')}</p></div>`;
   const first = ts[ts.length - 1].date, last = ts[0].date;
   const shown = ts.slice(0, ui.hist.limit);
   const months = [];
@@ -515,7 +657,7 @@ function histBody() {
       return `<div class="hist-month"><span>${cap(monthLong(m))}</span><span>${Math.abs(net) >= 0.5 ? signedEur(net, 0) : ''}</span></div>
         ${ops.map(tr => histRow(tr, showAcc)).join('')}`;
     }).join('')}</div>
-    ${ts.length > shown.length ? `<div class="btn-row" style="margin-top:14px;justify-content:center"><button class="btn" data-action="hist-more">${t('Afficher {n} de plus', { n: Math.min(150, ts.length - shown.length) })}</button></div>` : ''}`;
+    ${ts.length > shown.length ? `<div class="btn-row mt14 center"><button class="btn" data-action="hist-more">${t('Afficher {n} de plus', { n: Math.min(150, ts.length - shown.length) })}</button></div>` : ''}`;
 }
 
 function histRow(tr, showAcc) {
@@ -582,11 +724,11 @@ function viewSimuler() {
         <label class="field"><span>${t('Frais (€)')}</span><input class="input" id="sim-fees" inputmode="decimal" data-sim="fees" value="${esc(s.fees)}"></label>
       </div>
       <label class="check"><input type="checkbox" id="sim-cash" data-sim="useCash" ${s.useCash ? 'checked' : ''}><span>${t(s.mode === 'buy' ? 'Payer avec les espèces du compte' : 'Garder le produit de la vente en espèces sur le compte')}</span></label>
-      ${line ? `<p class="small muted" style="margin:0">${t('Vous détenez {n} parts, prix de revient {pru}, cours {price} ({date}).', { n: qtyShort(line.qty), pru: eur(pru(line)), price: eur(line.price), date: dateShort(line.priceDate) })}</p>` : ''}
+      ${line ? `<p class="small muted m0">${t('Vous détenez {n} parts, prix de revient {pru}, cours {price} ({date}).', { n: qtyShort(line.qty), pru: eur(pru(line)), price: eur(line.price), date: dateShort(line.priceDate) })}</p>` : ''}
     </form>
     <div id="sim-out">${simResult()}</div>
   </div>
-  ${allocation(data) ? `<section class="card reb" id="reb" style="margin-top:14px"><h3>${t('Rééquilibrer vers votre cible')}</h3>
+  ${allocation(data) ? `<section class="card reb mt14" id="reb"><h3>${t('Rééquilibrer vers votre cible')}</h3>
     <p class="lead">${t('Ce qu’il faudrait acheter, ou vendre, pour revenir à votre allocation cible. Touchez une ligne pour la simuler.')}</p>
     <div class="reb-tools"><label class="field"><span>${t('À investir (€)')}</span><input class="input" id="reb-amount" inputmode="decimal" data-reb="amount" value="${esc(ui.reb.amount)}"></label>
       <div class="seg" role="group" aria-label="${t('Ventes')}"><button type="button" data-action="reb-sell" data-v="0" aria-pressed="${!ui.reb.sell}">${t('Sans vendre')}</button><button type="button" data-action="reb-sell" data-v="1" aria-pressed="${ui.reb.sell}">${t('Avec ventes')}</button></div></div>
@@ -595,7 +737,7 @@ function viewSimuler() {
 function rebalanceRows() {
   const r = rebalance(data, parseNum(ui.reb.amount) || 0, ui.reb.sell);
   if (!r) return '';
-  if (!r.rows.length) return `<p class="muted small" style="margin:8px 0 0">${t(r.add || ui.reb.sell ? 'Vous êtes déjà à la cible, à 1 € près.' : 'Indiquez un montant à investir, ou autorisez les ventes.')}</p>`;
+  if (!r.rows.length) return `<p class="muted small m-t8">${t(r.add || ui.reb.sell ? 'Vous êtes déjà à la cible, à 1 € près.' : 'Indiquez un montant à investir, ou autorisez les ventes.')}</p>`;
   const what = x => { const cash = isCashLike(x.line); return x.move > 0 ? t(cash ? 'Ajouter {x} aux espèces' : 'Acheter {x}', { x: eur(x.move, 0) }) : t(cash ? 'Utiliser {x} d’espèces' : 'Vendre {x}', { x: eur(-x.move, 0) }); };
   const row = x => { const inner = `<span class="k">${esc(allocName(x.line))}</span><span class="v ${x.move > 0 ? 'pos' : 'neg'}">${what(x)}</span><span class="x">${t('{a} → {b}, cible {c}', { a: pct(x.pct), b: pct(x.after), c: pct(x.target) })}</span>`;
     return isCashLike(x.line) ? `<div class="cmp">${inner}</div>` : `<button type="button" class="cmp reb-row" data-action="reb-pick" data-id="${esc(x.line.id)}" data-v="${x.move}">${inner}</button>`; };
@@ -612,7 +754,7 @@ function simParams() {
 }
 function simResult() {
   const r = simulate(data, simParams());
-  if (!r.ok) return `<div class="card"><p class="muted" style="margin:0">${esc(r.error)}</p></div>`;
+  if (!r.ok) return `<div class="card"><p class="muted m0">${esc(r.error)}</p></div>`;
   const b = r.before.t, a = r.after.t;
   const p = simParams();
   const row = (k, from, to, x = '') => `<div class="cmp"><span class="k">${k}</span><span class="v"><span class="from">${from}</span>→ ${to}</span>${x ? `<span class="x">${x}</span>` : ''}</div>`;
@@ -621,20 +763,20 @@ function simResult() {
   const parts = tn(p.qty, '{n} part', '{n} parts', { n: (ui.sim.by === 'amount' ? '≈ ' : '') + qtyShort(p.qty) });
   return `<div class="card">
     <div class="eyebrow">${t(p.mode === 'buy' ? 'Achat de {parts} · {x}' : 'Vente de {parts} · {x}', { parts, x: eur(p.qty * p.price) })}</div>
-    <div class="compare" style="margin-top:6px">
+    <div class="compare mt6">
       ${row(t('Patrimoine total'), eur(b.total, 0), eur(a.total, 0), p.useCash || p.mode === 'sell' ? '' : t('L’achat est compté comme un nouvel apport.'))}
       ${row(t('Part en actions'), pct(b.equityPct), pct(a.equityPct), pts(a.equityPct - b.equityPct))}
       ${row(t('Poids de la ligne'), pct(r.weightBefore), pct(r.weightAfter))}
       ${p.mode === 'buy' ? row(t('Prix de revient unitaire'), r.line.prevQty ? eur(r.line.prevPru) : '—', eur(r.line.pru)) : row(t('Parts restantes'), qtyShort(r.line.prevQty), qtyShort(r.line.qty))}
       ${row(t('Espèces'), eur(b.cash, 0), eur(a.cash, 0))}
       ${p.mode === 'sell' ? `<div class="cmp"><span class="k">${t('Plus-value réalisée')}</span><span class="v ${r.realized >= 0 ? 'pos' : 'neg'}">${signedEur(r.realized)}</span></div>
-        <div class="cmp"><span class="k">${t('Impôt estimé')}</span><span class="v">${eur(r.tax)}</span><span class="x">${esc(r.taxNote)}</span></div>` : ''}
+        <div class="cmp"><span class="k">${t('Impôt estimé')}</span><span class="v">${eur(r.tax)}</span><span class="x">${esc(r.taxNote)}${accById(lineById(p.lineId)?.accountId)?.kind === 'pea' ? ' ' + esc(peaLine(accById(lineById(p.lineId).accountId))) : ''}</span></div>` : ''}
     </div>
-    ${r.warnings.map(w => `<div class="callout warn" style="margin-top:10px">${esc(w)}</div>`).join('')}
+    ${r.warnings.map(w => `<div class="callout warn mt10">${esc(w)}</div>`).join('')}
   </div>
-  ${deltas.length || cdeltas.length ? `<div class="card" style="margin-top:14px"><h3>${t('Ce qui bouge')}</h3>
-    ${deltas.length ? `<div class="eyebrow" style="margin-top:12px">${t('Secteurs')}</div><div class="compare tight">${deltas.map(d => row(esc(t(d.name)), pct(d.before), pct(d.after), pts(d.delta))).join('')}</div>` : ''}
-    ${cdeltas.length ? `<div class="eyebrow" style="margin-top:12px">${t('Pays')}</div><div class="compare tight">${cdeltas.map(d => row(esc(t(d.name)), pct(d.before), pct(d.after), pts(d.delta))).join('')}</div>` : ''}
+  ${deltas.length || cdeltas.length ? `<div class="card mt14"><h3>${t('Ce qui bouge')}</h3>
+    ${deltas.length ? `<div class="eyebrow mt12">${t('Secteurs')}</div><div class="compare tight">${deltas.map(d => row(esc(t(d.name)), pct(d.before), pct(d.after), pts(d.delta))).join('')}</div>` : ''}
+    ${cdeltas.length ? `<div class="eyebrow mt12">${t('Pays')}</div><div class="compare tight">${cdeltas.map(d => row(esc(t(d.name)), pct(d.before), pct(d.after), pts(d.delta))).join('')}</div>` : ''}
     <p class="note">${t('Parts calculées hors espèces, avec la composition indicative des fonds.')}</p></div>` : ''}`;
 }
 
@@ -674,7 +816,7 @@ function viewData() {
 function sectionAccounts() {
   return `<section class="card"><p class="lead">${t('Un solde (compte courant, livret) ou des lignes (assurance-vie, PER, autre courtier).')}</p>
     <div class="list">${data.accounts.map(a => { const v = data.lines.filter(l => l.accountId === a.id).reduce((s, l) => s + lineValue(l), 0); return `<div class="list-item"><span class="tile c-${esc(a.color || 'ink')}">${esc(initials(a.name))}</span><span><span class="n">${esc(a.name)}</span><br><span class="s">${esc(kindLabel(a.kind))} · ${eur(v, 0)}</span></span><button class="btn sm" data-action="edit-account" data-id="${esc(a.id)}">${t('Modifier')}</button></div>`; }).join('') || `<p class="muted small">${t('Aucun compte.')}</p>`}</div>
-    <div class="btn-row" style="margin-top:12px"><button class="btn" data-action="add-account">${ICONS.plus}${t('Ajouter un compte')}</button><button class="btn" data-action="add-line" ${data.accounts.length ? '' : 'disabled'}>${ICONS.plus}${t('Ajouter une ligne')}</button></div></section>`;
+    <div class="btn-row mt12"><button class="btn" data-action="add-account">${ICONS.plus}${t('Ajouter un compte')}</button><button class="btn" data-action="add-line" ${data.accounts.length ? '' : 'disabled'}>${ICONS.plus}${t('Ajouter une ligne')}</button></div></section>`;
 }
 
 function sectionImport() {
@@ -691,8 +833,8 @@ function sectionImport() {
     </section>
     <section class="card"><h3>${t('Sauvegarde')}</h3><p class="lead">${t('Un fichier à garder de côté, ou à restaurer sur un appareil sans synchronisation.')}</p>
       <div class="btn-row"><button class="btn" data-action="export-plain" ${data.lines.length ? '' : 'disabled'}>${ICONS.download}${t('Exporter en clair')}</button><button class="btn" data-action="export-enc" ${data.lines.length ? '' : 'disabled'}>${ICONS.lock}${t('Exporter chiffrée')}</button></div>
-      <div class="btn-row" style="margin-top:8px"><button class="btn primary" data-action="pick-backup">${ICONS.upload}${t('Restaurer une sauvegarde')}</button></div>
-      <p class="small muted" style="margin:12px 0 0">${device().lastExport ? t('Dernière sauvegarde depuis cet appareil : {x}.', { x: dateLong(device().lastExport.slice(0, 10)) }) : t('Aucune sauvegarde depuis cet appareil.')}</p>
+      <div class="btn-row mt8"><button class="btn primary" data-action="pick-backup">${ICONS.upload}${t('Restaurer une sauvegarde')}</button></div>
+      <p class="small muted m-t12">${device().lastExport ? t('Dernière sauvegarde depuis cet appareil : {x}.', { x: dateLong(device().lastExport.slice(0, 10)) }) : t('Aucune sauvegarde depuis cet appareil.')}</p>
       <p class="note">${t('La sauvegarde chiffrée utilise AES-GCM 256 bits avec une clé tirée de votre phrase de passe (PBKDF2, 310 000 itérations). Sans la phrase, le fichier est illisible : rien ne permet de la retrouver.')}</p>
     </section>`;
 }
@@ -700,7 +842,7 @@ function sectionImport() {
 function sectionPrices() {
   const server = { ok: ['ok', 'Serveur Carnet joignable'], off: ['off', 'Serveur Carnet absent : actualisation indisponible'], unknown: ['', 'Vérification du serveur…'] }[ui.server];
   return `<section class="card"><p class="lead">${t('L’actualisation récupère sur Yahoo Finance, via le serveur Carnet, le cours du jour et l’historique (5 ans) de chaque produit coté. Seuls les symboles sont envoyés, jamais vos quantités ni vos montants.')}</p>
-    <p style="margin:0 0 12px"><span class="status ${server[0]}"><i></i>${t(server[1])}</span></p>
+    <p class="m-b12"><span class="status ${server[0]}"><i></i>${t(server[1])}</span></p>
     <div class="btn-row"><button class="btn refresh-btn" data-action="refresh" ${ui.busy ? 'disabled' : ''}><span class="ic">${ICONS.refresh}</span><span class="r-long">${t('Actualiser les cours')}</span></button></div>
     ${refreshReport()}</section>`;
 }
@@ -738,8 +880,8 @@ function sectionDevice() {
   const done = installed();
   const kept = ui.persisted === true || done && platform() === 'ios';
   return `<section class="card">
-    <p style="margin:0 0 8px"><span class="status ${done ? 'ok' : 'off'}"><i></i>${t(done ? 'Carnet est installée sur cet appareil.' : 'Carnet s’ouvre dans le navigateur.')}</span></p>
-    ${ui.persisted == null && !done ? '' : `<p style="margin:0 0 14px"><span class="status ${kept ? 'ok' : 'off'}"><i></i>${t(kept ? 'Le navigateur garde vos données.' : 'Le navigateur peut effacer vos données s’il manque de place, ou après 7 jours sans visite sur iPhone.')}</span></p>`}
+    <p class="m-b8"><span class="status ${done ? 'ok' : 'off'}"><i></i>${t(done ? 'Carnet est installée sur cet appareil.' : 'Carnet s’ouvre dans le navigateur.')}</span></p>
+    ${ui.persisted == null && !done ? '' : `<p class="m-b14"><span class="status ${kept ? 'ok' : 'off'}"><i></i>${t(kept ? 'Le navigateur garde vos données.' : 'Le navigateur peut effacer vos données s’il manque de place, ou après 7 jours sans visite sur iPhone.')}</span></p>`}
     ${done ? '' : `<div class="btn-row"><button class="btn primary" data-action="install">${ICONS.telephone}${t('Installer Carnet')}</button></div>`}
     <p class="note">${t('Installée, Carnet s’ouvre comme une app, en plein écran, et votre iPhone n’efface plus ses données. Pensez quand même aux sauvegardes.')}</p></section>`;
 }
@@ -795,6 +937,7 @@ function openSheet(html, { onMount, onClose, label = t('Fenêtre') } = {}) {
   const scrim = document.createElement('div'); scrim.className = 'scrim';
   const sh = document.createElement('div'); sh.className = 'sheet'; sh.setAttribute('role', 'dialog'); sh.setAttribute('aria-modal', 'true'); sh.setAttribute('aria-label', label);
   sh.innerHTML = '<div class="grab" aria-hidden="true"></div>' + html;
+  sizeBars(sh);
   document.body.append(scrim, sh);
   const prevFocus = document.activeElement;
   const close = () => {
@@ -816,7 +959,7 @@ const sheetHead = (title, sub = '') => `<div class="sheet-head"><h2>${title}${su
 function confirmSheet({ title, text, ok = t('Confirmer'), danger = false }) {
   return new Promise(res => {
     let done = false;
-    openSheet(`${sheetHead(title)}<p class="muted" style="margin-top:0">${text}</p><div class="btn-row"><button class="btn ${danger ? 'danger solid' : 'primary'}" data-ok>${ok}</button><button class="btn" data-close>${t('Annuler')}</button></div>`, {
+    openSheet(`${sheetHead(title)}<p class="muted mt0">${text}</p><div class="btn-row"><button class="btn ${danger ? 'danger solid' : 'primary'}" data-ok>${ok}</button><button class="btn" data-close>${t('Annuler')}</button></div>`, {
       label: title,
       onMount: (sh, close) => sh.querySelector('[data-ok]').addEventListener('click', () => { done = true; res(true); close(); }),
       onClose: () => { if (!done) res(false); },
@@ -826,7 +969,7 @@ function confirmSheet({ title, text, ok = t('Confirmer'), danger = false }) {
 function choiceSheet({ title, text, choices }) {
   return new Promise(res => {
     let done = false;
-    openSheet(`${sheetHead(title)}<p class="muted" style="margin-top:0">${text}</p><div class="btn-row">${choices.map(([k, l, cls]) => `<button class="btn ${cls}" data-choice="${k}">${l}</button>`).join('')}<button class="btn" data-close>${t('Annuler')}</button></div>`, {
+    openSheet(`${sheetHead(title)}<p class="muted mt0">${text}</p><div class="btn-row">${choices.map(([k, l, cls]) => `<button class="btn ${cls}" data-choice="${k}">${l}</button>`).join('')}<button class="btn" data-close>${t('Annuler')}</button></div>`, {
       label: title,
       onMount: (sh, close) => sh.addEventListener('click', e => { const c = e.target.closest('[data-choice]'); if (c) { done = true; res(c.dataset.choice); close(); } }),
       onClose: () => { if (!done) res(null); },
@@ -871,15 +1014,15 @@ function openLine(id) {
       <div class="stat"><div class="k">${t('Plus-value')}</div><div class="v ${Math.abs(g) < 0.5 ? '' : g > 0 ? 'pos' : 'neg'}">${signedEur(g)}<br><span class="small">${c > 0 ? signedPct(g / c) : ''}</span></div></div>`;
   // Full fund name, ISIN and symbol on one line under the title, rather than one more card.
   const ids = [lib && lib.name !== shortName(l) ? lib.name : '', l.isin, l.ticker].filter(Boolean);
-  const holdings = comp ? `<div class="section-head" style="margin-top:22px"><h2>${t('Principales entreprises')}</h2><span class="aside">${esc(comp.index)}</span></div>
+  const holdings = comp ? `<div class="section-head mt22"><h2>${t('Principales entreprises')}</h2><span class="aside">${esc(comp.index)}</span></div>
     <div class="holdings">${comp.holdings.map((h, i) => `<div class="holding"><span class="r">${i + 1}</span><span class="n">${esc(h.name)}</span><span class="a">${eur(h.amount)}</span><span class="w">${t('{p} du fonds', { p: pct(h.weight) })} · ${esc(t(h.sector))} · ${esc(t(h.country))}</span></div>`).join('')}</div>
-    <div class="section-head"><h2>${t('Pays')}</h2></div><div class="bars" style="margin-top:0">${comp.countries.slice(0, 6).map(x => `<div class="barrow"><span class="n">${esc(t(x.name))}</span><span class="p"><b>${eur(v * x.pct, 0)}</b>${pct(x.pct)}</span><span class="track"><i style="width:${(100 * x.pct / comp.countries[0].pct).toFixed(1)}%"></i></span></div>`).join('')}</div>
+    <div class="section-head"><h2>${t('Pays')}</h2></div><div class="bars mt0">${comp.countries.slice(0, 6).map(x => `<div class="barrow"><span class="n">${esc(t(x.name))}</span><span class="p"><b>${eur(v * x.pct, 0)}</b>${pct(x.pct)}</span><span class="track"><i data-w="${(100 * x.pct / comp.countries[0].pct).toFixed(1)}"></i></span></div>`).join('')}</div>
     <p class="note">${t(COMPOSITION_NOTE)}</p>`
     : (!isCashLike(l) && l.type === 'etf' ? `<p class="note">${t('Composition non disponible pour ce fonds.')}</p>` : '');
   openSheet(`${sheetHead(esc(shortName(l)), esc((acc?.name || '') + ' · ' + t(l.envelope || '')))}
-    ${ids.length ? `<p class="small muted" style="margin:-8px 0 10px">${ids.map(esc).join(' · ')}</p>` : ''}
+    ${ids.length ? `<p class="small muted ids-line">${ids.map(esc).join(' · ')}</p>` : ''}
     <div class="detail-big">${eur(v)}</div>
-    ${l.qtyEstimated || l.estimateFromAmount ? `<div class="callout" style="margin-top:12px">${t(l.estimateFromAmount ? 'Montant investi connu, quantité pas encore calculée : elle le sera à la prochaine actualisation, avec la valeur liquidative du jour de souscription.' : 'Quantité estimée à partir du montant investi et de la valeur liquidative du jour de souscription. Remplacez-la par celle de votre relevé quand vous l’aurez (Modifier).')}</div>` : ''}
+    ${l.qtyEstimated || l.estimateFromAmount ? `<div class="callout mt12">${t(l.estimateFromAmount ? 'Montant investi connu, quantité pas encore calculée : elle le sera à la prochaine actualisation, avec la valeur liquidative du jour de souscription.' : 'Quantité estimée à partir du montant investi et de la valeur liquidative du jour de souscription. Remplacez-la par celle de votre relevé quand vous l’aurez (Modifier).')}</div>` : ''}
     <div class="stat-grid">${stats}</div>
     ${l.note ? `<p class="note-text">${esc(l.note)}</p>` : ''}
     ${priceSection(l)}
@@ -906,8 +1049,8 @@ const LRANGES = [['1M', 31], ['6M', 183], ['1A', 366], ['5A', 1830]];
 function priceSection(l) {
   if (isCashLike(l)) return '';
   const h = l.ticker && data.priceHistory?.[l.ticker];
-  if (!h || h.length < 2) return `<p class="note" style="margin:0 2px 14px">${t(l.type === 'non-cote' ? 'Pas de cours public pour ce fonds non coté.' : 'L’historique du cours apparaîtra après une actualisation (bouton en haut de l’écran).')}</p>`;
-  return `<section class="card chart-card" style="margin:0 0 14px;padding:16px 12px 10px">
+  if (!h || h.length < 2) return `<p class="note m-x2b14">${t(l.type === 'non-cote' ? 'Pas de cours public pour ce fonds non coté.' : 'L’historique du cours apparaîtra après une actualisation (bouton en haut de l’écran).')}</p>`;
+  return `<section class="card chart-card price-card">
     <div class="chart-top"><h3>${t('Cours|prix')}</h3><div class="chips" role="group" aria-label="${t('Période')}">${LRANGES.map(([k]) => `<button class="chip" data-lrange="${k}" aria-pressed="${ui.lineRange === k}">${t(k)}</button>`).join('')}</div></div>
     <div class="chart-hover" data-lhover></div><div class="chart-host" data-lhost></div>
     <div class="legend"><span><i></i>${t('Cours|prix')}</span><span><i class="dash"></i>${t('Prix de revient')}</span></div>
@@ -935,10 +1078,11 @@ function openAccount(id) {
   const rate = p && (p.days >= 365 ? (p.rate == null ? '' : t('{x} par an', { x: signedPct(p.rate) })) : p.periodRate == null ? '' : t('{x} sur la période', { x: signedPct(p.periodRate) }));
   openSheet(`${sheetHead(esc(a.name), esc(kindLabel(a.kind)))}
     <div class="detail-big">${eur(v)}</div>
-    ${p ? `<p class="small muted" style="margin:4px 0 0">${[t('Versé {x}', { x: eur(p.net, 0) }), t('gain réel {x}', { x: signedEur(p.gain, 0) }), rate].filter(Boolean).join(' · ')}</p>` : ''}
+    ${p ? `<p class="small muted m-t4">${[t('Versé {x}', { x: eur(p.net, 0) }), t('gain réel {x}', { x: signedEur(p.gain, 0) }), rate].filter(Boolean).join(' · ')}</p>` : ''}
+    ${a.kind === 'pea' ? `<p class="small muted m-t4">${esc(peaLine(a))}</p>` : ''}
     ${a.note ? `<p class="note-text">${esc(a.note)}</p>` : ''}
-    <div class="lines" style="margin:14px 0">${ls.map(lineRow).join('') || `<p class="muted" style="padding:16px;margin:0">${t('Aucune ligne sur ce compte.')}</p>`}</div>
-    <div class="btn-row"><button class="btn primary sm" data-act="add">${ICONS.plus}${t('Ajouter une ligne')}</button><button class="btn sm" data-act="edit">${t('Modifier le compte')}</button></div>`, {
+    <div class="lines my14">${ls.map(lineRow).join('') || `<p class="muted p16 m0">${t('Aucune ligne sur ce compte.')}</p>`}</div>
+    <div class="btn-row"><button class="btn primary sm" data-act="add">${ICONS.plus}${t('Ajouter une ligne')}</button><button class="btn sm" data-act="edit">${t('Modifier le compte')}</button><button class="btn sm" data-act="chart">${t('Voir sa courbe')}</button></div>`, {
     label: a.name,
     onMount: (sh, close) => sh.addEventListener('click', e => {
       const row = e.target.closest('[data-action="open-line"]');
@@ -946,6 +1090,7 @@ function openAccount(id) {
       const act = e.target.closest('[data-act]')?.dataset.act;
       if (act === 'add') { close(); setTimeout(() => lineForm(null, id), 200); }
       if (act === 'edit') { close(); setTimeout(() => accountForm(id), 200); }
+      if (act === 'chart') { close(); ui.scope = 'acc:' + id; go('patrimoine'); $('#chart-host')?.closest('section')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
     }),
   });
 }
@@ -960,15 +1105,16 @@ function accountForm(id) {
       <div class="row2"><label class="field"><span>${t('Établissement')}</span><input class="input" id="ac-inst" name="institution" maxlength="60" value="${esc(a?.institution || '')}" placeholder="${t('facultatif')}"></label>
       <label class="field"><span>${t('Type')}</span><select class="input" id="ac-kind" name="kind">${KINDS.map(([k, l]) => `<option value="${k}" ${kind === k ? 'selected' : ''}>${t(l)}</option>`).join('')}</select></label></div>
       <label class="field" id="ac-bal-wrap"><span>${t('Solde actuel (€)')}</span><input class="input" id="ac-bal" name="balance" inputmode="decimal" value="${cash ? inputNum(cash.amount) : ''}" placeholder="${t('0,00')}"><small>${t('Pour un compte courant ou un livret. Pour une assurance-vie ou un compte-titres, ajoutez ensuite des lignes.')}</small></label>
+      <label class="field" id="ac-open-wrap"><span>${t('Premier versement')}</span><input class="input" type="date" id="ac-open" name="openedAt" value="${esc(a?.openedAt || '')}"><small>${t('Les retraits sont exonérés d’impôt sur le revenu 5 ans après cette date.')} ${a && !a.openedAt && peaStatus(data, a) ? t('Vide : déduite de l’historique ({x}).', { x: dateLong(peaStatus(data, a).start) }) : ''}</small></label>
       <label class="field"><span>${t('Note')}</span><textarea class="input plain" id="ac-note" name="note" maxlength="500" rows="2" placeholder="${t('ex. date d’ouverture du PEA, numéro de contrat')}">${esc(a?.note || '')}</textarea></label>
-      <div class="field"><span>${t('Couleur')}</span><div class="swatches">${COLORS.map(c => `<label><input type="radio" name="color" value="${c}" ${(a?.color || 'blue') === c ? 'checked' : ''} aria-label="${c}"><span class="tile c-${c}" style="width:34px;height:34px"></span></label>`).join('')}</div></div>
+      <div class="field"><span>${t('Couleur')}</span><div class="swatches">${COLORS.map(c => `<label><input type="radio" name="color" value="${c}" ${(a?.color || 'blue') === c ? 'checked' : ''} aria-label="${c}"><span class="tile c-${c} swatch-tile"></span></label>`).join('')}</div></div>
       <p class="small neg" id="ac-err" hidden></p>
       <div class="btn-row"><button class="btn primary" type="submit">${t(a ? 'Enregistrer' : 'Créer le compte')}</button>${a ? `<button class="btn danger" type="button" data-act="del">${t('Supprimer le compte')}</button>` : ''}</div>
     </form>`, {
     label: t('Compte'),
     onMount: (sh, close) => {
       const form = sh.querySelector('form');
-      const sync = () => { const k = form.kind.value; sh.querySelector('#ac-bal-wrap').hidden = !(k === 'courant' || k === 'livret' || cash); };
+      const sync = () => { const k = form.kind.value; sh.querySelector('#ac-bal-wrap').hidden = !(k === 'courant' || k === 'livret' || cash); sh.querySelector('#ac-open-wrap').hidden = k !== 'pea'; };
       form.kind.addEventListener('change', sync); sync();
       form.addEventListener('submit', e => {
         e.preventDefault();
@@ -981,6 +1127,7 @@ function accountForm(id) {
         const acc = a || { id: 'acc-' + Date.now().toString(36), source: 'manual' };
         Object.assign(acc, { name, institution: form.institution.value.trim(), kind: form.kind.value, color: form.color.value });
         const note = form.note.value.trim(); if (note) acc.note = note; else delete acc.note;
+        if (acc.kind === 'pea' && form.openedAt.value) acc.openedAt = form.openedAt.value; else delete acc.openedAt;
         if (!a) data.accounts.push(acc);
         if (bal !== null) {
           const isLiv = acc.kind === 'livret';
@@ -1101,7 +1248,7 @@ async function saveFile(filename, text) {
     toast(t('Sauvegarde exportée : {x}', { x: filename }));
     return true;
   } catch {
-    openSheet(`${sheetHead(t('Copiez votre sauvegarde'), t('Le téléchargement est bloqué ici.'))}<textarea class="input" readonly id="bk-text">${esc(text)}</textarea><div class="btn-row" style="margin-top:12px"><button class="btn primary" data-copy>${t('Copier')}</button></div>`, {
+    openSheet(`${sheetHead(t('Copiez votre sauvegarde'), t('Le téléchargement est bloqué ici.'))}<textarea class="input" readonly id="bk-text">${esc(text)}</textarea><div class="btn-row mt12"><button class="btn primary" data-copy>${t('Copier')}</button></div>`, {
       onMount: sh => sh.querySelector('[data-copy]').addEventListener('click', () => { const ta = sh.querySelector('#bk-text'); navigator.clipboard?.writeText(ta.value).then(() => toast(t('Copié.')), () => { ta.select(); }); }),
     });
   }
@@ -1140,9 +1287,9 @@ async function importCsvFlow() {
   const held = imp.lines.filter(l => isHeld(l)); // without fully sold positions, kept for the chart
   const byAcc = id => held.filter(l => l.accountId === id);
   openSheet(`${sheetHead(t('Import Trade Republic'), tn(st.rows, '{n} opération, du {a} au {b}', '{n} opérations, du {a} au {b}', { n: num(st.rows, 0), a: dateLong(st.from), b: dateLong(st.to) }))}
-    ${imp.accounts.map(a => `<div class="section-head" style="margin-top:8px"><h2>${esc(a.name)}</h2><span class="aside">${tn(byAcc(a.id).length, '{n} ligne', '{n} lignes')}</span></div>
+    ${imp.accounts.map(a => `<div class="section-head mt8"><h2>${esc(a.name)}</h2><span class="aside">${tn(byAcc(a.id).length, '{n} ligne', '{n} lignes')}</span></div>
       <div class="holdings">${byAcc(a.id).sort((x, y) => lineCost(y) - lineCost(x)).map(l => `<div class="holding"><span class="r"></span><span class="n">${esc(shortName(l))}</span><span class="a">${isCashLike(l) ? eur(l.amount) : fqty(l.qty)}</span><span class="w">${isCashLike(l) ? t('Solde espèces recalculé') : t('Prix de revient {x}', { x: eur(l.cost) }) + (l.pending ? ' · ' + t('dont {x} en attente d’exécution', { x: eur(l.pending) }) : '')}</span></div>`).join('')}</div>`).join('')}
-    <div class="callout" style="margin:16px 0">${t('Espèces recalculées : {x}. Vérifiez ce montant dans l’app Trade Republic.', { x: `<b>${Object.entries(st.cash).map(([id, v]) => esc(imp.accounts.find(a => a.id === id)?.name || id) + ' ' + eur(v)).join(' · ')}</b>` })}</div>
+    <div class="callout my16">${t('Espèces recalculées : {x}. Vérifiez ce montant dans l’app Trade Republic.', { x: `<b>${Object.entries(st.cash).map(([id, v]) => esc(imp.accounts.find(a => a.id === id)?.name || id) + ' ' + eur(v)).join(' · ')}</b>` })}</div>
     ${data.demo ? `<p class="small muted">${t('Les données d’exemple seront effacées.')}</p>` : ''}
     <div class="btn-row"><button class="btn primary" data-ok>${t('Importer')}</button><button class="btn" data-close>${t('Annuler')}</button></div>`, {
     label: t('Import'),
@@ -1245,7 +1392,7 @@ function adoptRemote(r) { data = normalize(r.data); save(data); render(); }
 function syncStatusHtml() {
   const st = syncState(); if (!st) return '';
   if (ui.syncing) return `<span class="status"><i></i>${t('Synchronisation…')}</span>`;
-  if (ui.syncError) return `<span class="status off"><i></i>${esc(ui.syncError)}</span>${ui.syncLost ? `<br><button class="btn sm" style="margin-top:10px" data-action="sync-recreate">${t('Recréer le coffre avec les données de cet appareil')}</button>` : ''}`;
+  if (ui.syncError) return `<span class="status off"><i></i>${esc(ui.syncError)}</span>${ui.syncLost ? `<br><button class="btn sm mt10" data-action="sync-recreate">${t('Recréer le coffre avec les données de cet appareil')}</button>` : ''}`;
   if (st.dirty) return `<span class="status"><i></i>${t('Changements en attente d’envoi')}</span>`;
   if (!st.at) return `<span class="status"><i></i>${t('Pas encore synchronisé')}</span>`;
   const d = new Date(st.at), sameDay = d.toDateString() === new Date().toDateString();
@@ -1258,9 +1405,9 @@ function syncCard() {
     <div class="btn-row"><button class="btn primary" data-action="sync-create">${t('Créer un coffre')}</button><button class="btn" data-action="sync-login">${t('Se connecter')}</button></div>
     <p class="note">${t('Un identifiant et une phrase de passe, sans e-mail. La phrase n’est jamais envoyée : si vous l’oubliez, personne ne peut ouvrir le coffre, mais les données de vos appareils restent intactes.')}</p></section>`;
   return `<section class="card"><p class="lead">${t('Cet appareil est relié au coffre {x}. Chaque modification y est envoyée chiffrée, et vos autres appareils la récupèrent en s’ouvrant.', { x: `<b>${esc(st.user)}</b>` })}</p>
-    <p style="margin:0 0 12px" id="sync-status">${syncStatusHtml()}</p>
+    <p class="m-b12" id="sync-status">${syncStatusHtml()}</p>
     <div class="btn-row"><button class="btn" data-action="sync-now">${t('Synchroniser')}</button><button class="btn" data-action="sync-logout">${t('Déconnecter cet appareil')}</button></div>
-    <div class="btn-row" style="margin-top:8px"><button class="btn danger" data-action="sync-delete">${t('Supprimer le coffre en ligne')}</button></div>
+    <div class="btn-row mt8"><button class="btn danger" data-action="sync-delete">${t('Supprimer le coffre en ligne')}</button></div>
     <p class="note">${t('Le serveur gratuit peut, rarement, perdre un coffre. Vos appareils gardent toujours leurs données : Carnet le signale alors et le recrée en un geste.')}</p></section>`;
 }
 
@@ -1427,7 +1574,7 @@ async function autoCompositions() {
 }
 function noServerSheet() {
   openSheet(`${sheetHead(t('Actualisation indisponible'), t('Le serveur Carnet ne répond pas.'))}
-    <p class="muted" style="margin-top:0">${t('Les cours sont récupérés par le petit serveur livré avec Carnet, qui interroge Yahoo Finance. Lancez Carnet avec {cmd} ou déployez-le sur Vercel (voir le README).', { cmd: '<code>node server.mjs</code>' })}</p>
+    <p class="muted mt0">${t('Les cours sont récupérés par le petit serveur livré avec Carnet, qui interroge Yahoo Finance. Lancez Carnet avec {cmd} ou déployez-le sur Vercel (voir le README).', { cmd: '<code>node server.mjs</code>' })}</p>
     <p class="muted">${t('En attendant, vous pouvez saisir un cours à la main : touchez une ligne, puis « Modifier ».')}</p>
     <div class="btn-row"><button class="btn primary" data-close>${t('Compris')}</button></div>`, { label: t('Actualisation') });
 }
@@ -1528,11 +1675,11 @@ async function refreshPrices() {
 
 function refreshReport() {
   const lr = data.lastRefresh;
-  if (!lr) return `<p class="small muted" style="margin:12px 0 0">${t('Aucune actualisation pour l’instant.')}</p>`;
+  if (!lr) return `<p class="small muted m-t12">${t('Aucune actualisation pour l’instant.')}</p>`;
   const quiet = r => /non coté|Aucun symbole/.test(r.error);
   const ok = lr.results.filter(r => r.ok), ko = lr.results.filter(r => !r.ok).sort((a, b) => quiet(a) - quiet(b));
   const note = r => r.noteDate ? t(r.note, { x: dateShort(r.noteDate) }) : t(r.note);
-  return `<p class="small muted" style="margin:14px 0 6px">${t('Dernière actualisation : {date} à {time} · {ok} à jour, {ko} sans cours.', { date: dateLong(lr.at.slice(0, 10)), time: timeShort(new Date(lr.at)), ok: ok.length, ko: ko.length })}</p>
+  return `<p class="small muted m-t14b6">${t('Dernière actualisation : {date} à {time} · {ok} à jour, {ko} sans cours.', { date: dateLong(lr.at.slice(0, 10)), time: timeShort(new Date(lr.at)), ok: ok.length, ko: ko.length })}</p>
     <div class="holdings">${[...ko, ...ok].map(r => `<div class="holding"><span class="r">${r.ok ? '<span class="pos">●</span>' : quiet(r) ? '<span class="muted">●</span>' : '<span class="neg">●</span>'}</span><span class="n">${esc(r.name)}</span><span class="a">${r.ok ? eur(r.price) : '—'}</span><span class="w">${r.ok ? `${esc(r.symbol)} · ${t('cours du {x}', { x: dateShort(r.date) })} · ${tn(+r.points || 0, '{n} point d’historique', '{n} points d’historique')}${r.note ? ' · ' + esc(note(r)) : ''}` : esc(t(r.error, { x: r.arg }))}</span></div>`).join('')}</div>`;
 }
 
@@ -1650,6 +1797,8 @@ document.addEventListener('click', async e => {
     }
     case 'sim-mode': ui.sim.mode = v; render(); break;
     case 'targets': targetSheet(); break;
+    case 'share': shareSheet(); break;
+    case 'pea-seen': setDevice({ peaSeen: { ...(device().peaSeen || {}), [b.dataset.id]: v } }); render(); break;
     case 'go-rebalance': go('simuler'); $('#reb')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); break;
     case 'reb-sell': ui.reb.sell = v === '1'; render(); break;
     case 'reb-pick': {
@@ -1678,6 +1827,7 @@ document.addEventListener('input', e => {
     }
     const out = $('#sim-out'); if (out) out.innerHTML = simResult();
   }
+  if (el.dataset.scope !== undefined) { ui.scope = el.value; const l = el.parentNode.querySelector('.scope-label'); if (l) l.textContent = scopeLabel(); after.patrimoine(); }
   if (el.dataset.reb) { ui.reb[el.dataset.reb] = el.value; const o = $('#reb-out'); if (o) o.innerHTML = rebalanceRows(); }
   if (el.dataset.hist) { ui.hist[el.dataset.hist] = el.value; ui.hist.limit = 150; const b = $('#hist-body'); if (b) b.innerHTML = histBody(); }
   if (el.dataset.setting === 'taxRate') { const n = parseNum(el.value); if (isFinite(n) && n >= 0 && n <= 100) { data.settings.taxRate = n; save(data); scheduleSync(); } }

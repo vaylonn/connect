@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { importTradeRepublic, mergeImport } from '../public/js/importer.js';
 import { emptyData, backupPayload } from '../public/js/store.js';
-import { totals, heldLines, history } from '../public/js/compute.js';
+import { totals, heldLines, history, peaStatus } from '../public/js/compute.js';
 
 // Minimal export: one row per movement, on the brokerage account
 const H = 'datetime,date,account_type,category,type,asset_class,name,symbol,shares,price,amount,fee,tax';
@@ -50,4 +50,27 @@ test('a purchase paid with the account cash is not counted twice', () => {
 test('the backup keeps the history transactions', () => {
   const data = load([row('2025-01-02', 'CUSTOMER_INBOUND', { amount: 1000 }), row('2025-01-10', 'BUY', { isin: SP500, shares: 1, price: 500, amount: -500 })]);
   assert.deepEqual(backupPayload(data).transactions.map(x => x.kind), ['BUY', 'DEPOSIT'], 'security transactions, then cash movements');
+});
+
+test('value history of one account or one envelope', () => {
+  const data = load([
+    row('2025-01-02', 'CUSTOMER_INBOUND', { amount: 3000 }),
+    row('2025-01-10', 'BUY', { isin: SP500, shares: 4, price: 500, amount: -2000 }),
+  ]);
+  const now = '2025-03-31T12:00:00Z';
+  const all = history(data, new Date(now)), fund = history(data, new Date(now), l => l.envelope === 'Compte-titres');
+  assert.equal(all.at(-1).value, 3000);
+  assert.equal(fund.at(-1).value, 2000, 'the fund alone, without the cash');
+  assert.equal(fund.find(p => p.d === '2025-01-05'), undefined, 'starts with its first event');
+  assert.deepEqual(history(data, new Date(now), () => false), []);
+});
+
+test('PEA: withdrawals free of income tax 5 years after the first deposit', () => {
+  const data = load([row('2021-03-15', 'CUSTOMER_INBOUND', { amount: 100 })].map(r => r.replace(',DEFAULT,', ',PEA,')));
+  const pea = data.accounts.find(a => a.kind === 'pea');
+  assert.deepEqual(peaStatus(data, pea, new Date('2026-01-01')), { start: '2021-03-15', free: '2026-03-15', guessed: true, done: false, days: 73 });
+  assert.equal(peaStatus(data, pea, new Date('2026-03-15')).done, true);
+  pea.openedAt = '2020-02-29';
+  assert.deepEqual([peaStatus(data, pea).free, peaStatus(data, pea).guessed], ['2025-03-01', false], 'the date the user gave wins; 29 Feb rolls to 1 March');
+  assert.equal(peaStatus({ accounts: [], lines: [], transactions: [] }, { id: 'x', kind: 'pea' }), null);
 });

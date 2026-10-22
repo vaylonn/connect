@@ -182,9 +182,10 @@ function lastLE(arr, d, idx = 0) {
 }
 const iso = d => d.toISOString().slice(0, 10);
 
-export function history(data, now = new Date()) {
+// keep (optional) narrows the chart to some lines: one account, one envelope.
+export function history(data, now = new Date(), keep = null) {
   const accIds = new Set((data.accounts || []).map(a => a.id));
-  const lines = (data.lines || []).filter(l => accIds.has(l.accountId)); // past sales included
+  const lines = (data.lines || []).filter(l => accIds.has(l.accountId) && (!keep || keep(l))); // past sales included
   const ph = data.priceHistory || {};
   let start = null;
   for (const l of lines) {
@@ -230,8 +231,7 @@ export function history(data, now = new Date()) {
     points.push({ d, value, invested });
   }
   // last point = exact current value
-  const t = totals(data);
-  if (points.length) { points[points.length - 1].value = t.total; }
+  if (points.length) points[points.length - 1].value = heldLines(data).filter(l => !keep || keep(l)).reduce((s, l) => s + lineValue(l), 0);
   return points;
 }
 
@@ -393,4 +393,24 @@ export function rebalance(data, amount = 0, sell = false) {
   const rows = a.rows.map((r, i) => ({ ...r, move: Math.round(moves[i]), after: total > 0 ? (r.value + moves[i]) / total : 0 }))
     .filter(r => Math.abs(r.move) >= 1);
   return { ...a, add, total, rows };
+}
+
+// ——— PEA ———
+// Withdrawals from a PEA are free of income tax 5 years after its first deposit (social charges remain).
+// The date is the one the user gave (acc.openedAt), else the account's first known operation.
+export function peaStart(data, acc) {
+  if (acc.openedAt) return acc.openedAt;
+  const dates = [
+    ...(data.transactions || []).filter(tr => tr.accountId === acc.id).map(tr => tr.date),
+    ...(data.lines || []).filter(l => l.accountId === acc.id).map(l => l.events?.[0]?.[0] || l.since),
+  ].filter(Boolean).sort();
+  return dates[0] || '';
+}
+export function peaStatus(data, acc, now = new Date()) {
+  const start = peaStart(data, acc);
+  if (!start) return null;
+  const d = new Date(start + 'T00:00:00Z');
+  d.setUTCFullYear(d.getUTCFullYear() + 5);
+  const free = iso(d);
+  return { start, free, guessed: !acc.openedAt, done: free <= iso(now), days: Math.round((Date.parse(free) - Date.parse(iso(now))) / 86400000) };
 }

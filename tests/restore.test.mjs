@@ -4,12 +4,13 @@
 //   backup-v1.3.json            Trade Republic import with history, statistics and language setting
 //   backup-v1.3-encrypted.json  the same, encrypted with « phrase de test des sauvegardes »
 //   backup-v1.4.json            cash movements in the history, targets and notes (tests/tr-export.mjs)
+//   backup-v1.5.json            a manual PEA with the date of its first deposit
 //   partial-accounts.json       a few accounts to add to existing data (« partial »)
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { validateBackup, decryptBackup, backupPayload } from '../public/js/store.js';
-import { totals, heldLines, history, performance, allocation } from '../public/js/compute.js';
+import { totals, heldLines, history, performance, allocation, peaStatus } from '../public/js/compute.js';
 
 const fixture = name => JSON.parse(readFileSync(new URL('./fixtures/' + name, import.meta.url), 'utf8'));
 const total = d => Math.round(totals(d).total * 100) / 100;
@@ -55,6 +56,14 @@ test('a v1.4 backup keeps cash movements, targets and notes', () => {
   assert.equal(performance(validateBackup(fixture('backup-v1.3.json'))), null);
 });
 
+test('a v1.5 backup keeps the PEA’s first deposit date', () => {
+  const d = validateBackup(fixture('backup-v1.5.json'));
+  const pea = d.accounts[0];
+  assert.deepEqual([peaStatus(d, pea).free, peaStatus(d, pea).guessed], ['2024-06-03', false]);
+  assert.equal(total(d), 3000);
+  assert.equal(peaStatus(validateBackup(fixture('backup-v1.0.json')), { id: 'x', kind: 'pea' }), null, 'older files: no date, no failure');
+});
+
 test('a partial file is flagged so the app adds it instead of replacing', () => {
   const d = validateBackup(fixture('partial-accounts.json'));
   assert.equal(d.partial, true);
@@ -62,7 +71,7 @@ test('a partial file is flagged so the app adds it instead of replacing', () => 
 });
 
 test('exporting a restored backup gives a file that restores the same way', () => {
-  for (const name of ['backup-v1.0.json', 'backup-v1.3.json', 'backup-v1.4.json']) {
+  for (const name of ['backup-v1.0.json', 'backup-v1.3.json', 'backup-v1.4.json', 'backup-v1.5.json']) {
     const d = validateBackup(fixture(name));
     const again = validateBackup(JSON.parse(JSON.stringify(backupPayload(d))));
     assert.equal(total(again), total(d), name);

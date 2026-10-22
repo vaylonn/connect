@@ -1,6 +1,6 @@
 // Carnet service worker: caches the app for offline use.
 // /api calls (prices, sync) always go to the network. No personal data here.
-const CACHE = 'carnet-v1.4.0';
+const CACHE = 'carnet-v1.5.0';
 const SHELL = [
   './', 'index.html', 'app.css', 'manifest.webmanifest',
   'js/app.js', 'js/format.js', 'js/store.js', 'js/importer.js', 'js/compute.js', 'js/library.js', 'js/chart.js', 'js/sync.js', 'js/i18n.js', 'js/i18n-en.js',

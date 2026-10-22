@@ -86,13 +86,14 @@ test('a new import replaces Trade Republic lines and keeps manual data and overr
   let data = mergeImport(emptyData(), importTradeRepublic(CSV));
   const apple = data.lines.find(l => l.id === 'tr-default-us0378331005');
   Object.assign(apple, { name: 'Mon Apple', customName: true, target: 40, note: 'Achetée pour le dividende' });
-  data.accounts.find(a => a.id === 'tr-pea').note = 'Ouvert le 2 janvier 2025';
+  Object.assign(data.accounts.find(a => a.id === 'tr-pea'), { note: 'Ouvert le 2 janvier 2025', openedAt: '2024-12-30' });
   data.accounts.push({ id: 'acc-livret', name: 'Livret', kind: 'livret', source: 'manual' });
   data.lines.push({ id: 'ln-livret', source: 'manual', accountId: 'acc-livret', type: 'livret', envelope: 'Livrets', name: 'Livret', qty: 1, amount: 500, price: 500, cost: 500, events: [] });
   data = mergeImport(data, importTradeRepublic(CSV));
   const again = data.lines.find(l => l.id === 'tr-default-us0378331005');
   assert.deepEqual([again.name, again.target, again.note], ['Mon Apple', 40, 'Achetée pour le dividende'], 'name, target and note kept');
-  assert.equal(data.accounts.find(a => a.id === 'tr-pea').note, 'Ouvert le 2 janvier 2025');
+  const pea = data.accounts.find(a => a.id === 'tr-pea');
+  assert.deepEqual([pea.note, pea.openedAt], ['Ouvert le 2 janvier 2025', '2024-12-30'], 'account note and first deposit date kept');
   assert.equal(data.lines.filter(l => l.id === 'tr-default-us0378331005').length, 1, 'no duplicate');
   assert.ok(data.lines.some(l => l.id === 'ln-livret'));
   assert.equal(data.transactions.length, 14, 'history replaced, not appended: 8 trades and 6 cash movements');

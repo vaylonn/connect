@@ -416,8 +416,8 @@ textarea.input { height: auto; min-height: 110px; padding: 12px 14px; font-famil
 .steps .step:only-child .step-ic::after { display: none; }
 
 /* ——— Backup reminder ——— */
-.backup-hint { display: grid; gap: 10px; }
-.backup-hint p { margin: 0; line-height: 1.45; }
+.backup-hint, .pea-hint { display: grid; gap: 10px; }
+.backup-hint p, .pea-hint p { margin: 0; line-height: 1.45; }
 
 /* ——— Import source: dropdown and its button on one row ——— */
 .import-pick { display: flex; gap: 8px; align-items: center; margin-bottom: 4px; }
@@ -440,3 +440,27 @@ textarea.input.plain { font-family: inherit; font-size: 16px; min-height: 72px; 
 .reb-row { width: 100%; background: none; border: 0; border-top: 1px solid var(--line); text-align: left; cursor: pointer; color: inherit; }
 .compare .reb-row:first-child { border-top: 0; }
 .reb-row:hover .k { text-decoration: underline; }
+
+/* Chart scope: the card title is a select (whole net worth, one account, one envelope) */
+.scope { position: relative; min-width: 0; flex: 0 1 auto; display: inline-flex; }
+.scope-label { font-size: 15px; font-weight: 600; padding: 4px 18px 4px 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  background-image: linear-gradient(45deg, transparent 50%, currentColor 50%), linear-gradient(135deg, currentColor 50%, transparent 50%); background-position: right 5px center, right 0 center; background-size: 5px 5px; background-repeat: no-repeat; }
+.scope-select { position: absolute; inset: 0; width: 100%; opacity: 0; cursor: pointer; font-size: 16px; }
+.scope:focus-within .scope-label { outline: 2px solid var(--orange); outline-offset: 2px; border-radius: 6px; }
+
+/* Anonymous view to share */
+.share-parts { margin: 0 0 12px; }
+.share-img { display: block; width: 100%; max-width: 420px; margin: 0 auto 14px; border-radius: var(--r-sm); border: 1px solid var(--line); background: var(--bg); }
+
+/* Spacing helpers: templates use classes, never style="" (the CSP has no 'unsafe-inline' for styles).
+   !important, as the inline styles they replace, so they win over more specific rules. */
+.m0 { margin: 0 !important; } .mt0 { margin-top: 0 !important; } .mt6 { margin-top: 6px !important; } .mt8 { margin-top: 8px !important; } .mt10 { margin-top: 10px !important; }
+.mt12 { margin-top: 12px !important; } .mt14 { margin-top: 14px !important; } .mt22 { margin-top: 22px !important; }
+.m-t4 { margin: 4px 0 0 !important; } .m-t8 { margin: 8px 0 0 !important; } .m-t12 { margin: 12px 0 0 !important; } .m-t14b6 { margin: 14px 0 6px !important; }
+.m-b8 { margin: 0 0 8px !important; } .m-b12 { margin: 0 0 12px !important; } .m-b14 { margin: 0 0 14px !important; }
+.m-x2b6 { margin: 0 2px 6px !important; } .m-x2b14 { margin: 0 2px 14px !important; } .my14 { margin: 14px 0 !important; } .my16 { margin: 16px 0 !important; }
+.p16 { padding: 16px !important; } .p24 { padding: 24px !important; } .btn-row.center { justify-content: center !important; }
+.swatch-tile { width: 34px !important; height: 34px !important; }
+.title.empty-title { text-align: center !important; margin: 6px auto 4px !important; }
+.card.price-card { margin: 0 0 14px !important; padding: 16px 12px 10px !important; }
+.ids-line { margin: -8px 0 10px !important; }

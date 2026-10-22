@@ -1,0 +1,53 @@
+{
+ "app": "carnet",
+ "schema": 1,
+ "exportedAt": "2026-10-22T15:00:00.000Z",
+ "profile": {
+  "firstName": "Ancienneté"
+ },
+ "settings": {
+  "theme": "auto",
+  "lang": "fr",
+  "taxRate": 31.4,
+  "staleDays": 4,
+  "snoozeUntil": ""
+ },
+ "accounts": [
+  {
+   "id": "acc-pea",
+   "name": "PEA Bourse",
+   "institution": "Banque",
+   "kind": "pea",
+   "color": "orange",
+   "source": "manual",
+   "openedAt": "2019-06-03",
+   "note": "Plan ouvert en agence"
+  }
+ ],
+ "lines": [
+  {
+   "id": "ln-world",
+   "source": "manual",
+   "accountId": "acc-pea",
+   "envelope": "PEA",
+   "type": "etf",
+   "name": "Amundi MSCI World",
+   "isin": "FR0011869353",
+   "ticker": "",
+   "qty": 100,
+   "cost": 2500,
+   "price": 30,
+   "priceDate": "2026-10-01",
+   "priceSource": "manuel",
+   "pending": 0,
+   "equity": 1,
+   "events": [],
+   "since": "2019-06-10",
+   "target": 100
+  }
+ ],
+ "priceHistory": {},
+ "trStats": null,
+ "imports": [],
+ "transactions": []
+}

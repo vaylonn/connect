@@ -8,6 +8,7 @@ Personal net-worth tracker: PEA, brokerage account, crypto, savings accounts, li
 - Net worth, analysis (sectors, countries, companies), buy or sell simulator.
 - Real performance (annualised return on what you paid in), target allocation with rebalancing suggestions.
 - History of buys, sells, dividends, interest and deposits; notes on any holding or account.
+- Chart of the whole net worth, one account or one envelope; PEA 5-year date and reminder; an anonymous view of your allocation to share (percentages only).
 - Trade Republic CSV import, manual entry for any other account.
 - Up-to-date prices from Yahoo Finance.
 - Sync across devices, end-to-end encrypted (optional).
@@ -40,6 +41,8 @@ To install the app: Settings → Install the app shows the steps for your device
   Manually added accounts have no dated deposits and are left out.
 - **Target allocation**: a target share per holding (Analysis → *Set my target*), out of 100 %, measured on the holdings that have one.
   Simulate → *Rebalance* suggests where new money should go (to the holdings furthest below target first) or, with sales, how to get exactly back on target.
+- **PEA 5 years**: withdrawals are free of income tax (social charges remain) 5 years after the first deposit, and no longer close the plan.
+  Carnet takes the date entered on the account (*Edit account* → *First deposit*), else the account's first known operation, shows it on the account and in the simulator, and reminds you on the home screen from two months before.
 - Small differences with TR are normal: TR shows real-time prices, Yahoo slightly delayed ones.
 
 ## Your data
@@ -114,7 +117,7 @@ lib/            Yahoo Finance client, compositions (Morningstar, justETF), /api 
 public/         the app (HTML, CSS, JS, fonts, icons, PWA)
   js/           UI, CSV import, calculations, storage, sync, chart, ETF library
 tools/          Trade Republic CSV → backup, from the command line
-tests/          calculations, Trade Republic import, performance and target allocation, restore of old
+tests/          calculations, Trade Republic import, performance and target allocation, CSP, restore of old
                 backups, sync API, translations; end-to-end browser tests; fake Yahoo; a realistic
                 Trade Republic export (tr-export.mjs); fixtures (frozen backup files)
 ```
