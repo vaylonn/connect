@@ -82,6 +82,8 @@ In PowerShell: `$env:PORT=9000; node server.mjs`.
 node --test tests/*.test.mjs
 ```
 
+**Roadmap**: [`docs/ROADMAP.md`](docs/ROADMAP.md) lists what is left to do, most urgent first.
+
 **Structure**
 
 ```

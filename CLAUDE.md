@@ -43,6 +43,10 @@ No dependencies and no build step: plain Node (≥ 18.17; CI uses 22) and browse
 
 **Data model.** Lines with `source: 'tr'` are replaced by each Trade Republic import (`mergeImport` keeps manual lines and user overrides such as `customName` and `customTicker`). `events` holds `[date, qty, cost, price]` snapshots used by the value history chart. Use `heldLines()`/`isHeld()` (`compute.js`) for anything about current holdings: they drop lines of deleted accounts and sub-cent leftovers after a sale. `data.transactions` feeds the Historique tab. The meaning of the displayed figures (gain %, cost basis, unlisted funds) is described in the README section "Reading the figures".
 
+## Roadmap
+
+`docs/ROADMAP.md` lists what is left to do, most urgent first. Check it before proposing work, and delete an item in the same commit that ships it.
+
 ## Things that must change together
 
 - A new persisted key in `data` → add it to `backupPayload()` in `store.js` (exports are a whitelist) and to the « Ajouter » restore merge in `app.js`. Sync already sends everything except `demo`.
