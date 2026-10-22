@@ -5,9 +5,8 @@ What is left to do, most urgent first. When an item ships, delete it from this f
 
 ## Must have — data loss or silent breakage
 
-- **Redis without persistence (S–M).** Vercel's free Redis can lose vaults (restart, eviction once the 30 MB
-  are full). « Recréer le coffre » covers it, but friends won't know why their vault vanished. Either move to
-  Upstash (disk-persisted, still free) or at least explain the risk in the Sync section.
+- **Move sync to Upstash (owner action, S).** The app now explains a lost vault and recreates it, and the README
+  gives the steps; what is left is connecting Upstash for Redis in the Vercel dashboard (Storage) and redeploying.
 - **Browser tests in CI (M).** Since the Python scripts were removed, nothing checks the UI automatically. Turn
   the manual flows (import, backup and restore, Settings navigation, both languages) into a Node Playwright
   test that CI runs against `tests/mock-yahoo.mjs`.

@@ -506,7 +506,7 @@ const SECTIONS = {
   import: { title: 'Import et sauvegarde', sub: 'Trade Republic, et vos fichiers de sauvegarde.', icon: 'transfert', body: sectionImport,
     summary: () => data.imports?.length ? t('Dernier import le {x}', { x: dateLong(data.imports[data.imports.length - 1].at?.slice(0, 10)) }) : t('Trade Republic, fichier de sauvegarde') },
   sync: { title: 'Synchronisation', sub: 'Le même carnet sur tous vos appareils.', icon: 'nuage', body: syncCard,
-    summary: () => syncState() ? t('Coffre {x}', { x: syncState().user }) : t('Désactivée') },
+    summary: () => !syncState() ? t('Désactivée') : ui.syncLost ? t('Coffre à recréer') : t('Coffre {x}', { x: syncState().user }) },
   cours: { title: 'Cours', sub: 'Yahoo Finance, sans jamais vos montants.', icon: 'cours', body: sectionPrices,
     summary: () => ui.server === 'off' ? t('Serveur absent : actualisation indisponible') : data.lastRefresh ? refreshLabel().long : t('Jamais actualisés') },
   appareil: { title: 'Installer l’app', sub: 'Carnet sur l’écran d’accueil, et vos données gardées.', icon: 'telephone', body: sectionDevice,
@@ -1080,7 +1080,8 @@ function syncCard() {
   return `<section class="card"><p class="lead">${t('Cet appareil est relié au coffre {x}. Chaque modification y est envoyée chiffrée, et vos autres appareils la récupèrent en s’ouvrant.', { x: `<b>${esc(st.user)}</b>` })}</p>
     <p style="margin:0 0 12px" id="sync-status">${syncStatusHtml()}</p>
     <div class="btn-row"><button class="btn" data-action="sync-now">${t('Synchroniser')}</button><button class="btn" data-action="sync-logout">${t('Déconnecter cet appareil')}</button></div>
-    <div class="btn-row" style="margin-top:8px"><button class="btn danger" data-action="sync-delete">${t('Supprimer le coffre en ligne')}</button></div></section>`;
+    <div class="btn-row" style="margin-top:8px"><button class="btn danger" data-action="sync-delete">${t('Supprimer le coffre en ligne')}</button></div>
+    <p class="note">${t('Le serveur gratuit peut, rarement, perdre un coffre. Vos appareils gardent toujours leurs données : Carnet le signale alors et le recrée en un geste.')}</p></section>`;
 }
 
 async function syncNow(manual = false) {
@@ -1103,7 +1104,7 @@ async function syncNow(manual = false) {
     if (manual && ok) toast(t('Synchronisé.'));
   } catch (e) {
     ui.syncLost = e.status === 404;
-    ui.syncError = ui.syncLost ? t('Le coffre n’existe plus sur le serveur (supprimé depuis un autre appareil, ou base vidée).')
+    ui.syncError = ui.syncLost ? t('Le coffre n’existe plus sur le serveur : supprimé depuis un autre appareil, ou perdu par le serveur. Les données de cet appareil sont intactes.')
       : e.status === 401 ? t('Coffre supprimé ou phrase de passe changée : déconnectez cet appareil.') : e.message;
     if (manual) toast(ui.syncError);
   } finally { ui.syncing = false; setSyncUI(); }

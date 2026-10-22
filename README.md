@@ -49,8 +49,11 @@ To install the app: Settings → Install the app shows the steps for your device
 ### Vercel (online version)
 
 1. Import the repository on [vercel.com](https://vercel.com). Nothing to configure: `vercel.json` sets everything (preset "Other", `public` folder, `api/` functions).
-2. For sync: *Storage → Create Database → Redis* (or Upstash), connected to the project for **Production and Preview**, then redeploy.
-   Carnet accepts `REDIS_URL` as well as `KV_REST_API_URL` / `KV_REST_API_TOKEN`, even with a prefix. Without a database the app works; only sync is disabled.
+2. For sync: *Storage → Create Database → Upstash for Redis* (free plan), connected to the project for **Production and Preview**, then redeploy.
+   Prefer Upstash: it keeps data on disk. The free « Redis » database has no persistence and can lose vaults on a restart or once its 30 MB are full;
+   devices keep their data and offer to recreate a lost vault, but it is better avoided.
+   Carnet accepts `KV_REST_API_URL` / `KV_REST_API_TOKEN` (Upstash, used first when both exist) as well as `REDIS_URL`, even with a prefix. Without a database the app works; only sync is disabled.
+   Moving to Upstash: connect it, redeploy, then on each device Settings → Sync → « Recréer le coffre avec les données de cet appareil » (the first device recreates it, the others reconnect on their own).
    Anyone can create their own vault there (at most 5 per hour per address): your friends and family can use your online version.
 
 Preview URLs are protected by Vercel login (*Settings → Deployment Protection*).
