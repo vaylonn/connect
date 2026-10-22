@@ -15,6 +15,7 @@ Carnet is a personal net-worth tracker (PEA, brokerage, crypto, savings, life in
 No dependencies and no build step: plain Node (≥ 18.17; CI uses 22) and browser ES modules.
 
 - Run: `node server.mjs` → http://localhost:8080 (env options in the README; vaults are stored in `./data`).
+- Browser tests (CI job `browser`): `npm install --no-save playwright && npx playwright install chromium`, then `node --test tests/browser.e2e.mjs` (starts its own server and fake Yahoo on ports 8137/9917). Extend it when a user flow changes.
 - Tests (as in CI): `node --test tests/*.test.mjs`; a single test: `node --test --test-name-pattern="courbe" tests/calculs.test.mjs`.
 - Syntax check (as in CI): `for f in server.mjs lib/*.mjs api/*.mjs tools/*.mjs tests/*.mjs public/js/*.js public/sw.js; do node --check "$f"; done`
 - Offline upstreams: `node tests/mock-yahoo.mjs &` then `YAHOO_BASE=http://127.0.0.1:9911 node server.mjs`; `MORNINGSTAR_BASE` and `JUSTETF_BASE` redirect the composition sources the same way.

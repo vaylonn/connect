@@ -85,6 +85,13 @@ In PowerShell: `$env:PORT=9000; node server.mjs`.
 node --test tests/*.test.mjs
 ```
 
+End-to-end tests in Chromium (they start their own server and fake Yahoo):
+
+```bash
+npm install --no-save playwright && npx playwright install chromium
+node --test tests/browser.e2e.mjs
+```
+
 **Roadmap**: [`docs/ROADMAP.md`](docs/ROADMAP.md) lists what is left to do, most urgent first.
 
 **Structure**
@@ -97,7 +104,7 @@ lib/            Yahoo Finance client, compositions (Morningstar, justETF), /api 
 public/         the app (HTML, CSS, JS, fonts, icons, PWA)
   js/           UI, CSV import, calculations, storage, sync, chart, ETF library
 tools/          Trade Republic CSV → backup, from the command line
-tests/          tests of the calculations and of the sync API, fake Yahoo
+tests/          calculations, sync API and translations; end-to-end browser tests; fake Yahoo
 ```
 
 **ETF library** (`public/js/library.js`): Yahoo symbol, sectors, countries and top companies of known funds, as orders of magnitude (mid-2026).

@@ -7,9 +7,6 @@ What is left to do, most urgent first. When an item ships, delete it from this f
 
 - **Move sync to Upstash (owner action, S).** The app now explains a lost vault and recreates it, and the README
   gives the steps; what is left is connecting Upstash for Redis in the Vercel dashboard (Storage) and redeploying.
-- **Browser tests in CI (M).** Since the Python scripts were removed, nothing checks the UI automatically. Turn
-  the manual flows (import, backup and restore, Settings navigation, both languages) into a Node Playwright
-  test that CI runs against `tests/mock-yahoo.mjs`.
 
 ## Important — reliability
 
