@@ -418,3 +418,7 @@ textarea.input { height: auto; min-height: 110px; padding: 12px 14px; font-famil
 /* ——— Backup reminder ——— */
 .backup-hint { display: grid; gap: 10px; }
 .backup-hint p { margin: 0; line-height: 1.45; }
+
+/* ——— Import source: dropdown and its button on one row ——— */
+.import-pick { display: flex; gap: 8px; align-items: center; margin-bottom: 4px; }
+.import-pick .field { flex: 1; min-width: 0; }

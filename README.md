@@ -16,7 +16,7 @@ Personal net-worth tracker: PEA, brokerage account, crypto, savings accounts, li
 
 ## Getting started
 
-1. **Import Trade Republic.** In the TR app: *Transaction export* as CSV, **since the account was opened**. Then Carnet → Settings → Import & backup → *Import CSV*.
+1. **Import Trade Republic.** In the TR app: *Transaction export* as CSV, **since the account was opened**. Then Carnet → Settings → Import & backup → *Import data*: pick Trade Republic, *Continue*, *Choose the file* (the window recalls these steps).
    An export covering only part of the period gives wrong quantities and cash: Carnet rebuilds everything from the full history.
 2. **Add your other accounts.** Settings → Accounts → *Add account* (savings account, life insurance, PER…), then *Add holding*.
 3. **Refresh prices** with the button at the top of the screen.

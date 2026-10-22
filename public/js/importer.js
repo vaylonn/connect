@@ -207,6 +207,6 @@ export function mergeImport(data, imp) {
     lines: [...lines, ...data.lines.filter(l => l.source !== 'tr')],
     trStats: imp.stats,
     transactions: [...(imp.transactions || []), ...(data.transactions || []).filter(t => t.source !== 'tr')],
-    imports: [...(data.imports || []), { at: new Date().toISOString(), rows: imp.stats.rows, from: imp.stats.from, to: imp.stats.to }].slice(-20),
+    imports: [...(data.imports || []), { at: new Date().toISOString(), source: 'tr', rows: imp.stats.rows, from: imp.stats.from, to: imp.stats.to }].slice(-20),
   };
 }

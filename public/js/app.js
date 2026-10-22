@@ -503,8 +503,8 @@ const langLabel = k => (k === 'fr' || k === 'en' ? LANGS[k] : t('Automatique'));
 const SECTIONS = {
   comptes: { title: 'Comptes', sub: 'Ajoutez, modifiez ou supprimez vos comptes.', icon: 'compte', body: sectionAccounts,
     summary: () => { const n = data.accounts.length; return n ? tn(n, '{n} compte · {x}', '{n} comptes · {x}', { x: eur(totals(data).total, 0) }) : t('Aucun compte'); } },
-  import: { title: 'Import et sauvegarde', sub: 'Trade Republic, et vos fichiers de sauvegarde.', icon: 'transfert', body: sectionImport,
-    summary: () => data.imports?.length ? t('Dernier import le {x}', { x: dateLong(data.imports[data.imports.length - 1].at?.slice(0, 10)) }) : t('Trade Republic, fichier de sauvegarde') },
+  import: { title: 'Import et sauvegarde', sub: 'Vos courtiers, et vos fichiers de sauvegarde.', icon: 'transfert', body: sectionImport,
+    summary: () => data.imports?.length ? t('Dernier import le {x}', { x: dateLong(data.imports[data.imports.length - 1].at?.slice(0, 10)) }) : t('Courtiers, fichier de sauvegarde') },
   sync: { title: 'Synchronisation', sub: 'Le même carnet sur tous vos appareils.', icon: 'nuage', body: syncCard,
     summary: () => !syncState() ? t('Désactivée') : ui.syncLost ? t('Coffre à recréer') : t('Coffre {x}', { x: syncState().user }) },
   cours: { title: 'Cours', sub: 'Yahoo Finance, sans jamais vos montants.', icon: 'cours', body: sectionPrices,
@@ -535,13 +535,15 @@ function sectionAccounts() {
 
 function sectionImport() {
   const st = data.trStats;
-  return `<section class="card"><h3>Trade Republic</h3>
-      <p class="lead">${t('Exportez vos transactions depuis Trade Republic au format CSV (« Exportation de transactions »), puis importez le fichier ici. Un nouvel import remplace les lignes Trade Republic et garde vos lignes manuelles.')}</p>
-      <div class="btn-row"><button class="btn primary" data-action="pick-csv">${ICONS.upload}${t('Importer le CSV')}</button></div>
-      ${st ? `<dl class="kv"><dt>${t('Dernier import')}</dt><dd>${dateLong(data.imports?.[data.imports.length - 1]?.at?.slice(0, 10))}</dd>
-        <dt>${t('Opérations lues')}</dt><dd>${num(st.rows, 0)}</dd><dt>${t('Période')}</dt><dd>${dateLong(st.from)} → ${dateLong(st.to)}</dd>
+  const last = data.imports?.[data.imports.length - 1];
+  return `<section class="card"><h3>${t('Importer des données')}</h3>
+      <p class="lead">${t('Choisissez d’où viennent vos données : Carnet vous explique comment récupérer le fichier.')}</p>
+      <div class="import-pick"><label class="field"><span class="sr">${t('Source')}</span><select class="input" id="imp-source">${Object.entries(IMPORTERS).map(([k, x]) => `<option value="${k}">${esc(x.name)}</option>`).join('')}</select></label>
+        <button class="btn primary" data-action="import-source">${t('Continuer')}</button></div>
+      ${st ? `<dl class="kv"><dt>${t('Dernier import')}</dt><dd>${esc(IMPORTERS[last?.source || 'tr']?.name || '')} · ${dateLong(last?.at?.slice(0, 10))}</dd>
+        <dt>${t('Période')}</dt><dd>${dateLong(st.from)} → ${dateLong(st.to)}</dd>
         ${Object.entries(st.cash || {}).map(([id, v]) => `<dt>${t('Espèces {x}', { x: esc(accById(id)?.name || id) })}</dt><dd>${eur(v)}</dd>`).join('')}</dl>
-        <p class="note">${t('Le solde espèces est recalculé à partir de toutes les opérations (montant + frais + taxes). Comparez-le avec le solde affiché dans l’app Trade Republic.')}</p>` : ''}
+        <p class="note">${t('Espèces recalculées à partir de toutes les opérations : comparez-les avec le solde affiché par votre courtier.')}</p>` : ''}
     </section>
     <section class="card"><h3>${t('Sauvegarde')}</h3><p class="lead">${t('Un fichier à garder de côté, ou à restaurer sur un appareil sans synchronisation.')}</p>
       <div class="btn-row"><button class="btn" data-action="export-plain" ${data.lines.length ? '' : 'disabled'}>${ICONS.download}${t('Exporter en clair')}</button><button class="btn" data-action="export-enc" ${data.lines.length ? '' : 'disabled'}>${ICONS.lock}${t('Exporter chiffrée')}</button></div>
@@ -599,9 +601,10 @@ function sectionDevice() {
 }
 
 // A short tutorial for this device only: the browser's own dialog when it offers one, else the steps.
+// Numbered steps with an icon each (install tutorial, import guides).
+const step = (icon, title, sub = '') => `<li class="step"><span class="step-ic">${ICONS[icon]}</span><span><b>${title}</b>${sub ? `<br><span class="muted small">${sub}</span>` : ''}</span></li>`;
 function installSheet() {
   const p = platform();
-  const step = (icon, title, sub = '') => `<li class="step"><span class="step-ic">${ICONS[icon]}</span><span><b>${title}</b>${sub ? `<br><span class="muted small">${sub}</span>` : ''}</span></li>`;
   const STEPS = {
     ios: [step('share', t('Touchez le bouton Partager'), t('En bas de Safari, ou dans le menu ⋯ selon votre version.')), step('addHome', t('Choisissez « Sur l’écran d’accueil »'), t('Faites défiler la liste si vous ne le voyez pas.')), step('check', t('Touchez « Ajouter »'), t('Carnet apparaît sur l’écran d’accueil : ouvrez-la depuis là.'))],
     android: [step('dots', t('Ouvrez le menu ⋮'), t('En haut à droite du navigateur.')), step('addHome', t('Touchez « Installer l’application »'), t('Ou « Ajouter à l’écran d’accueil », selon le navigateur.')), step('check', t('Confirmez'), t('Carnet apparaît parmi vos applications.'))],
@@ -949,6 +952,30 @@ async function saveFile(filename, text) {
       onMount: sh => sh.querySelector('[data-copy]').addEventListener('click', () => { const ta = sh.querySelector('#bk-text'); navigator.clipboard?.writeText(ta.value).then(() => toast(t('Copié.')), () => { ta.select(); }); }),
     });
   }
+}
+
+// Supported import sources: each brings its guide (steps shown before picking the file) and its flow.
+// A new broker = one entry here and its parser next to importer.js.
+const IMPORTERS = {
+  tr: {
+    name: 'Trade Republic',
+    steps: () => [
+      step('download', t('Dans l’app Trade Republic, exportez vos transactions'), t('« Exportation de transactions », au format CSV.')),
+      step('historique', t('Choisissez toute la période, depuis l’ouverture du compte'), t('Une période partielle donne des quantités et des espèces fausses.')),
+      step('upload', t('Importez le fichier ici'), t('Un nouvel import remplace les lignes Trade Republic et garde vos lignes manuelles et vos renommages.')),
+    ],
+    run: () => importCsvFlow(),
+  },
+};
+function importGuide(key) {
+  const src = IMPORTERS[key]; if (!src) return;
+  openSheet(`${sheetHead(t('Import {x}', { x: esc(src.name) }), t('Trois étapes, et vos comptes sont à jour.'))}
+    <ol class="steps">${src.steps().join('')}</ol>
+    <div class="btn-row"><button class="btn primary" data-go>${ICONS.upload}${t('Choisir le fichier')}</button><button class="btn" data-close>${t('Annuler')}</button></div>`, {
+    label: t('Import {x}', { x: src.name }),
+    // The file picker must open from the click itself (browsers block it otherwise): run first, then close.
+    onMount: (sh, close) => sh.querySelector('[data-go]').addEventListener('click', () => { src.run(); close(); }),
+  });
 }
 
 async function importCsvFlow() {
@@ -1439,6 +1466,7 @@ document.addEventListener('click', async e => {
     case 'theme': data.settings.theme = v; commit(); break;
     case 'lang': data.settings.lang = v; commit(); break;
     case 'pick-csv': importCsvFlow(); break;
+    case 'import-source': importGuide($('#imp-source')?.value); break;
     case 'pick-backup': restoreFlow(); break;
     case 'export-plain': exportFlow(false); break;
     case 'export-enc': exportFlow(true); break;

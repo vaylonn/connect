@@ -181,3 +181,17 @@ test('old backup files restore through the app: replace, add, encrypted', async 
   assert.equal(await page.locator('.hist-list .line').count(), 2);
   await done();
 });
+
+test('import sources: a dropdown, then the chosen source’s guide opens the file picker', async () => {
+  const csv = join(TMP, 'guide.csv');
+  writeFileSync(csv, 'datetime,date,account_type,category,type,asset_class,name,symbol,shares,price,amount,fee,tax\n2025-01-02T08:00:00Z,2025-01-02,DEFAULT,CASH,CUSTOMER_INBOUND,,,,,,1000,,\n');
+  const { page, done } = await open({ hash: '#donnees/import' });
+  assert.deepEqual(await page.locator('#imp-source option').allInnerTexts(), ['Trade Republic']);
+  await page.locator('[data-action="import-source"]').click(); await page.waitForSelector('.sheet.open');
+  assert.equal(await page.locator('.sheet .step').count(), 3);
+  await pick(page, page.locator('.sheet [data-go]'), csv);
+  await page.waitForSelector('.sheet.open'); await page.locator('.sheet [data-ok]').click(); await page.waitForTimeout(400);
+  await section(page, 'import');
+  assert.match(await page.locator('#view .kv').innerText(), /Trade Republic · /);
+  await done();
+});
