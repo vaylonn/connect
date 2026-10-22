@@ -36,7 +36,9 @@ test('a v1.3 backup keeps history, statistics and settings', () => {
 test('an encrypted v1.3 backup decrypts to the same data', async () => {
   const enc = fixture('backup-v1.3-encrypted.json');
   assert.equal(enc.encrypted, true);
-  assert.deepEqual(validateBackup(await decryptBackup(enc, 'phrase de test des sauvegardes')), validateBackup(fixture('backup-v1.3.json')));
+  // updatedAt is not in backups: normalize() stamps it at restore time, so it is left out of the comparison
+  const strip = ({ updatedAt, ...d }) => d;
+  assert.deepEqual(strip(validateBackup(await decryptBackup(enc, 'phrase de test des sauvegardes'))), strip(validateBackup(fixture('backup-v1.3.json'))));
   await assert.rejects(decryptBackup(enc, 'mauvaise phrase'), /Phrase de passe incorrecte/);
 });
 
