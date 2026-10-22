@@ -1,0 +1,62 @@
+// Backups from earlier versions must keep restoring: friends keep old files around.
+// tests/fixtures holds files frozen in the format of each version; never regenerate them, add new ones.
+//   backup-v1.0.json            first format: no history, no import log, lines without pending/events
+//   backup-v1.3.json            Trade Republic import with history, statistics and language setting
+//   backup-v1.3-encrypted.json  the same, encrypted with « phrase de test des sauvegardes »
+//   partial-accounts.json       a few accounts to add to existing data (« partial »)
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { validateBackup, decryptBackup, backupPayload } from '../public/js/store.js';
+import { totals, heldLines, history } from '../public/js/compute.js';
+
+const fixture = name => JSON.parse(readFileSync(new URL('./fixtures/' + name, import.meta.url), 'utf8'));
+const total = d => Math.round(totals(d).total * 100) / 100;
+
+test('a v1.0 backup restores with today’s defaults', () => {
+  const d = validateBackup(fixture('backup-v1.0.json'));
+  assert.equal(d.profile.firstName, 'Ancien');
+  assert.deepEqual([d.settings.theme, d.settings.taxRate, d.settings.lang], ['dark', 30, 'auto'], 'new settings get their default');
+  assert.ok(d.lines.every(l => l.pending === 0 && Array.isArray(l.events)), 'missing line fields are filled in');
+  assert.equal(heldLines(d).length, 2);
+  assert.equal(total(d), 1570, '1500 savings + 10 × 7');
+  assert.deepEqual(history(d), [], 'no dates nor events: the chart says there is not enough history, without failing');
+  assert.equal(d.partial, undefined);
+});
+
+test('a v1.3 backup keeps history, statistics and settings', () => {
+  const d = validateBackup(fixture('backup-v1.3.json'));
+  assert.equal(d.transactions.length, 2);
+  assert.equal(d.transactions.find(x => x.kind === 'SELL').realized, 48.75, '250 − 1 − 801 × 1/4');
+  assert.equal(d.trStats.rows, 3);
+  assert.equal(d.settings.lang, 'en');
+  assert.equal(total(d), 2198, 'cash 2000 − 801 + 249, plus 3 × 250');
+});
+
+test('an encrypted v1.3 backup decrypts to the same data', async () => {
+  const enc = fixture('backup-v1.3-encrypted.json');
+  assert.equal(enc.encrypted, true);
+  assert.deepEqual(validateBackup(await decryptBackup(enc, 'phrase de test des sauvegardes')), validateBackup(fixture('backup-v1.3.json')));
+  await assert.rejects(decryptBackup(enc, 'mauvaise phrase'), /Phrase de passe incorrecte/);
+});
+
+test('a partial file is flagged so the app adds it instead of replacing', () => {
+  const d = validateBackup(fixture('partial-accounts.json'));
+  assert.equal(d.partial, true);
+  assert.equal(total(d), 2500);
+});
+
+test('exporting a restored backup gives a file that restores the same way', () => {
+  for (const name of ['backup-v1.0.json', 'backup-v1.3.json']) {
+    const d = validateBackup(fixture(name));
+    const again = validateBackup(JSON.parse(JSON.stringify(backupPayload(d))));
+    assert.equal(total(again), total(d), name);
+    assert.deepEqual(again.transactions, d.transactions, name);
+  }
+});
+
+test('files that are not Carnet backups are refused clearly', () => {
+  assert.throws(() => validateBackup({ app: 'autre', lines: [], accounts: [] }), /pas une sauvegarde Carnet/);
+  assert.throws(() => validateBackup({ app: 'carnet', accounts: [] }), /incomplète/);
+  assert.throws(() => validateBackup(null), /pas une sauvegarde Carnet/);
+});

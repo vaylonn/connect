@@ -1,0 +1,11 @@
+{
+ "app": "carnet",
+ "schema": 1,
+ "partial": true,
+ "accounts": [
+  { "id": "acc-av", "name": "Assurance-vie Linxea", "kind": "av", "color": "blue", "source": "manual" }
+ ],
+ "lines": [
+  { "id": "ln-fe", "source": "manual", "accountId": "acc-av", "type": "fonds-euros", "envelope": "Assurance-vie", "name": "Fonds euros", "qty": 1, "amount": 2500, "price": 2500, "cost": 2500, "equity": 0, "pending": 0, "events": [] }
+ ]
+}

@@ -1,0 +1,160 @@
+{
+ "app": "carnet",
+ "schema": 1,
+ "exportedAt": "2026-10-22T08:00:00.000Z",
+ "profile": {
+  "firstName": "Récent"
+ },
+ "settings": {
+  "theme": "auto",
+  "lang": "en",
+  "taxRate": 31.4,
+  "staleDays": 4,
+  "snoozeUntil": ""
+ },
+ "accounts": [
+  {
+   "id": "tr-cto",
+   "name": "Trade Republic",
+   "institution": "Trade Republic",
+   "kind": "cto",
+   "color": "ink",
+   "source": "tr"
+  }
+ ],
+ "lines": [
+  {
+   "id": "tr-default-us0378331005",
+   "source": "tr",
+   "accountId": "tr-cto",
+   "envelope": "Compte-titres",
+   "type": "action",
+   "name": "Apple",
+   "isin": "US0378331005",
+   "ticker": "AAPL",
+   "qty": 3,
+   "cost": 600.75,
+   "price": 250,
+   "priceDate": "2025-03-10",
+   "priceSource": "transaction",
+   "pending": 0,
+   "equity": 1,
+   "events": [
+    [
+     "2025-01-10",
+     4,
+     801,
+     200
+    ],
+    [
+     "2025-03-10",
+     3,
+     600.75,
+     250
+    ]
+   ]
+  },
+  {
+   "id": "tr-default-cash",
+   "source": "tr",
+   "accountId": "tr-cto",
+   "envelope": "Espèces",
+   "type": "especes",
+   "name": "Espèces",
+   "isin": "",
+   "ticker": "",
+   "qty": 1,
+   "cost": 1448,
+   "price": 1448,
+   "amount": 1448,
+   "priceDate": "2025-03-10",
+   "priceSource": "transaction",
+   "pending": 0,
+   "equity": 0,
+   "events": [
+    [
+     "2025-01-02",
+     1,
+     2000,
+     2000
+    ],
+    [
+     "2025-01-10",
+     1,
+     1199,
+     1199
+    ],
+    [
+     "2025-03-10",
+     1,
+     1448,
+     1448
+    ]
+   ]
+  }
+ ],
+ "priceHistory": {},
+ "trStats": {
+  "rows": 3,
+  "from": "2025-01-02",
+  "to": "2025-03-10",
+  "dividends": 0,
+  "interest": 0,
+  "fees": 2,
+  "taxes": 0,
+  "saveback": 0,
+  "unknownTypes": {},
+  "cash": {
+   "tr-cto": 1448
+  }
+ },
+ "imports": [
+  {
+   "at": "2026-10-22T08:00:00.000Z",
+   "rows": 3,
+   "from": "2025-01-02",
+   "to": "2025-03-10"
+  }
+ ],
+ "transactions": [
+  {
+   "id": "tr-op-0",
+   "source": "tr",
+   "date": "2025-01-10",
+   "acct": "DEFAULT",
+   "isin": "US0378331005",
+   "name": "Apple",
+   "cls": "STOCK",
+   "kind": "BUY",
+   "category": "TRADING",
+   "shares": 4,
+   "price": 200,
+   "amount": -800,
+   "fee": -1,
+   "tax": 0,
+   "accountId": "tr-cto",
+   "envelope": "Compte-titres",
+   "type": "action"
+  },
+  {
+   "id": "tr-op-1",
+   "source": "tr",
+   "date": "2025-03-10",
+   "acct": "DEFAULT",
+   "isin": "US0378331005",
+   "name": "Apple",
+   "cls": "STOCK",
+   "kind": "SELL",
+   "category": "TRADING",
+   "shares": 1,
+   "price": 250,
+   "amount": 250,
+   "fee": -1,
+   "tax": 0,
+   "realized": 48.75,
+   "accountId": "tr-cto",
+   "envelope": "Compte-titres",
+   "type": "action"
+  }
+ ]
+}

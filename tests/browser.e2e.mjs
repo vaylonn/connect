@@ -162,3 +162,22 @@ test('backup reminder after 30 days without an export', async () => {
   assert.equal(await page.locator('.backup-hint').count(), 0);
   await done();
 });
+
+test('old backup files restore through the app: replace, add, encrypted', async () => {
+  const fx = name => join(ROOT, 'tests/fixtures', name);
+  const { page, done } = await open();
+  await pick(page, page.getByRole('button', { name: 'Restaurer une sauvegarde' }), fx('backup-v1.0.json'));
+  assert.match(await total(page), /^1 570,00/, 'empty device: the v1.0 file replaces directly');
+  await section(page, 'import');
+  await pick(page, page.locator('#view [data-action="pick-backup"]'), fx('partial-accounts.json'));
+  await page.locator('.sheet [data-choice="merge"]').click(); await page.waitForTimeout(400);
+  assert.match(await total(page), /^4 070,00/, 'the partial file adds its account');
+  await section(page, 'import');
+  await pick(page, page.locator('#view [data-action="pick-backup"]'), fx('backup-v1.3-encrypted.json'));
+  await page.fill('#pp1', 'phrase de test des sauvegardes'); await page.locator('.sheet button[type=submit]').click();
+  await page.locator('.sheet [data-choice="replace"]').waitFor(); await page.locator('.sheet [data-choice="replace"]').click(); await page.waitForTimeout(400);
+  assert.match(await total(page), /2,198\.00|^2 198,00/, 'the encrypted v1.3 file replaces everything (it switches to English)');
+  await tab(page, 'historique');
+  assert.equal(await page.locator('.hist-list .line').count(), 2);
+  await done();
+});

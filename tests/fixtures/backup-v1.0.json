@@ -1,0 +1,16 @@
+{
+ "app": "carnet",
+ "schema": 1,
+ "exportedAt": "2026-06-14T09:12:00.000Z",
+ "profile": { "firstName": "Ancien" },
+ "settings": { "theme": "dark", "taxRate": 30, "staleDays": 4, "snoozeUntil": "" },
+ "accounts": [
+  { "id": "acc-livret", "name": "Livret A", "institution": "Banque", "kind": "livret", "color": "green", "source": "manual" },
+  { "id": "acc-pea", "name": "PEA Bourse", "institution": "Courtier", "kind": "pea", "color": "orange", "source": "manual" }
+ ],
+ "lines": [
+  { "id": "ln-livret", "source": "manual", "accountId": "acc-livret", "type": "livret", "envelope": "Livrets", "name": "Livret", "qty": 1, "amount": 1500, "price": 1500, "cost": 1500, "priceDate": "2026-06-01", "equity": 0 },
+  { "id": "ln-world", "source": "manual", "accountId": "acc-pea", "type": "etf", "envelope": "PEA", "name": "Amundi PEA MSCI World", "isin": "IE0002XZSHO1", "ticker": "WPEA.PA", "qty": 10, "cost": 60, "price": 7, "priceDate": "2026-06-01", "priceSource": "manuel", "equity": 1 }
+ ],
+ "priceHistory": {}
+}

@@ -52,6 +52,7 @@ No dependencies and no build step: plain Node (≥ 18.17; CI uses 22) and browse
 ## Things that must change together
 
 - A new persisted key in `data` → add it to `backupPayload()` in `store.js` (exports are a whitelist) and to the « Ajouter » restore merge in `app.js`. Sync already sends everything except `demo`.
+- A change to the backup format → add a fixture in `tests/fixtures` for the new version (never regenerate the old ones) and extend `tests/restore.test.mjs`.
 - A new UI string → write it in French inside `t()`/`tn()` and add its English to `i18n-en.js`; `tests/i18n.test.mjs` fails on any missing translation.
 - A new module in `public/js/` → add it to `SHELL` in `public/sw.js`.
 - The version string lives in `package.json`, `lib/handlers.mjs`, `public/js/app.js` (`VERSION`) and `public/sw.js` (`CACHE`).

@@ -3,11 +3,6 @@
 What is left to do, most urgent first. When an item ships, delete it from this file in the same commit
 (the commit message and git history keep the record). Sizes: S ≈ an hour, M ≈ half a day, L = more.
 
-## Important — reliability
-
-- **Restore regression test (S).** Check that a backup from an older version still restores, so friends' old
-  files stay readable.
-
 ## Useful — features
 
 - **Dividends and deposits in Historique (M).** The tab only shows buys and sells, though the import already
