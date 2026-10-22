@@ -3,11 +3,6 @@
 What is left to do, most urgent first. When an item ships, delete it from this file in the same commit
 (the commit message and git history keep the record). Sizes: S ≈ an hour, M ≈ half a day, L = more.
 
-## Must have — data loss or silent breakage
-
-- **Move sync to Upstash (owner action, S).** The app now explains a lost vault and recreates it, and the README
-  gives the steps; what is left is connecting Upstash for Redis in the Vercel dashboard (Storage) and redeploying.
-
 ## Important — reliability
 
 - **Alert when Yahoo or Morningstar break (M).** Both sources are unofficial and change without notice. A daily

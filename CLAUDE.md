@@ -24,7 +24,7 @@ No dependencies and no build step: plain Node (≥ 18.17; CI uses 22) and browse
 ## Deployment
 
 - Pushing to `main` deploys production on Vercel (https://connect-liard-three.vercel.app); other branches and PRs get preview URLs behind Vercel authentication. GitHub Actions CI runs on `main` and on PRs.
-- Vercel serves `public/` as static files and `api/*.mjs` as functions (`vercel.json`). Sync uses the project's Redis through `REDIS_URL` (free tier: 30 MB, no persistence). Anyone can create a vault on purpose: the owner's friends use this deployment too.
+- Vercel serves `public/` as static files and `api/*.mjs` as functions (`vercel.json`). Sync uses the project's Upstash for Redis through `UPSTASH_KV_REST_API_URL`/`_TOKEN` (free plan: disk-persisted, 500,000 commands a month, about 2 per sync poll); Upstash takes precedence over the older, non-persistent store still linked as `REDIS_URL`. Anyone can create a vault on purpose: the owner's friends use this deployment too.
 
 ## Architecture
 
