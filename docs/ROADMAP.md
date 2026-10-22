@@ -5,8 +5,6 @@ What is left to do, most urgent first. When an item ships, delete it from this f
 
 ## Important — reliability
 
-- **Trade Republic import test with a realistic fake CSV (S).** TR's format changes now and then; only a small
-  calculation test covers the importer today.
 - **Restore regression test (S).** Check that a backup from an older version still restores, so friends' old
   files stay readable.
 

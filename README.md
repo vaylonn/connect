@@ -106,7 +106,7 @@ lib/            Yahoo Finance client, compositions (Morningstar, justETF), /api 
 public/         the app (HTML, CSS, JS, fonts, icons, PWA)
   js/           UI, CSV import, calculations, storage, sync, chart, ETF library
 tools/          Trade Republic CSV → backup, from the command line
-tests/          calculations, sync API and translations; end-to-end browser tests; fake Yahoo
+tests/          calculations, Trade Republic import, sync API and translations; end-to-end browser tests; fake Yahoo
 ```
 
 **ETF library** (`public/js/library.js`): Yahoo symbol, sectors, countries and top companies of known funds, as orders of magnitude (mid-2026).
