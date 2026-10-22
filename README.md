@@ -92,6 +92,8 @@ npm install --no-save playwright && npx playwright install chromium
 node --test tests/browser.e2e.mjs
 ```
 
+**Upstream watch**: a daily GitHub Action (`.github/workflows/upstreams.yml`) runs `node tools/check-upstreams.mjs` against Yahoo Finance, Morningstar and justETF; when one of them changes, the run fails and GitHub sends an email.
+
 **Roadmap**: [`docs/ROADMAP.md`](docs/ROADMAP.md) lists what is left to do, most urgent first.
 
 **Structure**

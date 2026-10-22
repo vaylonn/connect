@@ -1,0 +1,22 @@
+name: Upstreams
+
+# Daily check that Yahoo Finance, Morningstar and justETF still answer as Carnet expects.
+# A failed run makes GitHub email the owner, before friends see « 0 à jour » in the app.
+on:
+  schedule:
+    - cron: '17 6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Yahoo Finance, Morningstar, justETF
+        run: node tools/check-upstreams.mjs
