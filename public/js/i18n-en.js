@@ -573,6 +573,14 @@ export const EN = {
   'Installer': 'Install',
   'Carnet est installée.': 'Carnet is installed.',
 
+  // ——— Backup reminder ———
+  'Dernière sauvegarde il y a {n} jours.': 'Last backup {n} days ago.',
+  'Aucune sauvegarde depuis {n} jours.': 'No backup for {n} days.',
+  'Si le navigateur efface ses données, ce fichier permet de tout retrouver.': 'If the browser erases its data, this file gets everything back.',
+  'Exporter': 'Export',
+  'Dernière sauvegarde depuis cet appareil : {x}.': 'Last backup from this device: {x}.',
+  'Aucune sauvegarde depuis cet appareil.': 'No backup from this device yet.',
+
   // ——— Example data and wipe ———
   'Courtier PEA': 'PEA broker',
   'Courtier': 'Broker',

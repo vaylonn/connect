@@ -142,7 +142,7 @@ function viewHome() {
     </div>
     <div class="meta">${tot.cost > 0 ? t('Depuis l’achat, sur {x} investis.', { x: eur(tot.cost, 0) }) : t('Ajoutez des placements pour suivre leur plus-value.')}</div>
   </section>`;
-  const stale = staleCard();
+  const stale = staleCard() + backupCard();
   const chart = `<section class="card chart-card" aria-label="${t('Évolution')}">
     <div class="chart-top"><h3>${t('Évolution')}</h3>
       <div class="chips" role="group" aria-label="${t('Période')}">${['1M', '6M', '1A', 'Tout'].map(r => `<button class="chip" data-action="range" data-v="${r}" aria-pressed="${ui.range === r}">${t(r)}</button>`).join('')}</div>
@@ -546,6 +546,7 @@ function sectionImport() {
     <section class="card"><h3>${t('Sauvegarde')}</h3><p class="lead">${t('Un fichier à garder de côté, ou à restaurer sur un appareil sans synchronisation.')}</p>
       <div class="btn-row"><button class="btn" data-action="export-plain" ${data.lines.length ? '' : 'disabled'}>${ICONS.download}${t('Exporter en clair')}</button><button class="btn" data-action="export-enc" ${data.lines.length ? '' : 'disabled'}>${ICONS.lock}${t('Exporter chiffrée')}</button></div>
       <div class="btn-row" style="margin-top:8px"><button class="btn primary" data-action="pick-backup">${ICONS.upload}${t('Restaurer une sauvegarde')}</button></div>
+      <p class="small muted" style="margin:12px 0 0">${device().lastExport ? t('Dernière sauvegarde depuis cet appareil : {x}.', { x: dateLong(device().lastExport.slice(0, 10)) }) : t('Aucune sauvegarde depuis cet appareil.')}</p>
       <p class="note">${t('La sauvegarde chiffrée utilise AES-GCM 256 bits avec une clé tirée de votre phrase de passe (PBKDF2, 310 000 itérations). Sans la phrase, le fichier est illisible : rien ne permet de la retrouver.')}</p>
     </section>`;
 }
@@ -933,8 +934,8 @@ async function saveFile(filename, text) {
   if (window.claude && typeof window.claude.use === 'function') {
     try {
       const dl = await window.claude.use('downloads');
-      if (dl) { await dl.save({ filename, data: text }); toast(t('Fichier enregistré.')); return; }
-    } catch (e) { if (e && e.code === 'declined') return; }
+      if (dl) { await dl.save({ filename, data: text }); toast(t('Fichier enregistré.')); return true; }
+    } catch (e) { if (e && e.code === 'declined') return false; }
   }
   try {
     const blob = new Blob([text], { type: 'application/json' });
@@ -942,6 +943,7 @@ async function saveFile(filename, text) {
     const a = document.createElement('a'); a.href = url; a.download = filename; document.body.append(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 4000);
     toast(t('Sauvegarde exportée : {x}', { x: filename }));
+    return true;
   } catch {
     openSheet(`${sheetHead(t('Copiez votre sauvegarde'), t('Le téléchargement est bloqué ici.'))}<textarea class="input" readonly id="bk-text">${esc(text)}</textarea><div class="btn-row" style="margin-top:12px"><button class="btn primary" data-copy>${t('Copier')}</button></div>`, {
       onMount: sh => sh.querySelector('[data-copy]').addEventListener('click', () => { const ta = sh.querySelector('#bk-text'); navigator.clipboard?.writeText(ta.value).then(() => toast(t('Copié.')), () => { ta.select(); }); }),
@@ -1014,11 +1016,32 @@ async function restoreFlow() {
 async function exportFlow(encrypted) {
   const payload = backupPayload(data);
   const stamp = today();
-  if (!encrypted) return saveFile(`carnet-sauvegarde-${stamp}.json`, JSON.stringify(payload, null, 1));
-  const pass = await passSheet({ title: t('Sauvegarde chiffrée'), confirm: true });
-  if (!pass) return;
-  const enc = await encryptBackup(payload, pass);
-  return saveFile(`carnet-sauvegarde-chiffree-${stamp}.json`, JSON.stringify(enc));
+  let saved;
+  if (!encrypted) saved = await saveFile(`carnet-sauvegarde-${stamp}.json`, JSON.stringify(payload, null, 1));
+  else {
+    const pass = await passSheet({ title: t('Sauvegarde chiffrée'), confirm: true });
+    if (!pass) return;
+    saved = await saveFile(`carnet-sauvegarde-chiffree-${stamp}.json`, JSON.stringify(await encryptBackup(payload, pass)));
+  }
+  if (saved) { setDevice({ lastExport: nowIso(), backupSnooze: '' }); render(); }
+}
+
+// Backup reminder: without sync, a backup file is the only copy if the browser erases its data.
+// Dates are per device (carnet:device:v1): restoring an old file must not look like a fresh backup.
+const BACKUP_DAYS = 30;
+function backupAge() {
+  const d = device();
+  if (!d.lastExport && !d.firstData) { setDevice({ firstData: nowIso() }); return 0; }
+  return Math.floor((Date.now() - Date.parse(d.lastExport || d.firstData)) / 86400000);
+}
+function backupCard() {
+  if (data.demo || !data.lines.length || syncState()) return '';
+  const days = backupAge(), d = device();
+  if (days < BACKUP_DAYS || (d.backupSnooze && d.backupSnooze > nowIso())) return '';
+  return `<section class="callout backup-hint" aria-label="${t('Sauvegarde')}">
+    <p><b>${t(d.lastExport ? 'Dernière sauvegarde il y a {n} jours.' : 'Aucune sauvegarde depuis {n} jours.', { n: days })}</b> ${t('Si le navigateur efface ses données, ce fichier permet de tout retrouver.')}</p>
+    <div class="btn-row"><button class="btn primary sm" data-action="export-plain">${ICONS.download}${t('Exporter')}</button><button class="btn sm" data-action="backup-snooze">${t('Plus tard')}</button></div>
+  </section>`;
 }
 
 // ——— Sync (encrypted in the browser, see sync.js) ———
@@ -1410,6 +1433,7 @@ document.addEventListener('click', async e => {
     case 'edit-account': accountForm(b.dataset.id); break;
     case 'refresh': refreshPrices(); break;
     case 'install': installSheet(); break;
+    case 'backup-snooze': setDevice({ backupSnooze: new Date(Date.now() + 7 * 86400000).toISOString() }); render(); break;
     case 'snooze': data.settings.snoozeUntil = new Date(Date.now() + 86400000).toISOString(); commit(); break;
     case 'theme': data.settings.theme = v; commit(); break;
     case 'lang': data.settings.lang = v; commit(); break;
@@ -1420,7 +1444,7 @@ document.addEventListener('click', async e => {
     case 'demo': data = demoData(); commit(t('Données d’exemple chargées.')); break;
     case 'clear-demo': { const keep = { settings: data.settings }; data = { ...emptyData(), ...keep }; clearAll(); commit(t('Exemple effacé.')); break; }
     case 'wipe':
-      if (await confirmSheet({ title: t('Tout effacer ?'), text: t('Comptes, lignes, historique et réglages seront supprimés de cet appareil. Cette action ne peut pas être annulée.') + (syncState() ? ' ' + t('Cet appareil sera aussi déconnecté du coffre, qui reste intact.') : ''), ok: t('Tout effacer'), danger: true })) { clearSyncState(); clearAll(); data = emptyData(); land('patrimoine'); commit(t('Données effacées.')); }
+      if (await confirmSheet({ title: t('Tout effacer ?'), text: t('Comptes, lignes, historique et réglages seront supprimés de cet appareil. Cette action ne peut pas être annulée.') + (syncState() ? ' ' + t('Cet appareil sera aussi déconnecté du coffre, qui reste intact.') : ''), ok: t('Tout effacer'), danger: true })) { clearSyncState(); clearAll(); setDevice({ firstData: '', lastExport: '', backupSnooze: '' }); data = emptyData(); land('patrimoine'); commit(t('Données effacées.')); }
       break;
     case 'sync-create': syncSheet(true); break;
     case 'sync-login': syncSheet(false); break;

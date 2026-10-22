@@ -5,9 +5,6 @@ What is left to do, most urgent first. When an item ships, delete it from this f
 
 ## Must have — data loss or silent breakage
 
-- **Backup reminder (S).** Without sync, a browser cleanup loses everything. Show a discreet banner such as
-  « Dernière sauvegarde il y a 30 jours ». The app does not record exports yet: store the date of
-  the last export (per device, so it should not go into backups).
 - **Redis without persistence (S–M).** Vercel's free Redis can lose vaults (restart, eviction once the 30 MB
   are full). « Recréer le coffre » covers it, but friends won't know why their vault vanished. Either move to
   Upstash (disk-persisted, still free) or at least explain the risk in the Sync section.

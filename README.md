@@ -39,7 +39,7 @@ To install the app: Settings → Install the app shows the steps for your device
 - **Stored in the browser** (`localStorage`). Clearing the site's data deletes it; private browsing does not keep it.
 - **Sync**: the passphrase never leaves the device. It is used to encrypt the data (256-bit AES-GCM, key derived with PBKDF2, 310,000 iterations). The server only keeps an unreadable blob, and blocks for fifteen minutes any address that makes 20 rejected attempts in a row.
   **Forgotten passphrase = lost vault**, but the data already on your devices stays intact.
-- **Backup**: Settings → Import & backup → *Export* (plain or encrypted), then *Restore* on another device.
+- **Backup**: Settings → Import & backup → *Export* (plain or encrypted), then *Restore* on another device. Without sync, Carnet reminds you after 30 days without a backup from this device.
 - **Only information sent in plain text**: the securities' symbols (e.g. `WPEA.PA`), to fetch prices. Never quantities or amounts.
 
 ---
