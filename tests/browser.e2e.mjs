@@ -12,6 +12,7 @@ import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { CSV } from './tr-export.mjs';
+import { linxeaXlsx } from './linxea-export.mjs';
 
 const { chromium, devices } = createRequire(import.meta.url)('playwright'); // CommonJS lookup also honours NODE_PATH
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -188,13 +189,13 @@ test('import sources: a dropdown, then the chosen source’s guide opens the fil
   const csv = join(TMP, 'guide.csv');
   writeFileSync(csv, 'datetime,date,account_type,category,type,asset_class,name,symbol,shares,price,amount,fee,tax\n2025-01-02T08:00:00Z,2025-01-02,DEFAULT,CASH,CUSTOMER_INBOUND,,,,,,1000,,\n');
   const { page, done } = await open({ hash: '#donnees/import' });
-  assert.deepEqual(await page.locator('#imp-source option').allInnerTexts(), ['Trade Republic']);
+  assert.deepEqual(await page.locator('#imp-source option').allInnerTexts(), ['Trade Republic', 'Linxea']);
   await page.locator('[data-action="import-source"]').click(); await page.waitForSelector('.sheet.open');
   assert.equal(await page.locator('.sheet .step').count(), 3);
   await pick(page, page.locator('.sheet [data-go]'), csv);
   await page.waitForSelector('.sheet.open'); await page.locator('.sheet [data-ok]').click(); await page.waitForTimeout(400);
   await section(page, 'import');
-  assert.match(await page.locator('#view .kv').innerText(), /Trade Republic · /);
+  assert.match(await page.locator('#view .kv').innerText(), /Trade Republic\s+importé le/);
   await done();
 });
 
@@ -241,17 +242,17 @@ test('PEA 5-year reminder, chart of one account, anonymous view to share', async
   const { page, done } = await open({ device: { viewport: { width: 1280, height: 900 } } });
   await pick(page, page.getByRole('button', { name: 'Importer un CSV Trade Republic' }), csv);
   await page.waitForSelector('.sheet.open'); await page.locator('.sheet [data-ok]').click(); await page.waitForTimeout(500);
-  assert.equal(await page.locator('.pea-hint').count(), 0, 'the PEA opened in 2025: nothing to say yet');
+  assert.equal(await page.locator('.milestone-hint').count(), 0, 'the PEA opened in 2025: nothing to say yet');
   // First deposit five years ago minus a month: the reminder shows, once
   const d = new Date(); d.setUTCFullYear(d.getUTCFullYear() - 5); d.setUTCDate(d.getUTCDate() + 30);
   await page.locator('.acc', { hasText: 'Trade Republic PEA' }).click(); await page.waitForSelector('.sheet.open');
   assert.match(await page.locator('.sheet').innerText(), /à partir du 2 janv\. 2030/);
   await page.locator('.sheet [data-act="edit"]').click(); await page.waitForSelector('#ac-open');
   await page.fill('#ac-open', d.toISOString().slice(0, 10)); await page.locator('.sheet.open button[type=submit]').click(); await page.waitForTimeout(400);
-  assert.match(await page.locator('.pea-hint').innerText(), /Trade Republic PEA aura 5 ans le/);
-  await page.locator('[data-action="pea-seen"]').click(); await page.waitForTimeout(200);
+  assert.match(await page.locator('.milestone-hint').innerText(), /Trade Republic PEA aura 5 ans le/);
+  await page.locator('[data-action="milestone-seen"]').click(); await page.waitForTimeout(200);
   await page.reload(); await page.waitForTimeout(300);
-  assert.equal(await page.locator('.pea-hint').count(), 0, 'dismissed for good');
+  assert.equal(await page.locator('.milestone-hint').count(), 0, 'dismissed for good');
   // The chart narrows to one account
   await page.selectOption('#chart-scope', 'acc:tr-pea'); await page.waitForTimeout(200);
   assert.equal(await page.locator('.scope-label').innerText(), 'Trade Republic PEA');
@@ -269,5 +270,45 @@ test('PEA 5-year reminder, chart of one account, anonymous view to share', async
   await page.locator('.sheet [data-part="lines"]').click(); await page.waitForTimeout(300);
   await page.locator('.sheet [data-copy]').click(); await page.waitForTimeout(200);
   assert.doesNotMatch(await page.evaluate(() => navigator.clipboard.readText()), /Lignes|Apple/, 'holdings left out');
+  await done();
+});
+
+test('Linxea: the guide, the workbook, and the contract in every view', async () => {
+  const xlsx = join(TMP, 'linxea.xlsx'); writeFileSync(xlsx, linxeaXlsx());
+  const { page, done } = await open();
+  // From the empty screen, the Linxea button opens the guide
+  await page.getByRole('button', { name: 'Importer un export Linxea' }).click(); await page.waitForSelector('.sheet.open');
+  assert.deepEqual(await page.locator('.sheet .step b').allInnerTexts(), ['Sur l’espace client Linxea, ouvrez votre contrat', 'Sous « Composition du contrat », touchez « Télécharger vos données »', 'Importez le fichier ici']);
+  assert.equal(await page.locator('.sheet .step a').getAttribute('href'), 'https://espaceclient.linxea.com');
+  await pick(page, page.locator('.sheet [data-go]'), xlsx);
+  await page.waitForSelector('.sheet.open');
+  assert.match(await page.locator('.sheet .sheet-head').innerText(), /6 supports au 23 oct\. 2026/);
+  assert.equal(await page.locator('.sheet .holding').count(), 6);
+  await page.locator('.sheet [data-ok]').click(); await page.waitForTimeout(500);
+  assert.match(await total(page), /^2 665,6/);
+  assert.match(await page.locator('.acc').innerText(), /Assurance-vie[\s\S]*Linxea Spirit 2/);
+  // A fund: its category, Linxea's price and the fund's own performance
+  await page.locator('#lines .line', { hasText: 'Amundi Core S&P 500' }).click(); await page.waitForSelector('.sheet.open');
+  const sheet = await page.locator('.sheet.open').innerText();
+  assert.match(sheet, /Actions Amérique · LU0496786574/);
+  assert.match(sheet, /22 oct\. 2026 · Linxea/);
+  assert.match(sheet, /Performance du support[\s\S]*Depuis janvier\s+\+17,4 %[\s\S]*3 ans\s+\+21,2 %\s+par an/);
+  await page.keyboard.press('Escape'); await page.waitForTimeout(400);
+  // The contract: values date and the 8-year milestone
+  await page.locator('.acc').click(); await page.waitForSelector('.sheet.open');
+  assert.match(await page.locator('.sheet.open').innerText(), /Valeurs Linxea du 23 oct\. 2026[\s\S]*Rachats avec abattement sur les gains à partir du 23 oct\. 2034/);
+  await page.keyboard.press('Escape'); await page.waitForTimeout(400);
+  await tab(page, 'analyse');
+  assert.match(await page.locator('.bars').innerText(), /Obligations et liquidités/);
+  await tab(page, 'historique');
+  assert.match(await page.locator('#view .card').innerText(), /L’export Linxea et les lignes ajoutées à la main ne donnent que des positions/);
+  // The same file again: nothing doubles
+  await section(page, 'import');
+  assert.match(await page.locator('#view .kv').innerText(), /Linxea\s+importé le[\s\S]*Valeurs au\s+23 oct\. 2026/);
+  await page.selectOption('#imp-source', 'linxea'); await page.locator('[data-action="import-source"]').click(); await page.waitForSelector('.sheet.open');
+  await pick(page, page.locator('.sheet [data-go]'), xlsx);
+  await page.waitForSelector('.sheet.open'); await page.locator('.sheet [data-ok]').click(); await page.waitForTimeout(500);
+  assert.equal(await page.locator('#lines .line').count(), 6);
+  assert.match(await total(page), /^2 665,6/);
   await done();
 });

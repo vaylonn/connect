@@ -1,0 +1,235 @@
+{
+ "app": "carnet",
+ "schema": 1,
+ "exportedAt": "2026-10-24T10:00:00.000Z",
+ "profile": {
+  "firstName": "Assurée"
+ },
+ "settings": {
+  "theme": "auto",
+  "lang": "fr",
+  "taxRate": 31.4,
+  "staleDays": 4,
+  "snoozeUntil": ""
+ },
+ "accounts": [
+  {
+   "id": "lx-0000012345",
+   "name": "Linxea Spirit 2",
+   "institution": "Linxea",
+   "kind": "av",
+   "color": "lilac",
+   "source": "linxea",
+   "contract": "0000012345",
+   "asOf": "2026-10-23",
+   "openedAt": "2019-02-01",
+   "note": "Versements libres"
+  }
+ ],
+ "lines": [
+  {
+   "id": "lx-0000012345-fondseurng",
+   "source": "linxea",
+   "accountId": "lx-0000012345",
+   "envelope": "Assurance-vie",
+   "type": "fonds-euros",
+   "name": "Fonds en euros Spirica Fonds Euro Nouvelle Génération",
+   "isin": "",
+   "ticker": "",
+   "category": "Fonds Euro",
+   "subcategory": "Fonds Euros",
+   "priceDate": "2026-10-23",
+   "priceSource": "linxea",
+   "pending": 0,
+   "equity": 0,
+   "qty": 1,
+   "amount": 1200,
+   "price": 1200,
+   "cost": 1200,
+   "events": [
+    [
+     "2026-10-23",
+     1,
+     1200,
+     1200
+    ]
+   ]
+  },
+  {
+   "id": "lx-0000012345-lu0496786574",
+   "source": "linxea",
+   "accountId": "lx-0000012345",
+   "envelope": "Assurance-vie",
+   "type": "etf",
+   "name": "Amundi Core S&P 500 Swap UCITS ETF EUR Dist",
+   "isin": "LU0496786574",
+   "ticker": "",
+   "category": "Fonds Actions",
+   "subcategory": "Actions Amérique",
+   "priceDate": "2026-10-22",
+   "priceSource": "linxea",
+   "pending": 0,
+   "equity": 1,
+   "fundPerf": {
+    "ytd": 0.173698,
+    "w1": -0.003753,
+    "m1": 0.009262,
+    "m6": 0.125793,
+    "y3": 0.211627,
+    "y5": 0.133692,
+    "y10": 0.15018,
+    "asOf": "2026-10-22"
+   },
+   "qty": 10,
+   "price": 70.65,
+   "cost": 650,
+   "events": [
+    [
+     "2026-10-23",
+     10,
+     650,
+     70.65
+    ]
+   ],
+   "target": 60,
+   "note": "Cœur du contrat"
+  },
+  {
+   "id": "lx-0000012345-lu1623762843",
+   "source": "linxea",
+   "accountId": "lx-0000012345",
+   "envelope": "Assurance-vie",
+   "type": "fonds",
+   "name": "Carmignac Pf Credit A EUR Acc",
+   "isin": "LU1623762843",
+   "ticker": "",
+   "category": "Fonds Obligations",
+   "subcategory": "Obligations Monde Secteur Privé",
+   "priceDate": "2026-10-22",
+   "priceSource": "linxea",
+   "pending": 0,
+   "equity": 0,
+   "fundPerf": {
+    "ytd": -0.017474,
+    "y3": 0.065066,
+    "asOf": "2026-10-22"
+   },
+   "lookthrough": {
+    "sector": "bonds",
+    "country": ""
+   },
+   "qty": 2,
+   "price": 155.19,
+   "cost": 320,
+   "events": [
+    [
+     "2026-10-23",
+     2,
+     320,
+     155.19
+    ]
+   ],
+   "target": 40
+  },
+  {
+   "id": "lx-0000012345-fr001400mut2",
+   "source": "linxea",
+   "accountId": "lx-0000012345",
+   "envelope": "Assurance-vie",
+   "type": "fonds",
+   "name": "Asian Convictions I",
+   "isin": "FR001400MUT2",
+   "ticker": "",
+   "category": "Fonds Diversifiés",
+   "subcategory": "Allocation flexible Monde",
+   "priceDate": "2026-10-22",
+   "priceSource": "linxea",
+   "pending": 0,
+   "equity": 0.5,
+   "fundPerf": {
+    "ytd": 0.168972,
+    "asOf": "2026-10-22"
+   },
+   "qty": 1.5,
+   "price": 136.91,
+   "cost": 200,
+   "events": [
+    [
+     "2026-10-23",
+     1.5,
+     200,
+     136.91
+    ]
+   ]
+  },
+  {
+   "id": "lx-0000012345-fr0013416716",
+   "source": "linxea",
+   "accountId": "lx-0000012345",
+   "envelope": "Assurance-vie",
+   "type": "etf",
+   "name": "Amundi Physical Gold ETC C",
+   "isin": "FR0013416716",
+   "ticker": "",
+   "category": "Fonds Matières premières",
+   "subcategory": "ETC",
+   "priceDate": "2026-10-22",
+   "priceSource": "linxea",
+   "pending": 0,
+   "equity": 0,
+   "lookthrough": {
+    "sector": "commo",
+    "country": ""
+   },
+   "qty": 1,
+   "price": 143.38,
+   "cost": 140,
+   "events": [
+    [
+     "2026-10-23",
+     1,
+     140,
+     143.38
+    ]
+   ]
+  },
+  {
+   "id": "lx-0000012345-frc764210890",
+   "source": "linxea",
+   "accountId": "lx-0000012345",
+   "envelope": "Assurance-vie",
+   "type": "structure",
+   "name": "EMTN EXIGENCE 38 Spirit",
+   "isin": "FRC764210890",
+   "ticker": "",
+   "category": "Produits Structurés",
+   "subcategory": "Capital protégé, actions europe et us",
+   "priceDate": "2026-10-23",
+   "priceSource": "linxea",
+   "pending": 0,
+   "equity": 0,
+   "qty": 0.1,
+   "price": 1000,
+   "cost": 100,
+   "events": [
+    [
+     "2026-10-23",
+     0.1,
+     100,
+     1000
+    ]
+   ]
+  }
+ ],
+ "priceHistory": {},
+ "trStats": null,
+ "imports": [
+  {
+   "at": "2026-10-24T09:00:00.000Z",
+   "source": "linxea",
+   "rows": 6,
+   "to": "2026-10-23",
+   "contracts": 1
+  }
+ ]
+}

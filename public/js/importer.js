@@ -216,24 +216,32 @@ export function importTradeRepublic(text) {
   return { accounts, lines, stats, transactions };
 }
 
+// What the user set on an imported line or account survives the next import of the same one
+// (name, Yahoo symbol, more recent price, breakdown, target, note; account name, colour, note, opening date).
+export function carryOver(o, l) {
+  const n = { ...l };
+  if (o.customName) { n.name = o.name; n.customName = true; }
+  if (o.ticker && o.customTicker) { n.ticker = o.ticker; n.customTicker = true; }
+  else if (o.ticker && o.tickerAuto && !n.ticker) { n.ticker = o.ticker; n.tickerAuto = true; }
+  if (o.noSymbol && !n.ticker) n.noSymbol = o.noSymbol;
+  if (!CASH.has(l.type) && o.priceDate && o.priceDate > l.priceDate) { n.price = o.price; n.priceDate = o.priceDate; n.priceSource = o.priceSource; }
+  if (o.lookthrough) n.lookthrough = o.lookthrough;
+  if (o.target) n.target = o.target;
+  if (o.note) n.note = o.note;
+  return n;
+}
+const CASH = new Set(['especes', 'livret', 'fonds-euros']);
+export function carryAccount(o, a) {
+  return o ? { ...a, name: o.name, color: o.color, ...(o.note ? { note: o.note } : {}), ...(o.openedAt ? { openedAt: o.openedAt } : {}) } : a;
+}
+
 // Merges an import into existing data: replaces what came from Trade Republic,
-// keeps manually entered lines and per-line settings (name, symbol, more recent price, target, note).
+// keeps manually entered lines and the user's settings (carryOver).
 export function mergeImport(data, imp) {
   const old = new Map(data.lines.filter(l => l.source === 'tr').map(l => [l.id, l]));
-  const lines = imp.lines.map(l => {
-    const o = old.get(l.id);
-    if (!o) return l;
-    const n = { ...l };
-    if (o.customName) { n.name = o.name; n.customName = true; }
-    if (o.ticker && o.customTicker) { n.ticker = o.ticker; n.customTicker = true; }
-    if (l.type !== 'especes' && o.priceDate && o.priceDate > l.priceDate) { n.price = o.price; n.priceDate = o.priceDate; n.priceSource = o.priceSource; }
-    if (o.lookthrough) n.lookthrough = o.lookthrough;
-    if (o.target) n.target = o.target;
-    if (o.note) n.note = o.note;
-    return n;
-  });
+  const lines = imp.lines.map(l => old.has(l.id) ? carryOver(old.get(l.id), l) : l);
   const oldAcc = new Map(data.accounts.map(a => [a.id, a]));
-  const accounts = imp.accounts.map(a => { const o = oldAcc.get(a.id); return o ? { ...a, name: o.name, color: o.color, ...(o.note ? { note: o.note } : {}), ...(o.openedAt ? { openedAt: o.openedAt } : {}) } : a; });
+  const accounts = imp.accounts.map(a => carryAccount(oldAcc.get(a.id), a));
   return {
     ...data,
     accounts: [...accounts, ...data.accounts.filter(a => a.source !== 'tr')],

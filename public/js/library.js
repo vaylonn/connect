@@ -16,6 +16,8 @@ export const SECTORS = {
   re: 'Immobilier',
   crypto: 'Crypto-actifs',
   pe: 'Capital-investissement',
+  bonds: 'Obligations et liquidités',
+  commo: 'Matières premières',
   other: 'Autres',
 };
 

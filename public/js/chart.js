@@ -23,7 +23,9 @@ export function lineChart(host, points, { onHover } = {}) {
   const pad = { l: 4, r: 44, t: 12, b: 26 };
   const vals = points.flatMap(p => [p.value, p.invested]);
   let min = Math.min(...vals), max = Math.max(...vals);
-  if (min === max) { min -= 1; max += 1; }
+  // A nearly flat series (a single snapshot, savings): at least 2 % of height, so the ticks stay distinct
+  const mid = (min + max) / 2, least = Math.max(Math.abs(mid) * 0.02, 1);
+  if (max - min < least) { min = mid - least / 2; max = mid + least / 2; }
   const ticks = niceTicks(min, max, 3);
   min = Math.min(min, ticks[0]); max = Math.max(max, ticks[ticks.length - 1]);
   const t0 = new Date(points[0].d).getTime(), t1 = new Date(points[points.length - 1].d).getTime();
@@ -43,10 +45,12 @@ export function lineChart(host, points, { onHover } = {}) {
   }
   // date markers
   const nLabels = W < 420 ? 3 : 5;
+  let prev = '';
   for (let i = 0; i < nLabels; i++) {
     const p = points[Math.round(i * (points.length - 1) / (nLabels - 1))];
+    if (monthShort(p.d) === prev) continue; // a short history: one label per month
     const tx = el('text', { x: x(p.d), y: H - 6, class: 'axis', 'text-anchor': i === 0 ? 'start' : i === nLabels - 1 ? 'end' : 'middle' });
-    tx.textContent = monthShort(p.d); svg.append(tx);
+    tx.textContent = prev = monthShort(p.d); svg.append(tx);
   }
   const path = key => points.map((p, i) => (i ? 'L' : 'M') + x(p.d).toFixed(1) + ' ' + y(p[key]).toFixed(1)).join(' ');
   const area = path('value') + ` L ${x(points[points.length - 1].d).toFixed(1)} ${H - pad.b} L ${x(points[0].d).toFixed(1)} ${H - pad.b} Z`;

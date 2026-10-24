@@ -8,8 +8,8 @@ Personal net-worth tracker: PEA, brokerage account, crypto, savings accounts, li
 - Net worth, analysis (sectors, countries, companies), buy or sell simulator.
 - Real performance (annualised return on what you paid in), target allocation with rebalancing suggestions.
 - History of buys, sells, dividends, interest and deposits; notes on any holding or account.
-- Chart of the whole net worth, one account or one envelope; PEA 5-year date and reminder; an anonymous view of your allocation to share (percentages only).
-- Trade Republic CSV import, manual entry for any other account.
+- Chart of the whole net worth, one account or one envelope; PEA 5-year and life insurance 8-year dates, with a reminder; an anonymous view of your allocation to share (percentages only).
+- Trade Republic CSV import, Linxea life insurance import (Excel file), manual entry for any other account.
 - Up-to-date prices from Yahoo Finance.
 - Sync across devices, end-to-end encrypted (optional).
 - Installable on a phone, works offline, light or dark mode.
@@ -21,9 +21,11 @@ Personal net-worth tracker: PEA, brokerage account, crypto, savings accounts, li
 
 1. **Import Trade Republic.** In the TR app: *Transaction export* as CSV, **since the account was opened**. Then Carnet → Settings → Import & backup → *Import data*: pick Trade Republic, *Continue*, *Choose the file* (the window recalls these steps).
    An export covering only part of the period gives wrong quantities and cash: Carnet rebuilds everything from the full history.
-2. **Add your other accounts.** Settings → Accounts → *Add account* (savings account, life insurance, PER…), then *Add holding*.
-3. **Refresh prices** with the button at the top of the screen.
-4. **Sync your devices** (optional). Settings → Sync → *Create vault* on the first device, then *Sign in* with the same username and passphrase on the others.
+2. **Import a Linxea contract** (life insurance, PER). On espaceclient.linxea.com, open the contract, then under *Composition du contrat* tap *Télécharger vos données*: an Excel file. Then Carnet → Settings → Import & backup → pick Linxea, *Continue*, *Choose the file*.
+   The file holds the contract's funds on a date (units, price, value, cost basis, the fund's performance), not its operations: import it again now and then to update the contract and add a point to its chart.
+3. **Add your other accounts.** Settings → Accounts → *Add account* (savings account, life insurance, PER…), then *Add holding*.
+4. **Refresh prices** with the button at the top of the screen.
+5. **Sync your devices** (optional). Settings → Sync → *Create vault* on the first device, then *Sign in* with the same username and passphrase on the others.
 
 To install the app: Settings → Install the app shows the steps for your device (it is also offered on a phone's first visit). Installed, it opens full screen and iOS no longer erases its data after 7 days without a visit.
 
@@ -43,6 +45,8 @@ To install the app: Settings → Install the app shows the steps for your device
   Simulate → *Rebalance* suggests where new money should go (to the holdings furthest below target first) or, with sales, how to get exactly back on target.
 - **PEA 5 years**: withdrawals are free of income tax (social charges remain) 5 years after the first deposit, and no longer close the plan.
   Carnet takes the date entered on the account (*Edit account* → *First deposit*), else the account's first known operation, shows it on the account and in the simulator, and reminds you on the home screen from two months before.
+- **Life insurance 8 years**: after 8 years, gains withdrawn get a yearly allowance (€4,600, €9,200 for a couple) and a lower rate. Same date logic as the PEA (*First deposit*, else the first known snapshot).
+- **Linxea contracts**: values are Linxea's on the file's date; the cost basis is the value minus Linxea's gain. Funds Yahoo knows get their price refreshed like any other; the others (and structured products, which have no public price) keep the last imported value, without a stale-price warning. *Fund performance* on a holding is the fund's own past performance as published by Linxea (3, 5 and 10 years: per year), not your return. Funds without a known composition are first broken down by their Linxea category (bonds, commodities, real estate).
 - Small differences with TR are normal: TR shows real-time prices, Yahoo slightly delayed ones.
 
 ## Your data
@@ -115,16 +119,18 @@ api/            Vercel functions: health, quote, search, composition, sync
 lib/            Yahoo Finance client, compositions (Morningstar, justETF), /api routes,
                 sync vaults (Redis or files), per-address limits
 public/         the app (HTML, CSS, JS, fonts, icons, PWA)
-  js/           UI, CSV import, calculations, storage, sync, chart, ETF library
+  js/           UI, Trade Republic and Linxea imports (xlsx.js reads Excel files), calculations,
+                storage, sync, chart, ETF library
 tools/          Trade Republic CSV → backup, from the command line
-tests/          calculations, Trade Republic import, performance and target allocation, CSP, restore of old
-                backups, sync API, translations; end-to-end browser tests; fake Yahoo; a realistic
-                Trade Republic export (tr-export.mjs); fixtures (frozen backup files)
+tests/          calculations, Trade Republic and Linxea imports, performance and target allocation, CSP,
+                restore of old backups, sync API, translations; end-to-end browser tests; fake Yahoo;
+                a realistic Trade Republic export (tr-export.mjs) and Linxea workbook (linxea-export.mjs,
+                built with invented figures); fixtures (frozen backup files)
 ```
 
 **ETF library** (`public/js/library.js`): Yahoo symbol, sectors, countries and top companies of known funds, as orders of magnitude (mid-2026).
 
-**History**: the tab lists the operations kept from the Trade Republic import: buys, sells, splits and free share grants (with the realised gain of each sale), and cash movements: deposits, withdrawals, dividends and interest (gross, with the withheld tax), saveback, and card payments summed per month. A new import replaces the Trade Republic history; imports made before version 1.4 kept only securities transactions.
+**History**: the tab lists the operations kept from the Trade Republic import: buys, sells, splits and free share grants (with the realised gain of each sale), and cash movements: deposits, withdrawals, dividends and interest (gross, with the withheld tax), saveback, and card payments summed per month. A new import replaces the Trade Republic history; imports made before version 1.4 kept only securities transactions. Linxea's file has no operations: those contracts only show in the other tabs.
 
 **Automatic compositions**: every ETF, fund (including life-insurance unit-linked funds) and stock gets its composition, fetched by the server (`/api/composition`, only the ISIN is sent). Main source: Morningstar (countries and all 11 sectors, seen through the index even for the PEA's synthetic ETFs, equity share, top holdings). Fallback: justETF (index holdings of synthetic ETFs). Refreshed every 30 days; the library is the fallback when the server finds nothing.
 To add a fund, add an entry with its ISIN. Check that the symbol matches the fund **and the right share class** (Acc or Dist): a neighbouring symbol can give a very different price.

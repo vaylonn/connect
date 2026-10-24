@@ -5,7 +5,9 @@ import { eur, num, qty as fqty } from './format.js';
 
 export const CASH_TYPES = new Set(['especes', 'livret', 'fonds-euros']);
 export const isCashLike = l => CASH_TYPES.has(l.type);
-export const NEEDS_PRICE = l => !isCashLike(l) && l.type !== 'non-cote' && l.type !== 'autre-fixe';
+export const NEEDS_PRICE = l => !isCashLike(l) && !['non-cote', 'structure', 'autre-fixe'].includes(l.type);
+// A price Yahoo can refresh: a symbol, or an ISIN not yet found absent from Yahoo (noSymbol, set on refresh)
+export const QUOTE_EXPECTED = l => NEEDS_PRICE(l) && !!(l.ticker || (l.isin && !l.noSymbol));
 
 export const ENVELOPE_ORDER = ['PEA', 'Compte-titres', 'Assurance-vie', 'PER', 'Crypto', 'Livrets', 'Espèces', 'Autre'];
 
@@ -71,7 +73,7 @@ export function totals(data) {
 
 export function staleLines(data, now = new Date(), days = 4) {
   const limit = new Date(now.getTime() - days * 86400000).toISOString().slice(0, 10);
-  return heldLines(data).filter(l => NEEDS_PRICE(l) && (l.ticker || l.isin) && (!l.priceDate || l.priceDate < limit));
+  return heldLines(data).filter(l => QUOTE_EXPECTED(l) && (!l.priceDate || l.priceDate < limit));
 }
 
 // ——— Look-through: sectors, countries, companies ———
@@ -88,7 +90,7 @@ function normalized(obj) {
 //   line   : a whole line (crypto, unlisted, product without breakdown)
 //   fund / direct: for a company, the fund that holds it or the direct line
 export const DIRECT = 'en direct';
-const OTHER_ASSETS = 'Obligations et liquidités';
+const OTHER_ASSETS = SECTORS.bonds;
 export function lookthrough(data) {
   const sectors = new Map(), countries = new Map(), companies = new Map();
   const parts = { sectors: new Map(), countries: new Map(), companies: new Map() };
@@ -395,10 +397,12 @@ export function rebalance(data, amount = 0, sell = false) {
   return { ...a, add, total, rows };
 }
 
-// ——— PEA ———
-// Withdrawals from a PEA are free of income tax 5 years after its first deposit (social charges remain).
+// ——— Tax milestones ———
+// PEA: withdrawals free of income tax 5 years after the first deposit (social charges remain).
+// Life insurance: after 8 years, gains withdrawn get a yearly allowance and a lower rate.
 // The date is the one the user gave (acc.openedAt), else the account's first known operation.
-export function peaStart(data, acc) {
+export const MILESTONE_YEARS = { pea: 5, av: 8 };
+export function accountStart(data, acc) {
   if (acc.openedAt) return acc.openedAt;
   const dates = [
     ...(data.transactions || []).filter(tr => tr.accountId === acc.id).map(tr => tr.date),
@@ -406,11 +410,12 @@ export function peaStart(data, acc) {
   ].filter(Boolean).sort();
   return dates[0] || '';
 }
-export function peaStatus(data, acc, now = new Date()) {
-  const start = peaStart(data, acc);
+export function milestone(data, acc, now = new Date()) {
+  const years = MILESTONE_YEARS[acc?.kind];
+  const start = years ? accountStart(data, acc) : '';
   if (!start) return null;
   const d = new Date(start + 'T00:00:00Z');
-  d.setUTCFullYear(d.getUTCFullYear() + 5);
+  d.setUTCFullYear(d.getUTCFullYear() + years);
   const free = iso(d);
-  return { start, free, guessed: !acc.openedAt, done: free <= iso(now), days: Math.round((Date.parse(free) - Date.parse(iso(now))) / 86400000) };
+  return { years, start, free, guessed: !acc.openedAt, done: free <= iso(now), days: Math.round((Date.parse(free) - Date.parse(iso(now))) / 86400000) };
 }

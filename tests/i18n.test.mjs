@@ -25,11 +25,12 @@ function calledKeys(src) {
 
 test('every text shown by the app has an English translation', () => {
   const app = read('public/js/app.js');
-  const keys = ['app.js', 'chart.js', 'compute.js', 'importer.js', 'store.js', 'sync.js'].flatMap(f => calledKeys(read('public/js/' + f)));
-  // Labels kept in tables and translated where they are shown
-  for (const name of ['KINDS', 'TYPES', 'OP_LABEL', 'HIST_KINDS', 'THEMES', 'SPLIT_WORD', 'SECTIONS']) {
+  const keys = ['app.js', 'chart.js', 'compute.js', 'importer.js', 'importer-linxea.js', 'xlsx.js', 'store.js', 'sync.js'].flatMap(f => calledKeys(read('public/js/' + f)));
+  // Labels kept in tables and translated where they are shown (one line, or up to the closing brace)
+  for (const name of ['KINDS', 'TYPES', 'OP_LABEL', 'HIST_KINDS', 'THEMES', 'SPLIT_WORD', 'SHARE_PARTS', 'PERF_LABEL', 'SECTIONS', 'MILESTONE_TEXT']) {
     const start = app.indexOf(`const ${name} =`);
-    keys.push(...literals(app.slice(start, app.indexOf(name === 'SECTIONS' ? '\n};' : '\n', start))));
+    assert.ok(start >= 0, name);
+    keys.push(...literals(app.slice(start, app.indexOf(['SECTIONS', 'MILESTONE_TEXT'].includes(name) ? '\n};' : '\n', start))));
   }
   keys.push(...Object.values(SECTORS), ...[...read('public/index.html').matchAll(/data-t>([^<]+)</g)].map(m => m[1]));
   const missing = [...new Set(keys)].filter(k => !code(k) && !(k in EN));

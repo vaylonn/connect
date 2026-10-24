@@ -242,6 +242,8 @@ button { cursor: pointer; }
 .line .mono.t-crypto { background: color-mix(in srgb, var(--orange) 22%, var(--surface)); }
 .line .mono.t-especes, .line .mono.t-livret, .line .mono.t-fonds-euros { background: color-mix(in srgb, var(--green) 20%, var(--surface)); }
 .line .mono.t-non-cote { background: color-mix(in srgb, var(--pink) 25%, var(--surface)); }
+.line .mono.t-fonds { background: color-mix(in srgb, var(--lilac) 22%, var(--surface)); }
+.line .mono.t-structure { background: color-mix(in srgb, var(--blue) 10%, var(--bg-2)); }
 .line .n { font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .line .s { color: var(--muted); font-size: 12.5px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .line .v { font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
@@ -416,8 +418,8 @@ textarea.input { height: auto; min-height: 110px; padding: 12px 14px; font-famil
 .steps .step:only-child .step-ic::after { display: none; }
 
 /* ——— Backup reminder ——— */
-.backup-hint, .pea-hint { display: grid; gap: 10px; }
-.backup-hint p, .pea-hint p { margin: 0; line-height: 1.45; }
+.backup-hint, .milestone-hint { display: grid; gap: 10px; }
+.backup-hint p, .milestone-hint p { margin: 0; line-height: 1.45; }
 
 /* ——— Import source: dropdown and its button on one row ——— */
 .import-pick { display: flex; gap: 8px; align-items: center; margin-bottom: 4px; }
@@ -451,6 +453,8 @@ textarea.input.plain { font-family: inherit; font-size: 16px; min-height: 72px; 
 /* Anonymous view to share */
 .share-parts { margin: 0 0 12px; }
 .share-img { display: block; width: 100%; max-width: 420px; margin: 0 auto 14px; border-radius: var(--r-sm); border: 1px solid var(--line); background: var(--bg); }
+
+.steps a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
 
 /* Spacing helpers: templates use classes, never style="" (the CSP has no 'unsafe-inline' for styles).
    !important, as the inline styles they replace, so they win over more specific rules. */
