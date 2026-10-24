@@ -1,0 +1,159 @@
+{
+ "app": "carnet",
+ "schema": 1,
+ "exportedAt": "2026-11-06T10:00:00.000Z",
+ "profile": {
+  "firstName": "Épargnante"
+ },
+ "settings": {
+  "theme": "auto",
+  "lang": "fr",
+  "taxRate": 31.4,
+  "staleDays": 4,
+  "snoozeUntil": ""
+ },
+ "accounts": [
+  {
+   "id": "ce-ld58hy",
+   "name": "Caisse d’Épargne",
+   "institution": "Caisse d’Épargne",
+   "kind": "courant",
+   "color": "blue",
+   "source": "ce",
+   "asOf": "2026-11-03"
+  },
+  {
+   "id": "ce-rpfyee",
+   "name": "Livret A",
+   "institution": "Caisse d’Épargne",
+   "kind": "livret",
+   "color": "green",
+   "source": "ce",
+   "asOf": "2026-11-03"
+  },
+  {
+   "id": "ce-1w7w8tl",
+   "name": "LDDS",
+   "institution": "Caisse d’Épargne",
+   "kind": "livret",
+   "color": "green",
+   "source": "ce",
+   "asOf": "2026-11-03"
+  }
+ ],
+ "lines": [
+  {
+   "id": "ce-ld58hy-solde",
+   "source": "ce",
+   "accountId": "ce-ld58hy",
+   "envelope": "Espèces",
+   "type": "especes",
+   "name": "Solde",
+   "isin": "",
+   "ticker": "",
+   "qty": 1,
+   "amount": 1234.56,
+   "price": 1234.56,
+   "cost": 1234.56,
+   "priceDate": "2026-11-03",
+   "priceSource": "ce",
+   "pending": 0,
+   "equity": 0,
+   "events": [
+    [
+     "2026-10-03",
+     1,
+     1234.56,
+     1234.56
+    ],
+    [
+     "2026-11-03",
+     1,
+     1234.56,
+     1234.56
+    ]
+   ]
+  },
+  {
+   "id": "ce-rpfyee-solde",
+   "source": "ce",
+   "accountId": "ce-rpfyee",
+   "envelope": "Livrets",
+   "type": "livret",
+   "name": "Livret A",
+   "isin": "",
+   "ticker": "",
+   "qty": 1,
+   "amount": 10500,
+   "price": 10500,
+   "cost": 10500,
+   "priceDate": "2026-11-03",
+   "priceSource": "ce",
+   "pending": 0,
+   "equity": 0,
+   "events": [
+    [
+     "2026-10-03",
+     1,
+     10000,
+     10000
+    ],
+    [
+     "2026-11-03",
+     1,
+     10500,
+     10500
+    ]
+   ]
+  },
+  {
+   "id": "ce-1w7w8tl-solde",
+   "source": "ce",
+   "accountId": "ce-1w7w8tl",
+   "envelope": "Livrets",
+   "type": "livret",
+   "name": "LDDS",
+   "isin": "",
+   "ticker": "",
+   "qty": 1,
+   "amount": 2500.5,
+   "price": 2500.5,
+   "cost": 2500.5,
+   "priceDate": "2026-11-03",
+   "priceSource": "ce",
+   "pending": 0,
+   "equity": 0,
+   "events": [
+    [
+     "2026-10-03",
+     1,
+     2500.5,
+     2500.5
+    ],
+    [
+     "2026-11-03",
+     1,
+     2500.5,
+     2500.5
+    ]
+   ]
+  }
+ ],
+ "priceHistory": {},
+ "trStats": null,
+ "imports": [
+  {
+   "at": "2026-11-04T09:00:00.000Z",
+   "source": "ce",
+   "rows": 3,
+   "to": "2026-10-03"
+  },
+  {
+   "at": "2026-11-05T09:00:00.000Z",
+   "source": "ce",
+   "rows": 3,
+   "to": "2026-11-03"
+  }
+ ],
+ "transactions": []
+}

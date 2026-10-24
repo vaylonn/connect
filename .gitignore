@@ -5,3 +5,4 @@ carnet-sauvegarde*.json
 carnet-ajout*.json
 data/
 *.xlsx
+*.pdf

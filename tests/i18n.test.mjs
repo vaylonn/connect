@@ -25,7 +25,7 @@ function calledKeys(src) {
 
 test('every text shown by the app has an English translation', () => {
   const app = read('public/js/app.js');
-  const keys = ['app.js', 'chart.js', 'compute.js', 'importer.js', 'importer-linxea.js', 'xlsx.js', 'store.js', 'sync.js'].flatMap(f => calledKeys(read('public/js/' + f)));
+  const keys = ['app.js', 'chart.js', 'compute.js', 'importer.js', 'importer-linxea.js', 'importer-ce.js', 'xlsx.js', 'pdf.js', 'store.js', 'sync.js'].flatMap(f => calledKeys(read('public/js/' + f)));
   // Labels kept in tables and translated where they are shown (one line, or up to the closing brace)
   for (const name of ['KINDS', 'TYPES', 'OP_LABEL', 'HIST_KINDS', 'THEMES', 'SPLIT_WORD', 'SHARE_PARTS', 'PERF_LABEL', 'SECTIONS', 'MILESTONE_TEXT']) {
     const start = app.indexOf(`const ${name} =`);

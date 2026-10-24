@@ -8,11 +8,13 @@ import { syncState, saveSyncState, clearSyncState, deriveAccount, pullVault, pus
 import { importTradeRepublic, mergeImport } from './importer.js';
 import { importLinxea, mergeLinxea, PERF_KEYS } from './importer-linxea.js';
 import { readXlsx } from './xlsx.js';
+import { importCe, mergeCe, duplicates } from './importer-ce.js';
+import { readPdf } from './pdf.js';
 import { totals, staleLines, lookthrough, DIRECT, heldLines, isHeld, lineComposition, history as buildHistory, lineValue, lineCost, lineGain, pru, isCashLike, QUOTE_EXPECTED, simulate, envelopeForAccount, ENVELOPE_ORDER, FLOW_KINDS, INCOME_KINDS, netAmount, performance, allocation, rebalance, milestone, accountStart, MILESTONE_YEARS } from './compute.js';
 import { libraryFor, libraryChoices, SECTORS, COMPOSITION_NOTE, setFetchedLibrary, wantsComposition } from './library.js';
 import { lineChart, hoverText } from './chart.js';
 
-const VERSION = '1.6.0';
+const VERSION = '1.7.0';
 let data = load();
 const ui = {
   tab: 'patrimoine', range: '1A', scope: 'all', filter: 'all', group: 'accounts', analyse: 'sectors', server: 'unknown', busy: false, progress: '', lineRange: '1A',
@@ -300,10 +302,10 @@ function emptyState() {
     <div class="orb" aria-hidden="true"><i class="ring"></i><i class="core"></i><i class="s1"></i><i class="s2"></i><i class="s3"></i></div>
     <div class="wordmark">Carnet<span class="dot">.</span></div>
     <h1 class="title empty-title">${t('Votre patrimoine, en un seul endroit.')}<em>${t('Et seulement sur cet appareil.')}</em></h1>
-    <p>${t('Importez vos transactions Trade Republic ou votre assurance-vie Linxea, restaurez une sauvegarde, ou ajoutez vos comptes à la main.')}</p>
+    <p>${t('Importez vos exports (Trade Republic, Linxea, Caisse d’Épargne), restaurez une sauvegarde, ou ajoutez vos comptes à la main.')}</p>
     <div class="btn-row">
       <button class="btn primary" data-action="pick-csv">${ICONS.upload}${t('Importer un CSV Trade Republic')}</button>
-      <button class="btn" data-action="import-guide" data-v="linxea">${ICONS.upload}${t('Importer un export Linxea')}</button>
+      <button class="btn" data-action="section" data-v="import">${ICONS.upload}${t('Autres imports')}</button>
       <button class="btn" data-action="pick-backup">${t('Restaurer une sauvegarde')}</button>
       <button class="btn" data-action="add-account">${ICONS.plus}${t('Ajouter un compte')}</button>
     </div>
@@ -1108,7 +1110,7 @@ function openAccount(id) {
   openSheet(`${sheetHead(esc(a.name), esc(kindLabel(a.kind)))}
     <div class="detail-big">${eur(v)}</div>
     ${p ? `<p class="small muted m-t4">${[t('Versé {x}', { x: eur(p.net, 0) }), t('gain réel {x}', { x: signedEur(p.gain, 0) }), rate].filter(Boolean).join(' · ')}</p>` : ''}
-    ${a.asOf ? `<p class="small muted m-t4">${t('Valeurs {x} du {date} : réimportez pour les mettre à jour.', { x: esc(IMPORTERS[a.source]?.name || ''), date: dateLong(a.asOf) })}</p>` : ''}
+    ${a.asOf ? `<p class="small muted m-t4">${t('Dernier import {x} : valeurs du {date}.', { x: esc(IMPORTERS[a.source]?.name || ''), date: dateLong(a.asOf) })}</p>` : ''}
     ${MILESTONE_YEARS[a.kind] ? `<p class="small muted m-t4">${esc(milestoneLine(a))}</p>` : ''}
     ${a.note ? `<p class="note-text">${esc(a.note)}</p>` : ''}
     <div class="lines my14">${ls.map(lineRow).join('') || `<p class="muted p16 m0">${t('Aucune ligne sur ce compte.')}</p>`}</div>
@@ -1161,7 +1163,11 @@ function accountForm(id) {
         if (!a) data.accounts.push(acc);
         if (bal !== null) {
           const isLiv = acc.kind === 'livret';
-          if (cash) { cash.amount = bal; cash.price = bal; cash.cost = bal; cash.priceDate = today(); }
+          if (cash) {
+            Object.assign(cash, { amount: bal, price: bal, cost: bal, priceDate: today() });
+            // an imported balance keeps its history: the new one is today's point
+            if (cash.events?.length) cash.events = [...cash.events.filter(e => e[0] !== today()), [today(), 1, bal, bal]];
+          }
           else data.lines.push({ id: 'ln-' + Date.now().toString(36), source: 'manual', accountId: acc.id, type: isLiv ? 'livret' : 'especes', envelope: isLiv ? 'Livrets' : 'Espèces', name: isLiv ? 'Livret' : 'Solde', qty: 1, amount: bal, price: bal, cost: bal, priceDate: today(), equity: 0, pending: 0, events: [], since: today() });
         }
         if (a) for (const l of data.lines) if (l.accountId === acc.id && l.source !== 'tr' && !isCashLike(l)) l.envelope = envelopeForAccount(acc);
@@ -1305,6 +1311,15 @@ const IMPORTERS = {
     ],
     run: () => importLinxeaFlow(),
   },
+  ce: {
+    name: 'Caisse d’Épargne',
+    steps: () => [
+      step('dots', t('Dans l’app Caisse d’Épargne, touchez « Plus », puis « Documents »'), t('Puis « Consulter mes documents personnels ».')),
+      step('download', t('Ouvrez le dernier « Relevé de comptes » et enregistrez le PDF'), t('Avec ⋯ à côté du relevé : téléchargez-le, ou partagez-le vers Fichiers.')),
+      step('upload', t('Importez le PDF ici'), t('Carnet ne lit que la synthèse : le solde de chaque compte et livret. Les opérations, vos coordonnées et vos numéros de compte sont ignorés.')),
+    ],
+    run: () => importCeFlow(),
+  },
 };
 const imported = l => !!(l && IMPORTERS[l.source]);
 function importGuide(key) {
@@ -1359,6 +1374,31 @@ async function importLinxeaFlow() {
       if (data.demo) { const keep = { profile: data.profile, settings: data.settings }; data = { ...emptyData(), ...keep }; }
       data = mergeLinxea(data, imp); close(); land('patrimoine');
       commit(tn(imp.lines.length, '{n} support importé.', '{n} supports importés.'));
+    }),
+  });
+}
+
+async function importCeFlow() {
+  const f = await pickFile('.pdf,application/pdf');
+  if (!f) return;
+  let imp;
+  try { imp = importCe(await readPdf(await f.arrayBuffer())); } catch (e) { toast(e.message || t('Lecture du fichier impossible.')); return; }
+  const dup = data.demo ? [] : duplicates(data, imp);
+  const known = new Set(data.accounts.map(a => a.id));
+  const older = imp.accounts.some(a => known.has(a.id) && accById(a.id).asOf > a.asOf);
+  openSheet(`${sheetHead(t('Import Caisse d’Épargne'), tn(imp.lines.length, '{n} compte au {date}', '{n} comptes au {date}', { date: dateLong(imp.stats.to) }))}
+    <div class="holdings">${imp.lines.map(l => `<div class="holding"><span class="r"></span><span class="n">${esc(accById(l.accountId)?.name || imp.accounts.find(a => a.id === l.accountId).name)}</span><span class="a">${eur(l.amount)}</span><span class="w">${esc(t(l.envelope))}${known.has(l.accountId) ? ' · ' + t('mis à jour') : ''}</span></div>`).join('')}</div>
+    ${imp.stats.skipped.length ? `<p class="note">${t('Non importés : {x}. Prêts et placements ont leurs propres relevés.', { x: esc(imp.stats.skipped.join(', ')) })}</p>` : ''}
+    ${dup.length ? `<label class="check mt12"><input type="checkbox" id="ce-dup" checked><span>${t('Fusionner avec les comptes saisis à la main : {x}', { x: esc(dup.map(d => d.account.name).join(', ')) })}<br><span class="small muted">${t('Le solde le plus récent reste affiché ; l’autre rejoint la courbe.')}</span></span></label>` : ''}
+    <div class="callout my16">${t(older ? 'Ce relevé est plus ancien que le dernier importé : il complète la courbe, les soldes affichés ne changent pas.' : 'Soldes au {date}. Chaque relevé importé met à jour ces comptes et ajoute un point à leur courbe.', { date: dateLong(imp.stats.to) })}</div>
+    ${data.demo ? `<p class="small muted">${t('Les données d’exemple seront effacées.')}</p>` : ''}
+    <div class="btn-row"><button class="btn primary" data-ok>${t('Importer')}</button><button class="btn" data-close>${t('Annuler')}</button></div>`, {
+    label: t('Import'),
+    onMount: (sh, close) => sh.querySelector('[data-ok]').addEventListener('click', () => {
+      const merge = sh.querySelector('#ce-dup')?.checked ? dup : [];
+      if (data.demo) { const keep = { profile: data.profile, settings: data.settings }; data = { ...emptyData(), ...keep }; }
+      data = mergeCe(data, imp, merge); close(); land('patrimoine');
+      commit(tn(imp.lines.length, '{n} compte importé.', '{n} comptes importés.'));
     }),
   });
 }
@@ -1862,7 +1902,6 @@ document.addEventListener('click', async e => {
     case 'targets': targetSheet(); break;
     case 'share': shareSheet(); break;
     case 'milestone-seen': setDevice({ milestoneSeen: { ...(device().milestoneSeen || {}), [b.dataset.id]: v } }); render(); break;
-    case 'import-guide': importGuide(v); break;
     case 'go-rebalance': go('simuler'); $('#reb')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); break;
     case 'reb-sell': ui.reb.sell = v === '1'; render(); break;
     case 'reb-pick': {

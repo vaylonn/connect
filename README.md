@@ -9,7 +9,7 @@ Personal net-worth tracker: PEA, brokerage account, crypto, savings accounts, li
 - Real performance (annualised return on what you paid in), target allocation with rebalancing suggestions.
 - History of buys, sells, dividends, interest and deposits; notes on any holding or account.
 - Chart of the whole net worth, one account or one envelope; PEA 5-year and life insurance 8-year dates, with a reminder; an anonymous view of your allocation to share (percentages only).
-- Trade Republic CSV import, Linxea life insurance import (Excel file), manual entry for any other account.
+- Trade Republic CSV import, Linxea life insurance import (Excel file), Caisse d’Épargne balances from the monthly statement (PDF), manual entry for any other account.
 - Up-to-date prices from Yahoo Finance.
 - Sync across devices, end-to-end encrypted (optional).
 - Installable on a phone, works offline, light or dark mode.
@@ -23,9 +23,11 @@ Personal net-worth tracker: PEA, brokerage account, crypto, savings accounts, li
    An export covering only part of the period gives wrong quantities and cash: Carnet rebuilds everything from the full history.
 2. **Import a Linxea contract** (life insurance, PER). On espaceclient.linxea.com, open the contract, then under *Composition du contrat* tap *Télécharger vos données*: an Excel file. Then Carnet → Settings → Import & backup → pick Linxea, *Continue*, *Choose the file*.
    The file holds the contract's funds on a date (units, price, value, cost basis, the fund's performance), not its operations: import it again now and then to update the contract and add a point to its chart.
-3. **Add your other accounts.** Settings → Accounts → *Add account* (savings account, life insurance, PER…), then *Add holding*.
-4. **Refresh prices** with the button at the top of the screen.
-5. **Sync your devices** (optional). Settings → Sync → *Create vault* on the first device, then *Sign in* with the same username and passphrase on the others.
+3. **Import your Caisse d’Épargne balances.** In the bank's app: *Plus* → *Documents* → *Consulter mes documents personnels*, then the latest *Relevé de comptes* (⋯ to download or share the PDF). Then Carnet → Settings → Import & backup → pick Caisse d’Épargne.
+   Only the statement's summary is read: one balance per account (current account → Cash, savings books → Savings books). Transactions, names, addresses and account numbers are not kept. Accounts you had entered by hand can be merged: the most recent balance stays shown, the other joins the chart; an older statement only fills in the chart.
+4. **Add your other accounts.** Settings → Accounts → *Add account* (savings account, life insurance, PER…), then *Add holding*.
+5. **Refresh prices** with the button at the top of the screen.
+6. **Sync your devices** (optional). Settings → Sync → *Create vault* on the first device, then *Sign in* with the same username and passphrase on the others.
 
 To install the app: Settings → Install the app shows the steps for your device (it is also offered on a phone's first visit). Installed, it opens full screen and iOS no longer erases its data after 7 days without a visit.
 
@@ -119,13 +121,14 @@ api/            Vercel functions: health, quote, search, composition, sync
 lib/            Yahoo Finance client, compositions (Morningstar, justETF), /api routes,
                 sync vaults (Redis or files), per-address limits
 public/         the app (HTML, CSS, JS, fonts, icons, PWA)
-  js/           UI, Trade Republic and Linxea imports (xlsx.js reads Excel files), calculations,
-                storage, sync, chart, ETF library
+  js/           UI, Trade Republic, Linxea and Caisse d’Épargne imports (xlsx.js reads Excel files,
+                pdf.js the text of PDF statements), calculations, storage, sync, chart, ETF library
 tools/          Trade Republic CSV → backup, from the command line
-tests/          calculations, Trade Republic and Linxea imports, performance and target allocation, CSP,
-                restore of old backups, sync API, translations; end-to-end browser tests; fake Yahoo;
-                a realistic Trade Republic export (tr-export.mjs) and Linxea workbook (linxea-export.mjs,
-                built with invented figures); fixtures (frozen backup files)
+tests/          calculations, imports (Trade Republic, Linxea, Caisse d’Épargne), performance and target
+                allocation, CSP, restore of old backups, sync API, translations; end-to-end browser tests;
+                fake Yahoo; a realistic Trade Republic export (tr-export.mjs), Linxea workbook
+                (linxea-export.mjs) and Caisse d’Épargne statement (ce-statement.mjs), all with invented
+                figures; fixtures (frozen backup files)
 ```
 
 **ETF library** (`public/js/library.js`): Yahoo symbol, sectors, countries and top companies of known funds, as orders of magnitude (mid-2026).

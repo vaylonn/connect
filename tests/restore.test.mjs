@@ -6,6 +6,7 @@
 //   backup-v1.4.json            cash movements in the history, targets and notes (tests/tr-export.mjs)
 //   backup-v1.5.json            a manual PEA with the date of its first deposit
 //   backup-v1.6.json            a Linxea life insurance contract (tests/linxea-export.mjs)
+//   backup-v1.7.json            Caisse d'Épargne balances from two statements (tests/ce-statement.mjs)
 //   partial-accounts.json       a few accounts to add to existing data (« partial »)
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -75,6 +76,14 @@ test('a v1.6 backup keeps a Linxea contract: funds, categories, fund performance
   assert.deepEqual(allocation(d).rows.map(r => r.target), [0.6, 0.4]);
 });
 
+test('a v1.7 backup keeps the Caisse d’Épargne balances and their history', () => {
+  const d = validateBackup(fixture('backup-v1.7.json'));
+  assert.deepEqual(d.accounts.map(a => [a.name, a.kind, a.source, a.asOf]), [['Caisse d’Épargne', 'courant', 'ce', '2026-11-03'], ['Livret A', 'livret', 'ce', '2026-11-03'], ['LDDS', 'livret', 'ce', '2026-11-03']]);
+  assert.equal(total(d), 14235.06, '1 234,56 + 10 500 + 2 500,50');
+  assert.deepEqual(d.lines.find(l => l.name === 'Livret A').events.map(e => e[2]), [10000, 10500]);
+  assert.deepEqual(history(d, new Date('2026-11-10T12:00:00Z')).find(p => p.d === '2026-10-10')?.value, 13735.06);
+});
+
 test('a partial file is flagged so the app adds it instead of replacing', () => {
   const d = validateBackup(fixture('partial-accounts.json'));
   assert.equal(d.partial, true);
@@ -82,7 +91,7 @@ test('a partial file is flagged so the app adds it instead of replacing', () => 
 });
 
 test('exporting a restored backup gives a file that restores the same way', () => {
-  for (const name of ['backup-v1.0.json', 'backup-v1.3.json', 'backup-v1.4.json', 'backup-v1.5.json', 'backup-v1.6.json']) {
+  for (const name of ['backup-v1.0.json', 'backup-v1.3.json', 'backup-v1.4.json', 'backup-v1.5.json', 'backup-v1.6.json', 'backup-v1.7.json']) {
     const d = validateBackup(fixture(name));
     const again = validateBackup(JSON.parse(JSON.stringify(backupPayload(d))));
     assert.equal(total(again), total(d), name);

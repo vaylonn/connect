@@ -13,6 +13,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { CSV } from './tr-export.mjs';
 import { linxeaXlsx } from './linxea-export.mjs';
+import { ceStatement } from './ce-statement.mjs';
 
 const { chromium, devices } = createRequire(import.meta.url)('playwright'); // CommonJS lookup also honours NODE_PATH
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -189,7 +190,7 @@ test('import sources: a dropdown, then the chosen source’s guide opens the fil
   const csv = join(TMP, 'guide.csv');
   writeFileSync(csv, 'datetime,date,account_type,category,type,asset_class,name,symbol,shares,price,amount,fee,tax\n2025-01-02T08:00:00Z,2025-01-02,DEFAULT,CASH,CUSTOMER_INBOUND,,,,,,1000,,\n');
   const { page, done } = await open({ hash: '#donnees/import' });
-  assert.deepEqual(await page.locator('#imp-source option').allInnerTexts(), ['Trade Republic', 'Linxea']);
+  assert.deepEqual(await page.locator('#imp-source option').allInnerTexts(), ['Trade Republic', 'Linxea', 'Caisse d’Épargne']);
   await page.locator('[data-action="import-source"]').click(); await page.waitForSelector('.sheet.open');
   assert.equal(await page.locator('.sheet .step').count(), 3);
   await pick(page, page.locator('.sheet [data-go]'), csv);
@@ -276,8 +277,10 @@ test('PEA 5-year reminder, chart of one account, anonymous view to share', async
 test('Linxea: the guide, the workbook, and the contract in every view', async () => {
   const xlsx = join(TMP, 'linxea.xlsx'); writeFileSync(xlsx, linxeaXlsx());
   const { page, done } = await open();
-  // From the empty screen, the Linxea button opens the guide
-  await page.getByRole('button', { name: 'Importer un export Linxea' }).click(); await page.waitForSelector('.sheet.open');
+  // From the empty screen, « Autres imports » leads to the list of sources
+  await page.getByRole('button', { name: 'Autres imports' }).click(); await page.waitForTimeout(200);
+  assert.equal(new URL(page.url()).hash, '#donnees/import');
+  await page.selectOption('#imp-source', 'linxea'); await page.locator('[data-action="import-source"]').click(); await page.waitForSelector('.sheet.open');
   assert.deepEqual(await page.locator('.sheet .step b').allInnerTexts(), ['Sur l’espace client Linxea, ouvrez votre contrat', 'Sous « Composition du contrat », touchez « Télécharger vos données »', 'Importez le fichier ici']);
   assert.equal(await page.locator('.sheet .step a').getAttribute('href'), 'https://espaceclient.linxea.com');
   await pick(page, page.locator('.sheet [data-go]'), xlsx);
@@ -296,7 +299,7 @@ test('Linxea: the guide, the workbook, and the contract in every view', async ()
   await page.keyboard.press('Escape'); await page.waitForTimeout(400);
   // The contract: values date and the 8-year milestone
   await page.locator('.acc').click(); await page.waitForSelector('.sheet.open');
-  assert.match(await page.locator('.sheet.open').innerText(), /Valeurs Linxea du 23 oct\. 2026[\s\S]*Rachats avec abattement sur les gains à partir du 23 oct\. 2034/);
+  assert.match(await page.locator('.sheet.open').innerText(), /Dernier import Linxea : valeurs du 23 oct\. 2026[\s\S]*Rachats avec abattement sur les gains à partir du 23 oct\. 2034/);
   await page.keyboard.press('Escape'); await page.waitForTimeout(400);
   await tab(page, 'analyse');
   assert.match(await page.locator('.bars').innerText(), /Obligations et liquidités/);
@@ -310,5 +313,31 @@ test('Linxea: the guide, the workbook, and the contract in every view', async ()
   await page.waitForSelector('.sheet.open'); await page.locator('.sheet [data-ok]').click(); await page.waitForTimeout(500);
   assert.equal(await page.locator('#lines .line').count(), 6);
   assert.match(await total(page), /^2 665,6/);
+  await done();
+});
+
+test('Caisse d’Épargne: the statement’s balances, in place of the accounts entered by hand', async () => {
+  const pdf = join(TMP, 'releve.pdf'); writeFileSync(pdf, ceStatement({ date: '03/10/2020' }));
+  const { page, done } = await open({ hash: '#donnees/comptes' });
+  // A Livret A entered by hand beforehand
+  await page.getByRole('button', { name: 'Ajouter un compte' }).click(); await page.waitForSelector('.sheet.open');
+  await page.fill('#ac-name', 'Livret A'); await page.selectOption('#ac-kind', 'livret'); await page.fill('#ac-bal', '9 000');
+  await page.locator('.sheet button[type=submit]').click(); await page.waitForTimeout(400);
+  await section(page, 'import');
+  await page.selectOption('#imp-source', 'ce'); await page.locator('[data-action="import-source"]').click(); await page.waitForSelector('.sheet.open');
+  assert.equal(await page.locator('.sheet .step').count(), 3);
+  await pick(page, page.locator('.sheet [data-go]'), pdf);
+  await page.waitForSelector('#ce-dup');
+  assert.match(await page.locator('.sheet .sheet-head').innerText(), /3 comptes au 3 oct\. 2020/);
+  assert.match(await page.locator('.sheet.open').innerText(), /Non importés : Pret Immobilier/);
+  assert.match(await page.locator('label.check').innerText(), /Fusionner avec les comptes saisis à la main : Livret A/);
+  await page.locator('.sheet [data-ok]').click(); await page.waitForTimeout(500);
+  // 9 000 entered today is more recent than the statement's 10 000: it stays, counted once
+  assert.match(await total(page), /^12 735,06/);
+  assert.equal(await page.locator('.acc', { hasText: 'Livret A' }).count(), 1);
+  await page.locator('[data-action="group"][data-v="envelopes"]').click(); await page.waitForTimeout(200);
+  assert.match(await page.locator('.accounts').innerText(), /Livrets[\s\S]*11\s501\s€[\s\S]*Espèces[\s\S]*1\s235\s€/);
+  const body = await page.evaluate(() => localStorage.getItem('carnet:data:v1'));
+  assert.ok(!/01234567890|CAMILLE|BOULANGERIE/.test(body), 'no account number, name or operation stored');
   await done();
 });
