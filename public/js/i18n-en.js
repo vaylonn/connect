@@ -720,6 +720,7 @@ export const EN = {
   '{x} sur livrets': '{x} in savings books',
   'non comptées': 'not counted',
   'Espèces non comptées : {x} (Réglages, Préférences).': 'Cash not counted: {x} (Settings, Preferences).',
+  'Relevé du {date} : {x}, moins {y} versés depuis sur vos autres comptes.': 'Statement of {date}: {x}, less {y} paid since into your other accounts.',
   'Les espèces des comptes ne sont pas comptées : l’argent de l’achat ou de la vente n’y apparaît pas.': 'Accounts’ cash is not counted: the money of the purchase or sale does not show here.',
 
   // ——— Install and storage ———

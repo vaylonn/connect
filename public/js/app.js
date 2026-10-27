@@ -10,11 +10,11 @@ import { importLinxea, mergeLinxea, PERF_KEYS } from './importer-linxea.js';
 import { readXlsx } from './xlsx.js';
 import { importCe, mergeCe, duplicates } from './importer-ce.js';
 import { readPdf } from './pdf.js';
-import { totals, staleLines, lookthrough, DIRECT, heldLines, isHeld, lineComposition, history as buildHistory, lineValue, lineCost, lineGain, pru, isCashLike, QUOTE_EXPECTED, cashCounted, shownLine, simulate, envelopeForAccount, ENVELOPE_ORDER, FLOW_KINDS, INCOME_KINDS, netAmount, performance, allocation, rebalance, milestone, accountStart, MILESTONE_YEARS } from './compute.js';
+import { totals, staleLines, lookthrough, DIRECT, heldLines, isHeld, lineComposition, history as buildHistory, lineValue, lineCost, lineGain, pru, isCashLike, QUOTE_EXPECTED, cashCounted, shownLine, simulate, envelopeForAccount, ENVELOPE_ORDER, FLOW_KINDS, INCOME_KINDS, netAmount, performance, settleCash, allocation, rebalance, milestone, accountStart, MILESTONE_YEARS } from './compute.js';
 import { libraryFor, libraryChoices, SECTORS, COMPOSITION_NOTE, setFetchedLibrary, wantsComposition } from './library.js';
 import { lineChart, hoverText } from './chart.js';
 
-const VERSION = '1.8.0';
+const VERSION = '1.8.1';
 let data = load();
 const ui = {
   tab: 'patrimoine', range: '1A', scope: 'all', filter: 'all', group: 'accounts', analyse: 'sectors', server: 'unknown', busy: false, progress: '', lineRange: '1A',
@@ -65,7 +65,7 @@ const initials = s => (String(s || '?').replace(/[^\p{L}\p{N}\s&]/gu, ' ').trim(
 const shortName = l => { const s = libraryFor(l.isin)?.short; return s ? t(s) : isCashLike(l) && !l.customName ? t(l.name) : l.name; };
 const isWide = () => matchMedia('(min-width: 1100px)').matches;
 const today = () => new Date().toISOString().slice(0, 10);
-function commit(msg) { setTimeout(ensurePersist, 0); data.updatedAt = new Date().toISOString(); if (!save(data) && !commit.warned) { commit.warned = true; toast(t('Stockage du navigateur indisponible : vos changements seront perdus en fermant la page.')); } else if (msg) toast(msg); render(); scheduleSync(); setTimeout(autoCompositions, 0); }
+function commit(msg) { setTimeout(ensurePersist, 0); data.lines = settleCash(data).lines; data.updatedAt = new Date().toISOString(); if (!save(data) && !commit.warned) { commit.warned = true; toast(t('Stockage du navigateur indisponible : vos changements seront perdus en fermant la page.')); } else if (msg) toast(msg); render(); scheduleSync(); setTimeout(autoCompositions, 0); }
 
 let toastTimer;
 function toast(msg) {
@@ -1042,6 +1042,7 @@ function openLine(id) {
   openSheet(`${sheetHead(esc(shortName(l)), esc((acc?.name || '') + ' · ' + t(l.envelope || '')))}
     ${ids.length ? `<p class="small muted ids-line">${ids.map(esc).join(' · ')}</p>` : ''}
     <div class="detail-big">${eur(v)}</div>
+    ${l.moved ? `<p class="small muted m-t4">${t('Relevé du {date} : {x}, moins {y} versés depuis sur vos autres comptes.', { date: dateShort(l.priceDate), x: eur(l.amount), y: eur(l.moved) })}</p>` : ''}
     ${l.qtyEstimated || l.estimateFromAmount ? `<div class="callout mt12">${t(l.estimateFromAmount ? 'Montant investi connu, quantité pas encore calculée : elle le sera à la prochaine actualisation, avec la valeur liquidative du jour de souscription.' : 'Quantité estimée à partir du montant investi et de la valeur liquidative du jour de souscription. Remplacez-la par celle de votre relevé quand vous l’aurez (Modifier).')}</div>` : ''}
     <div class="stat-grid">${stats}</div>
     ${l.note ? `<p class="note-text">${esc(l.note)}</p>` : ''}
@@ -1140,7 +1141,7 @@ function accountForm(id) {
       <label class="field"><span>${t('Nom')}</span><input class="input" id="ac-name" name="name" required maxlength="60" value="${esc(a?.name || '')}" placeholder="${t('ex. Caisse d’Épargne')}"></label>
       <div class="row2"><label class="field"><span>${t('Établissement')}</span><input class="input" id="ac-inst" name="institution" maxlength="60" value="${esc(a?.institution || '')}" placeholder="${t('facultatif')}"></label>
       <label class="field"><span>${t('Type')}</span><select class="input" id="ac-kind" name="kind">${KINDS.map(([k, l]) => `<option value="${k}" ${kind === k ? 'selected' : ''}>${t(l)}</option>`).join('')}</select></label></div>
-      <label class="field" id="ac-bal-wrap"><span>${t('Solde actuel (€)')}</span><input class="input" id="ac-bal" name="balance" inputmode="decimal" value="${cash ? inputNum(cash.amount) : ''}" placeholder="${t('0,00')}"><small>${t('Pour un compte courant ou un livret. Pour une assurance-vie ou un compte-titres, ajoutez ensuite des lignes.')}</small></label>
+      <label class="field" id="ac-bal-wrap"><span>${t('Solde actuel (€)')}</span><input class="input" id="ac-bal" name="balance" inputmode="decimal" value="${cash ? inputNum(lineValue(cash)) : ''}" placeholder="${t('0,00')}"><small>${t('Pour un compte courant ou un livret. Pour une assurance-vie ou un compte-titres, ajoutez ensuite des lignes.')}</small></label>
       <label class="field" id="ac-open-wrap"><span>${t('Premier versement')}</span><input class="input" type="date" id="ac-open" name="openedAt" value="${esc(a?.openedAt || '')}"><small><span data-kind="pea">${t('Les retraits sont exonérés d’impôt sur le revenu 5 ans après cette date.')}</span><span data-kind="av">${t('Après 8 ans, les rachats profitent d’un abattement sur les gains.')}</span> ${a && !a.openedAt && accountStart(data, a) ? t('Vide : déduite de l’historique ({x}).', { x: dateLong(accountStart(data, a)) }) : ''}</small></label>
       <label class="field"><span>${t('Note')}</span><textarea class="input plain" id="ac-note" name="note" maxlength="500" rows="2" placeholder="${t('ex. date d’ouverture du PEA, numéro de contrat')}">${esc(a?.note || '')}</textarea></label>
       <div class="field"><span>${t('Couleur')}</span><div class="swatches">${COLORS.map(c => `<label><input type="radio" name="color" value="${c}" ${(a?.color || 'blue') === c ? 'checked' : ''} aria-label="${c}"><span class="tile c-${c} swatch-tile"></span></label>`).join('')}</div></div>
@@ -1205,7 +1206,7 @@ function lineForm(id, accountId) {
       <label class="field"><span>${t('Prix de revient unitaire (€)')}</span><input class="input" id="lf-pru" name="pru" inputmode="decimal" value="${l && !isCashLike(l) && l.qty ? inputNum(pru(l), 4) : ''}"></label></div>
       <div class="row2" data-show="market"><label class="field"><span>${t('Cours actuel (€)')}</span><input class="input" id="lf-price" name="price" inputmode="decimal" value="${l && !isCashLike(l) ? inputNum(l.price, 4) : ''}"><small>${t('Mis à jour à l’actualisation si un symbole est connu.')}</small></label>
       <label class="field"><span>${t('Part en actions (%)')}</span><input class="input" id="lf-eq" name="equity" inputmode="decimal" value="${l ? inputNum((l.equity ?? 1) * 100, 0) : '100'}"></label></div>
-      <label class="field" data-show="cash"><span>${t('Montant (€)')}</span><input class="input" id="lf-amount" name="amount" inputmode="decimal" value="${l && isCashLike(l) ? inputNum(l.amount) : ''}"></label>
+      <label class="field" data-show="cash"><span>${t('Montant (€)')}</span><input class="input" id="lf-amount" name="amount" inputmode="decimal" value="${l && isCashLike(l) ? inputNum(lineValue(l)) : ''}"></label>
       <div class="row2" data-show="action"><label class="field"><span>${t('Secteur')}</span><select class="input" id="lf-sector" name="sector"><option value="">—</option>${sectorOpts}</select></label>
       <label class="field"><span>${t('Pays')}</span><input class="input" id="lf-country" name="country" maxlength="40" value="${esc(l?.lookthrough?.country || '')}" placeholder="${t('ex. France')}"></label></div>
       <label class="field"><span>${t('Détenu depuis')}</span><input class="input" type="date" id="lf-since" name="since" value="${esc(l?.since || (l?.events?.[0]?.[0]) || today())}"><small>${t('Sert à placer la ligne sur la courbe d’évolution.')}</small></label>
