@@ -33,8 +33,7 @@ To install the app: Settings → Install the app shows the steps for your device
 
 ## Reading the figures
 
-- **Total net worth**: everything included, cash and manually added accounts too.
-  Trade Republic's "Total" **does not include cash**: compare account by account.
+- **Total net worth**: every account, manually added ones too, **except the accounts' cash** by default: current account balances and uninvested money at brokers. A monthly statement's balance is soon stale, and money since moved to a broker would count twice. Settings → Preferences → *Accounts' cash* counts it again. Savings books and euro funds always count.
 - **"Up x %"**: unrealised gain on your current investments **since purchase**, i.e. (value − cost basis) ÷ cost basis.
   Cash, savings accounts and euro funds are left out of the percentage, as are past sales and dividends. It is not the daily change shown by TR.
 - **Cost basis**: weighted average cost, purchase fees included.

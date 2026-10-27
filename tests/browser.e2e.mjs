@@ -69,15 +69,24 @@ test('Trade Republic import, refresh and every tab', async () => {
   await pick(page, page.getByRole('button', { name: 'Importer un CSV Trade Republic' }), csv);
   await page.waitForSelector('.sheet.open');
   await page.locator('.sheet [data-ok]').click(); await page.waitForTimeout(500);
-  assert.match(await total(page), /2 998,00/, 'deposit minus the two 1 € fees, holdings at their purchase price');
+  assert.match(await total(page), /^1 600,00/, 'holdings at their purchase price; the account’s cash is left out by default');
   await page.locator('.refresh-btn.top').click();
   await page.locator('#toast', { hasText: 'actualisé' }).waitFor({ timeout: 30000 });
-  assert.equal(await page.locator('#lines .line').count(), 3);
+  assert.equal(await page.locator('#lines .line').count(), 2, 'the two funds; the cash line is left out');
   for (const name of ['analyse', 'historique', 'simuler']) { await tab(page, name); assert.ok((await page.locator('#view').innerText()).length > 100, name); }
   await tab(page, 'historique');
   assert.equal(await page.locator('.hist-list .line').count(), 3, 'the deposit and both buys');
   await section(page, 'cours');
   assert.match(await page.locator('.card', { hasText: 'Dernière actualisation' }).locator('p.small').innerText(), /2 à jour, 0 sans cours/);
+  // Counting the accounts' cash (Préférences) adds the broker's cash back: 3000 − 1301 − 301
+  const euros = s => +s.replace(/[^\d,]/g, '').replace(',', '.');
+  await tab(page, 'patrimoine');
+  const without = euros(await total(page));
+  await section(page, 'preferences');
+  await page.locator('[data-action="cash"][data-v="on"]').click(); await page.waitForTimeout(200);
+  await tab(page, 'patrimoine');
+  assert.equal(Math.round((euros(await total(page)) - without) * 100) / 100, 1398);
+  assert.equal(await page.locator('#lines .line').count(), 3);
   await done();
 });
 
@@ -179,7 +188,7 @@ test('old backup files restore through the app: replace, add, encrypted', async 
   await pick(page, page.locator('#view [data-action="pick-backup"]'), fx('backup-v1.3-encrypted.json'));
   await page.fill('#pp1', 'phrase de test des sauvegardes'); await page.locator('.sheet button[type=submit]').click();
   await page.locator('.sheet [data-choice="replace"]').waitFor(); await page.locator('.sheet [data-choice="replace"]').click(); await page.waitForTimeout(400);
-  assert.match(await total(page), /2,198\.00|^2 198,00/, 'the encrypted v1.3 file replaces everything (it switches to English)');
+  assert.match(await total(page), /^750\.00/, 'the encrypted v1.3 file replaces everything (it switches to English); its cash is left out');
   await tab(page, 'historique');
   assert.equal(await page.locator('.hist-list .line').count(), 2);
   assert.equal(await page.locator('#view .callout [data-action="pick-csv"]').count(), 1, 'an import from before 1.4: a new import adds deposits and dividends');
@@ -265,8 +274,8 @@ test('PEA 5-year reminder, chart of one account, anonymous view to share', async
   await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
   await page.locator('.sheet [data-copy]').click(); await page.waitForTimeout(200);
   const text = await page.evaluate(() => navigator.clipboard.readText());
-  assert.match(text, /Enveloppes\n• Espèces : 41 %/);
-  assert.match(text, /• Apple : 30 %/);
+  assert.match(text, /Enveloppes\n• Compte-titres : 68 %/, 'the accounts’ cash is left out');
+  assert.match(text, /• Apple : 51 %/);
   assert.doesNotMatch(text, /€|10\s?011|2\s?361|3\s?000/, 'no amount');
   await page.locator('.sheet [data-part="lines"]').click(); await page.waitForTimeout(300);
   await page.locator('.sheet [data-copy]').click(); await page.waitForTimeout(200);
@@ -333,10 +342,11 @@ test('Caisse d’Épargne: the statement’s balances, in place of the accounts 
   assert.match(await page.locator('label.check').innerText(), /Fusionner avec les comptes saisis à la main : Livret A/);
   await page.locator('.sheet [data-ok]').click(); await page.waitForTimeout(500);
   // 9 000 entered today is more recent than the statement's 10 000: it stays, counted once
-  assert.match(await total(page), /^12 735,06/);
+  assert.match(await total(page), /^11 500,50/, 'and the current account’s cash is left out by default');
   assert.equal(await page.locator('.acc', { hasText: 'Livret A' }).count(), 1);
   await page.locator('[data-action="group"][data-v="envelopes"]').click(); await page.waitForTimeout(200);
-  assert.match(await page.locator('.accounts').innerText(), /Livrets[\s\S]*11\s501\s€[\s\S]*Espèces[\s\S]*1\s235\s€/);
+  assert.doesNotMatch(await page.locator('.accounts').innerText(), /Espèces/);
+  assert.match(await page.locator('.accounts').innerText(), /Livrets[\s\S]*11\s501\s€/);
   const body = await page.evaluate(() => localStorage.getItem('carnet:data:v1'));
   assert.ok(!/01234567890|CAMILLE|BOULANGERIE/.test(body), 'no account number, name or operation stored');
   await done();

@@ -34,7 +34,9 @@ test('a v1.3 backup keeps history, statistics and settings', () => {
   assert.equal(d.transactions.find(x => x.kind === 'SELL').realized, 48.75, '250 − 1 − 801 × 1/4');
   assert.equal(d.trStats.rows, 3);
   assert.equal(d.settings.lang, 'en');
-  assert.equal(total(d), 2198, 'cash 2000 − 801 + 249, plus 3 × 250');
+  assert.equal(total(d), 750, 'the account’s cash is left out by default: 3 × 250');
+  d.settings.cash = true;
+  assert.equal(total(d), 2198, 'counted: cash 2000 − 801 + 249, plus 3 × 250');
 });
 
 test('an encrypted v1.3 backup decrypts to the same data', async () => {
@@ -79,9 +81,13 @@ test('a v1.6 backup keeps a Linxea contract: funds, categories, fund performance
 test('a v1.7 backup keeps the Caisse d’Épargne balances and their history', () => {
   const d = validateBackup(fixture('backup-v1.7.json'));
   assert.deepEqual(d.accounts.map(a => [a.name, a.kind, a.source, a.asOf]), [['Caisse d’Épargne', 'courant', 'ce', '2026-11-03'], ['Livret A', 'livret', 'ce', '2026-11-03'], ['LDDS', 'livret', 'ce', '2026-11-03']]);
-  assert.equal(total(d), 14235.06, '1 234,56 + 10 500 + 2 500,50');
+  assert.equal(total(d), 13000.5, 'the current account’s cash is left out by default: 10 500 + 2 500,50');
+  assert.equal(totals(d).accounts.length, 2, 'and so is the account that only holds it');
   assert.deepEqual(d.lines.find(l => l.name === 'Livret A').events.map(e => e[2]), [10000, 10500]);
-  assert.deepEqual(history(d, new Date('2026-11-10T12:00:00Z')).find(p => p.d === '2026-10-10')?.value, 13735.06);
+  assert.equal(history(d, new Date('2026-11-10T12:00:00Z')).find(p => p.d === '2026-10-10')?.value, 12500.5);
+  d.settings.cash = true;
+  assert.equal(total(d), 14235.06, 'counted: 1 234,56 + 10 500 + 2 500,50');
+  assert.equal(history(d, new Date('2026-11-10T12:00:00Z')).find(p => p.d === '2026-10-10')?.value, 13735.06);
 });
 
 test('a partial file is flagged so the app adds it instead of replacing', () => {

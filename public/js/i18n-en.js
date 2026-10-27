@@ -279,7 +279,7 @@ export const EN = {
   'Cours': 'Prices',
   'Cours|prix': 'Price',
   'Yahoo Finance, sans jamais vos montants.': 'Yahoo Finance, never with your amounts.',
-  'Prénom, langue, thème et impôt.': 'First name, language, theme and tax.',
+  'Prénom, langue, thème, espèces et impôt.': 'First name, language, theme, cash and tax.',
   '{n} compte · {x}': '{n} account · {x}',
   '{n} comptes · {x}': '{n} accounts · {x}',
   'Aucun compte': 'No accounts',
@@ -709,6 +709,18 @@ export const EN = {
   'Ce fichier n’est pas un PDF lisible.': 'This file is not a readable PDF.',
   'Ce navigateur ne sait pas lire ce fichier : mettez-le à jour.': 'This browser cannot read this file: update it.',
   'Ce PDF est protégé : Carnet ne peut pas le lire.': 'This PDF is protected: Carnet cannot read it.',
+
+  // ——— Accounts' cash ———
+  'Espèces des comptes': 'Accounts’ cash',
+  'Le solde des comptes courants et l’argent non investi chez les courtiers. Un relevé du début du mois les compte souvent deux fois, une fois l’argent placé ailleurs. Les livrets et fonds en euros comptent toujours.': 'Current account balances and uninvested money at brokers. A statement from the start of the month often counts it twice, once the money is invested elsewhere. Savings books and euro funds always count.',
+  'Ignorées': 'Left out',
+  'Comptées': 'Counted',
+  'espèces comptées': 'cash counted',
+  'espèces ignorées': 'cash left out',
+  '{x} sur livrets': '{x} in savings books',
+  'non comptées': 'not counted',
+  'Espèces non comptées : {x} (Réglages, Préférences).': 'Cash not counted: {x} (Settings, Preferences).',
+  'Les espèces des comptes ne sont pas comptées : l’argent de l’achat ou de la vente n’y apparaît pas.': 'Accounts’ cash is not counted: the money of the purchase or sale does not show here.',
 
   // ——— Install and storage ———
   'Installer l’app': 'Install the app',

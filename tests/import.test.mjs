@@ -6,6 +6,7 @@ import { emptyData } from '../public/js/store.js';
 import { totals, heldLines } from '../public/js/compute.js';
 import { HEAD, ROWS, CSV } from './tr-export.mjs';
 
+const withCash = () => { const d = emptyData(); d.settings.cash = true; return d; }; // these tests count the accounts' cash
 const line = (imp, id) => imp.lines.find(l => l.id === id);
 
 test('realistic export: positions, cost basis, cash and statistics', () => {
@@ -83,7 +84,7 @@ test('a semicolon export with decimal commas gives the same positions', () => {
 });
 
 test('a new import replaces Trade Republic lines and keeps manual data and overrides', () => {
-  let data = mergeImport(emptyData(), importTradeRepublic(CSV));
+  let data = mergeImport(withCash(), importTradeRepublic(CSV));
   const apple = data.lines.find(l => l.id === 'tr-default-us0378331005');
   Object.assign(apple, { name: 'Mon Apple', customName: true, target: 40, note: 'Achetée pour le dividende' });
   Object.assign(data.accounts.find(a => a.id === 'tr-pea'), { note: 'Ouvert le 2 janvier 2025', openedAt: '2024-12-30' });

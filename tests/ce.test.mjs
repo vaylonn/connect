@@ -7,6 +7,7 @@ import { emptyData } from '../public/js/store.js';
 import { totals, history } from '../public/js/compute.js';
 import { ceStatement, ACCOUNTS } from './ce-statement.mjs';
 
+const withCash = () => { const d = emptyData(); d.settings.cash = true; return d; }; // these tests count the accounts' cash
 const load = async opts => importCe(await readPdf(ceStatement(opts)));
 
 test('pdf: lines of each page, in reading order, runs joined', async () => {
@@ -33,14 +34,14 @@ test('the summary only: balances by account, nothing personal kept', async () =>
   const json = JSON.stringify(imp);
   for (const secret of ['01234567890', '09876543210', 'CAMILLE', 'FR76', 'BOULANGERIE']) assert.ok(!json.includes(secret), secret);
   assert.match(imp.accounts[0].id, /^ce-[a-z0-9]+$/);
-  const data = mergeCe(emptyData(), imp);
+  const data = mergeCe(withCash(), imp);
   assert.equal(totals(data).total, 13735.06);
   assert.deepEqual(totals(data).envelopes.map(e => [e.name, e.value]), [['Livrets', 12500.5], ['Espèces', 1234.56]]);
   assert.equal((data.transactions || []).length, 0, 'no operation imported');
 });
 
 test('a statement a month later updates the balances; an older one only fills in the history', async () => {
-  let data = mergeCe(emptyData(), await load());
+  let data = mergeCe(withCash(), await load());
   const la = () => data.lines.find(l => l.name === 'Livret A' || l.customName);
   Object.assign(data.accounts.find(a => a.name === 'Livret A'), { name: 'Mon livret A', color: 'pink', note: 'Plafond 22 950 €' });
   const later = ACCOUNTS.map(([l, n, v]) => [l, n, l === 'COMPTE DE DEPOT' ? -45.2 : l === 'LIV.A EN CPTE' ? 10500 : v]);
@@ -63,7 +64,7 @@ test('a statement a month later updates the balances; an older one only fills in
 });
 
 test('accounts entered by hand merge with the statement’s: the most recent balance stays shown', async () => {
-  const data = emptyData();
+  const data = withCash();
   data.accounts.push(
     { id: 'acc-1', name: 'Livret A', kind: 'livret', source: 'manual', color: 'pink' },
     { id: 'acc-2', name: 'Compte joint', institution: "Caisse d'Epargne", kind: 'courant', source: 'manual', note: 'Avec Dominique' },

@@ -10,11 +10,11 @@ import { importLinxea, mergeLinxea, PERF_KEYS } from './importer-linxea.js';
 import { readXlsx } from './xlsx.js';
 import { importCe, mergeCe, duplicates } from './importer-ce.js';
 import { readPdf } from './pdf.js';
-import { totals, staleLines, lookthrough, DIRECT, heldLines, isHeld, lineComposition, history as buildHistory, lineValue, lineCost, lineGain, pru, isCashLike, QUOTE_EXPECTED, simulate, envelopeForAccount, ENVELOPE_ORDER, FLOW_KINDS, INCOME_KINDS, netAmount, performance, allocation, rebalance, milestone, accountStart, MILESTONE_YEARS } from './compute.js';
+import { totals, staleLines, lookthrough, DIRECT, heldLines, isHeld, lineComposition, history as buildHistory, lineValue, lineCost, lineGain, pru, isCashLike, QUOTE_EXPECTED, cashCounted, shownLine, simulate, envelopeForAccount, ENVELOPE_ORDER, FLOW_KINDS, INCOME_KINDS, netAmount, performance, allocation, rebalance, milestone, accountStart, MILESTONE_YEARS } from './compute.js';
 import { libraryFor, libraryChoices, SECTORS, COMPOSITION_NOTE, setFetchedLibrary, wantsComposition } from './library.js';
 import { lineChart, hoverText } from './chart.js';
 
-const VERSION = '1.7.0';
+const VERSION = '1.8.0';
 let data = load();
 const ui = {
   tab: 'patrimoine', range: '1A', scope: 'all', filter: 'all', group: 'accounts', analyse: 'sectors', server: 'unknown', busy: false, progress: '', lineRange: '1A',
@@ -146,7 +146,7 @@ function viewHome() {
     <div class="pills">
       ${tot.cost > 0 ? `<span class="pill"><span class="dotc"></span>${t('{x} de plus-value', { x: signedEur(tot.gain) })}</span>` : ''}
       <span class="pill">${t('{x} en actions', { x: pct(tot.equityPct, 0) })}</span>
-      ${tot.liquid > 0 ? `<span class="pill">${t('{x} d’espèces', { x: eur(tot.liquid, 0) })}</span>` : ''}
+      ${tot.liquid > 0 ? `<span class="pill">${t(cashCounted(data) ? '{x} d’espèces' : '{x} sur livrets', { x: eur(tot.liquid, 0) })}</span>` : ''}
     </div>
     <div class="meta">${tot.cost > 0 ? t('Depuis l’achat, sur {x} investis.', { x: eur(tot.cost, 0) }) : t('Ajoutez des placements pour suivre leur plus-value.')}</div>
   </section>`;
@@ -778,11 +778,11 @@ function simResult() {
   return `<div class="card">
     <div class="eyebrow">${t(p.mode === 'buy' ? 'Achat de {parts} · {x}' : 'Vente de {parts} · {x}', { parts, x: eur(p.qty * p.price) })}</div>
     <div class="compare mt6">
-      ${row(t('Patrimoine total'), eur(b.total, 0), eur(a.total, 0), p.useCash || p.mode === 'sell' ? '' : t('L’achat est compté comme un nouvel apport.'))}
+      ${row(t('Patrimoine total'), eur(b.total, 0), eur(a.total, 0), !cashCounted(data) ? t('Les espèces des comptes ne sont pas comptées : l’argent de l’achat ou de la vente n’y apparaît pas.') : p.useCash || p.mode === 'sell' ? '' : t('L’achat est compté comme un nouvel apport.'))}
       ${row(t('Part en actions'), pct(b.equityPct), pct(a.equityPct), pts(a.equityPct - b.equityPct))}
       ${row(t('Poids de la ligne'), pct(r.weightBefore), pct(r.weightAfter))}
       ${p.mode === 'buy' ? row(t('Prix de revient unitaire'), r.line.prevQty ? eur(r.line.prevPru) : '—', eur(r.line.pru)) : row(t('Parts restantes'), qtyShort(r.line.prevQty), qtyShort(r.line.qty))}
-      ${row(t('Espèces'), eur(b.cash, 0), eur(a.cash, 0))}
+      ${cashCounted(data) ? row(t('Espèces'), eur(b.cash, 0), eur(a.cash, 0)) : ''}
       ${p.mode === 'sell' ? `<div class="cmp"><span class="k">${t('Plus-value réalisée')}</span><span class="v ${r.realized >= 0 ? 'pos' : 'neg'}">${signedEur(r.realized)}</span></div>
         <div class="cmp"><span class="k">${t('Impôt estimé')}</span><span class="v">${eur(r.tax)}</span><span class="x">${esc(r.taxNote)} ${esc(milestoneLine(accById(lineById(p.lineId)?.accountId)))}</span></div>` : ''}
     </div>
@@ -811,8 +811,8 @@ const SECTIONS = {
     summary: () => ui.server === 'off' ? t('Serveur absent : actualisation indisponible') : data.lastRefresh ? refreshLabel().long : t('Jamais actualisés') },
   appareil: { title: 'Installer l’app', sub: 'Carnet sur l’écran d’accueil, et vos données gardées.', icon: 'telephone', body: sectionDevice,
     summary: () => t(installed() ? 'Installée sur cet appareil' : 'Pas encore installée') + (ui.persisted === false ? ' · ' + t('données non protégées') : '') },
-  preferences: { title: 'Préférences', sub: 'Prénom, langue, thème et impôt.', icon: 'profil', body: sectionPreferences,
-    summary: () => [data.profile.firstName || t('Sans prénom'), langLabel(data.settings.lang), t('thème {x}', { x: t(THEMES[data.settings.theme] || 'Automatique').toLowerCase() }), t('impôt {x}', { x: pct(data.settings.taxRate / 100, 1) })].join(' · ') },
+  preferences: { title: 'Préférences', sub: 'Prénom, langue, thème, espèces et impôt.', icon: 'profil', body: sectionPreferences,
+    summary: () => [data.profile.firstName || t('Sans prénom'), langLabel(data.settings.lang), t('thème {x}', { x: t(THEMES[data.settings.theme] || 'Automatique').toLowerCase() }), t(cashCounted(data) ? 'espèces comptées' : 'espèces ignorées'), t('impôt {x}', { x: pct(data.settings.taxRate / 100, 1) })].join(' · ') },
 };
 
 function viewData() {
@@ -945,6 +945,8 @@ function sectionPreferences() {
       <div class="seg" role="group" aria-label="${t('Langue')}">${Object.keys(LANGS).map(k => `<button data-action="lang" data-v="${k}" aria-pressed="${(data.settings.lang || 'auto') === k}" ${k === 'auto' ? '' : `lang="${k}"`}>${langLabel(k)}</button>`).join('')}</div></section>
     <section class="card"><h3>${t('Thème')}</h3><p class="lead">${t('Le mode automatique suit le réglage de l’appareil.')}</p>
       <div class="seg" role="group" aria-label="${t('Thème')}">${Object.entries(THEMES).map(([k, l]) => `<button data-action="theme" data-v="${k}" aria-pressed="${data.settings.theme === k}">${t(l)}</button>`).join('')}</div></section>
+    <section class="card"><h3>${t('Espèces des comptes')}</h3><p class="lead">${t('Le solde des comptes courants et l’argent non investi chez les courtiers. Un relevé du début du mois les compte souvent deux fois, une fois l’argent placé ailleurs. Les livrets et fonds en euros comptent toujours.')}</p>
+      <div class="seg" role="group" aria-label="${t('Espèces des comptes')}">${[['off', 'Ignorées'], ['on', 'Comptées']].map(([k, l]) => `<button data-action="cash" data-v="${k}" aria-pressed="${(k === 'on') === cashCounted(data)}">${t(l)}</button>`).join('')}</div></section>
     <section class="card"><h3>${t('Impôt sur les plus-values')}</h3><p class="lead">${t('Utilisé par le simulateur pour les ventes hors PEA et assurance-vie.')}</p>
       <label class="field"><span>${t('Taux (%)')}</span><input class="input" id="tax-rate" data-setting="taxRate" inputmode="decimal" value="${inputNum(data.settings.taxRate, 1)}"><small>${t('31,4 % en 2026 (prélèvement forfaitaire unique).')}</small></label></section>`;
 }
@@ -1103,8 +1105,9 @@ function drawLineChart(sh, l) {
 
 function openAccount(id) {
   const a = accById(id); if (!a) return;
-  const ls = data.lines.filter(l => l.accountId === id && isHeld(l)).sort((x, y) => lineValue(y) - lineValue(x));
+  const ls = data.lines.filter(l => l.accountId === id && isHeld(l) && shownLine(data, l)).sort((x, y) => lineValue(y) - lineValue(x));
   const v = ls.reduce((s, l) => s + lineValue(l), 0);
+  const leftOut = data.lines.filter(l => l.accountId === id && isHeld(l) && !shownLine(data, l)).reduce((s, l) => s + lineValue(l), 0);
   const p = performance(data, new Date(), id);
   const rate = p && (p.days >= 365 ? (p.rate == null ? '' : t('{x} par an', { x: signedPct(p.rate) })) : p.periodRate == null ? '' : t('{x} sur la période', { x: signedPct(p.periodRate) }));
   openSheet(`${sheetHead(esc(a.name), esc(kindLabel(a.kind)))}
@@ -1112,6 +1115,7 @@ function openAccount(id) {
     ${p ? `<p class="small muted m-t4">${[t('Versé {x}', { x: eur(p.net, 0) }), t('gain réel {x}', { x: signedEur(p.gain, 0) }), rate].filter(Boolean).join(' · ')}</p>` : ''}
     ${a.asOf ? `<p class="small muted m-t4">${t('Dernier import {x} : valeurs du {date}.', { x: esc(IMPORTERS[a.source]?.name || ''), date: dateLong(a.asOf) })}</p>` : ''}
     ${MILESTONE_YEARS[a.kind] ? `<p class="small muted m-t4">${esc(milestoneLine(a))}</p>` : ''}
+    ${Math.abs(leftOut) >= 0.005 ? `<p class="small muted m-t4">${t('Espèces non comptées : {x} (Réglages, Préférences).', { x: eur(leftOut) })}</p>` : ''}
     ${a.note ? `<p class="note-text">${esc(a.note)}</p>` : ''}
     <div class="lines my14">${ls.map(lineRow).join('') || `<p class="muted p16 m0">${t('Aucune ligne sur ce compte.')}</p>`}</div>
     <div class="btn-row"><button class="btn primary sm" data-act="add">${ICONS.plus}${t('Ajouter une ligne')}</button><button class="btn sm" data-act="edit">${t('Modifier le compte')}</button><button class="btn sm" data-act="chart">${t('Voir sa courbe')}</button></div>`, {
@@ -1343,7 +1347,7 @@ async function importCsvFlow() {
   const byAcc = id => held.filter(l => l.accountId === id);
   openSheet(`${sheetHead(t('Import Trade Republic'), tn(st.rows, '{n} opération, du {a} au {b}', '{n} opérations, du {a} au {b}', { n: num(st.rows, 0), a: dateLong(st.from), b: dateLong(st.to) }))}
     ${imp.accounts.map(a => `<div class="section-head mt8"><h2>${esc(a.name)}</h2><span class="aside">${tn(byAcc(a.id).length, '{n} ligne', '{n} lignes')}</span></div>
-      <div class="holdings">${byAcc(a.id).sort((x, y) => lineCost(y) - lineCost(x)).map(l => `<div class="holding"><span class="r"></span><span class="n">${esc(shortName(l))}</span><span class="a">${isCashLike(l) ? eur(l.amount) : fqty(l.qty)}</span><span class="w">${isCashLike(l) ? t('Solde espèces recalculé') : t('Prix de revient {x}', { x: eur(l.cost) }) + (l.pending ? ' · ' + t('dont {x} en attente d’exécution', { x: eur(l.pending) }) : '')}</span></div>`).join('')}</div>`).join('')}
+      <div class="holdings">${byAcc(a.id).sort((x, y) => lineCost(y) - lineCost(x)).map(l => `<div class="holding"><span class="r"></span><span class="n">${esc(shortName(l))}</span><span class="a">${isCashLike(l) ? eur(l.amount) : fqty(l.qty)}</span><span class="w">${isCashLike(l) ? t('Solde espèces recalculé') + (cashCounted(data) ? '' : ' · ' + t('non comptées')) : t('Prix de revient {x}', { x: eur(l.cost) }) + (l.pending ? ' · ' + t('dont {x} en attente d’exécution', { x: eur(l.pending) }) : '')}</span></div>`).join('')}</div>`).join('')}
     <div class="callout my16">${t('Espèces recalculées : {x}. Vérifiez ce montant dans l’app Trade Republic.', { x: `<b>${Object.entries(st.cash).map(([id, v]) => esc(imp.accounts.find(a => a.id === id)?.name || id) + ' ' + eur(v)).join(' · ')}</b>` })}</div>
     ${data.demo ? `<p class="small muted">${t('Les données d’exemple seront effacées.')}</p>` : ''}
     <div class="btn-row"><button class="btn primary" data-ok>${t('Importer')}</button><button class="btn" data-close>${t('Annuler')}</button></div>`, {
@@ -1387,7 +1391,7 @@ async function importCeFlow() {
   const known = new Set(data.accounts.map(a => a.id));
   const older = imp.accounts.some(a => known.has(a.id) && accById(a.id).asOf > a.asOf);
   openSheet(`${sheetHead(t('Import Caisse d’Épargne'), tn(imp.lines.length, '{n} compte au {date}', '{n} comptes au {date}', { date: dateLong(imp.stats.to) }))}
-    <div class="holdings">${imp.lines.map(l => `<div class="holding"><span class="r"></span><span class="n">${esc(accById(l.accountId)?.name || imp.accounts.find(a => a.id === l.accountId).name)}</span><span class="a">${eur(l.amount)}</span><span class="w">${esc(t(l.envelope))}${known.has(l.accountId) ? ' · ' + t('mis à jour') : ''}</span></div>`).join('')}</div>
+    <div class="holdings">${imp.lines.map(l => `<div class="holding"><span class="r"></span><span class="n">${esc(accById(l.accountId)?.name || imp.accounts.find(a => a.id === l.accountId).name)}</span><span class="a">${eur(l.amount)}</span><span class="w">${esc(t(l.envelope))}${l.type === 'especes' && !cashCounted(data) ? ' · ' + t('non comptées') : ''}${known.has(l.accountId) ? ' · ' + t('mis à jour') : ''}</span></div>`).join('')}</div>
     ${imp.stats.skipped.length ? `<p class="note">${t('Non importés : {x}. Prêts et placements ont leurs propres relevés.', { x: esc(imp.stats.skipped.join(', ')) })}</p>` : ''}
     ${dup.length ? `<label class="check mt12"><input type="checkbox" id="ce-dup" checked><span>${t('Fusionner avec les comptes saisis à la main : {x}', { x: esc(dup.map(d => d.account.name).join(', ')) })}<br><span class="small muted">${t('Le solde le plus récent reste affiché ; l’autre rejoint la courbe.')}</span></span></label>` : ''}
     <div class="callout my16">${t(older ? 'Ce relevé est plus ancien que le dernier importé : il complète la courbe, les soldes affichés ne changent pas.' : 'Soldes au {date}. Chaque relevé importé met à jour ces comptes et ajoute un point à leur courbe.', { date: dateLong(imp.stats.to) })}</div>
@@ -1874,6 +1878,7 @@ document.addEventListener('click', async e => {
     case 'snooze': data.settings.snoozeUntil = new Date(Date.now() + 86400000).toISOString(); commit(); break;
     case 'theme': data.settings.theme = v; commit(); break;
     case 'lang': data.settings.lang = v; commit(); break;
+    case 'cash': data.settings.cash = v === 'on'; commit(); break;
     case 'pick-csv': importCsvFlow(); break;
     case 'import-source': importGuide($('#imp-source')?.value); break;
     case 'pick-backup': restoreFlow(); break;

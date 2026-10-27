@@ -7,7 +7,7 @@ export function emptyData() {
   return {
     app: 'carnet', schema: SCHEMA,
     profile: { firstName: '' },
-    settings: { theme: 'auto', lang: 'auto', taxRate: 31.4, staleDays: 4, snoozeUntil: '' },
+    settings: { theme: 'auto', lang: 'auto', taxRate: 31.4, staleDays: 4, snoozeUntil: '', cash: false },
     accounts: [], lines: [], priceHistory: {}, trStats: null, imports: [],
     updatedAt: new Date().toISOString(),
   };

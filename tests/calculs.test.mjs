@@ -9,7 +9,8 @@ import { totals, heldLines, history, milestone } from '../public/js/compute.js';
 const H = 'datetime,date,account_type,category,type,asset_class,name,symbol,shares,price,amount,fee,tax';
 const row = (date, type, { isin = '', shares = '', price = '', amount = '', fee = '' } = {}) =>
   `${date}T10:00:00Z,${date},DEFAULT,TRADING,${type},${isin ? 'FUND' : ''},${isin ? 'Fonds ' + isin : ''},${isin},${shares},${price},${amount},${fee},`;
-const load = rows => mergeImport(emptyData(), importTradeRepublic([H, ...rows].join('\n')));
+const withCash = () => { const d = emptyData(); d.settings.cash = true; return d; }; // these tests count the accounts' cash
+const load = rows => mergeImport(withCash(), importTradeRepublic([H, ...rows].join('\n')));
 const valueOn = (data, day, now) => history(data, new Date(now)).find(p => p.d === day)?.value;
 const SP500 = 'IE00B5BMR087';
 
@@ -74,4 +75,23 @@ test('PEA: withdrawals free of income tax 5 years after the first deposit', () =
   assert.deepEqual([milestone(data, pea).free, milestone(data, pea).guessed], ['2025-03-01', false], 'the date the user gave wins; 29 Feb rolls to 1 March');
   assert.equal(milestone({ accounts: [], lines: [], transactions: [] }, { id: 'x', kind: 'pea' }), null);
   assert.equal(milestone(data, { ...pea, kind: 'cto' }), null, 'no milestone for a brokerage account');
+});
+
+test('the accounts’ cash is left out unless counted; savings books always count', () => {
+  const data = mergeImport(emptyData(), importTradeRepublic([H,
+    row('2025-01-02', 'CUSTOMER_INBOUND', { amount: 3000 }),
+    row('2025-01-10', 'BUY', { isin: SP500, shares: 4, price: 500, amount: -2000 }),
+  ].join('\n')));
+  data.accounts.push({ id: 'cc', name: 'Banque', kind: 'courant' }, { id: 'liv', name: 'Livret A', kind: 'livret' });
+  data.lines.push({ id: 'cc-1', accountId: 'cc', type: 'especes', envelope: 'Espèces', amount: 500, qty: 1, price: 500, cost: 500, events: [] },
+    { id: 'liv-1', accountId: 'liv', type: 'livret', envelope: 'Livrets', amount: 700, qty: 1, price: 700, cost: 700, events: [] });
+  assert.equal(data.settings.cash, false, 'left out by default');
+  const t = totals(data);
+  assert.equal(t.total, 2700, 'fund 2000 + Livret A 700; not the broker’s 1000 nor the bank’s 500');
+  assert.deepEqual(t.accounts.map(a => a.account.id), ['tr-cto', 'liv'], 'the cash-only bank account is not shown');
+  assert.equal(heldLines(data).some(l => l.type === 'especes'), false);
+  assert.equal(valueOn(data, '2025-02-15', '2025-03-31T12:00:00Z'), 2700, 'the chart leaves it out too: fund 2000 + Livret A 700, not the 1 000 € of cash');
+  data.settings.cash = true;
+  assert.equal(totals(data).total, 4200);
+  assert.equal(totals(data).accounts.length, 3);
 });

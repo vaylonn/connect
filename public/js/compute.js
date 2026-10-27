@@ -39,9 +39,14 @@ export function isHeld(l, accountIds) {
   if (q <= 1e-6) return false;
   return !(+l.price > 0) || q * l.price >= 0.01;
 }
-export function heldLines(data) {
+// The cash of accounts (type especes: current accounts, cash at brokers) can be left out of everything
+// shown (settings.cash false, the default): a monthly statement's balance is soon stale, and money since
+// moved to a broker would count twice. Savings books and euro funds always count.
+export const cashCounted = data => data?.settings?.cash !== false;
+export const shownLine = (data, l) => cashCounted(data) || l.type !== 'especes';
+export function heldLines(data, { cash = cashCounted(data) } = {}) {
   const ids = new Set((data.accounts || []).map(a => a.id));
-  return (data.lines || []).filter(l => isHeld(l, ids));
+  return (data.lines || []).filter(l => isHeld(l, ids) && (cash || l.type !== 'especes'));
 }
 
 export function totals(data) {
@@ -59,7 +64,9 @@ export function totals(data) {
     byEnv.set(env, (byEnv.get(env) || 0) + v);
   }
   const gain = invested - cost;
-  const accounts = (data.accounts || []).map(a => {
+  // an account that only holds left-out cash is not shown
+  const cashOnly = a => !cashCounted(data) && (data.lines || []).some(l => l.accountId === a.id) && (data.lines || []).every(l => l.accountId !== a.id || l.type === 'especes');
+  const accounts = (data.accounts || []).filter(a => !cashOnly(a)).map(a => {
     const ls = lines.filter(l => l.accountId === a.id);
     const v = byAcc.get(a.id) || 0;
     const c = ls.filter(l => !isCashLike(l)).reduce((s, l) => s + lineCost(l), 0);
@@ -187,7 +194,7 @@ const iso = d => d.toISOString().slice(0, 10);
 // keep (optional) narrows the chart to some lines: one account, one envelope.
 export function history(data, now = new Date(), keep = null) {
   const accIds = new Set((data.accounts || []).map(a => a.id));
-  const lines = (data.lines || []).filter(l => accIds.has(l.accountId) && (!keep || keep(l))); // past sales included
+  const lines = (data.lines || []).filter(l => accIds.has(l.accountId) && shownLine(data, l) && (!keep || keep(l))); // past sales included
   const ph = data.priceHistory || {};
   let start = null;
   for (const l of lines) {
@@ -239,7 +246,7 @@ export function history(data, now = new Date(), keep = null) {
 
 // ——— Simulation ———
 export function simulate(data, sim) {
-  const clone = JSON.parse(JSON.stringify({ accounts: data.accounts, lines: data.lines }));
+  const clone = JSON.parse(JSON.stringify({ accounts: data.accounts, lines: data.lines, settings: data.settings }));
   const before = { t: totals(data), lt: lookthrough(data) };
   const out = { ok: true, warnings: [], realized: 0, tax: 0, taxNote: '' };
   let line = sim.lineId ? clone.lines.find(l => l.id === sim.lineId) : null;
@@ -345,7 +352,8 @@ export function performance(data, now = new Date(), onlyAccount = null) {
   const deposits = flowsTx.reduce((s, tr) => s + Math.max(0, tr.amount), 0);
   if (!ids.size || deposits <= 0) return null;
   const withdrawals = flowsTx.reduce((s, tr) => s - Math.min(0, tr.amount), 0);
-  const value = heldLines(data).filter(l => ids.has(l.accountId)).reduce((s, l) => s + lineValue(l), 0);
+  // the account's cash counts here whatever the setting: deposits land there first
+  const value = heldLines(data, { cash: true }).filter(l => ids.has(l.accountId)).reduce((s, l) => s + lineValue(l), 0);
   const today = iso(now);
   const from = flowsTx[0].date;
   const days = Math.max(0, (Date.parse(today) - Date.parse(from)) / 86400000);
