@@ -10,11 +10,12 @@ import { importLinxea, mergeLinxea, PERF_KEYS } from './importer-linxea.js';
 import { readXlsx } from './xlsx.js';
 import { importCe, mergeCe, duplicates } from './importer-ce.js';
 import { readPdf } from './pdf.js';
+import { readBricksboard, importBricks, mergeBricks, STATUS as BRICKS_STATUS } from './importer-bricks.js';
 import { totals, staleLines, lookthrough, DIRECT, heldLines, isHeld, lineComposition, history as buildHistory, lineValue, lineCost, lineGain, pru, isCashLike, QUOTE_EXPECTED, cashCounted, shownLine, simulate, envelopeForAccount, ENVELOPE_ORDER, FLOW_KINDS, INCOME_KINDS, netAmount, performance, settleCash, allocation, rebalance, milestone, accountStart, MILESTONE_YEARS, positions, positionsCsv } from './compute.js';
 import { libraryFor, libraryChoices, SECTORS, COMPOSITION_NOTE, setFetchedLibrary, wantsComposition } from './library.js';
 import { lineChart, hoverText } from './chart.js';
 
-const VERSION = '1.9.1';
+const VERSION = '1.10.0';
 let data = load();
 const ui = {
   tab: 'patrimoine', range: '1A', scope: 'all', filter: 'all', group: 'accounts', analyse: 'sectors', server: 'unknown', busy: false, progress: '', lineRange: '1A',
@@ -26,8 +27,8 @@ const TABS = [
   ['patrimoine', 'Patrimoine'], ['analyse', 'Analyse'], ['historique', 'Historique'], ['positions', 'Positions'], ['simuler', 'Simuler'], ['donnees', 'Réglages'],
 ];
 const COLORS = ['ink', 'orange', 'blue', 'pink', 'lilac', 'green'];
-const KINDS = [['courant', 'Compte courant'], ['livret', 'Livret d’épargne'], ['cto', 'Compte-titres'], ['pea', 'PEA'], ['av', 'Assurance-vie'], ['per', 'PER'], ['crypto', 'Crypto'], ['autre', 'Autre']];
-const TYPES = [['etf', 'ETF'], ['fonds', 'Fonds (OPCVM, unité de compte)'], ['action', 'Action'], ['crypto', 'Crypto'], ['fonds-euros', 'Fonds en euros'], ['structure', 'Produit structuré'], ['livret', 'Livret'], ['especes', 'Espèces'], ['non-cote', 'Non coté'], ['autre', 'Autre']];
+const KINDS = [['courant', 'Compte courant'], ['livret', 'Livret d’épargne'], ['cto', 'Compte-titres'], ['pea', 'PEA'], ['av', 'Assurance-vie'], ['per', 'PER'], ['crypto', 'Crypto'], ['immo', 'Immobilier participatif'], ['autre', 'Autre']];
+const TYPES = [['etf', 'ETF'], ['fonds', 'Fonds (OPCVM, unité de compte)'], ['action', 'Action'], ['crypto', 'Crypto'], ['fonds-euros', 'Fonds en euros'], ['structure', 'Produit structuré'], ['livret', 'Livret'], ['especes', 'Espèces'], ['non-cote', 'Non coté'], ['immo', 'Immobilier participatif'], ['autre', 'Autre']];
 const TYPE_LABEL = Object.fromEntries(TYPES);
 const kindLabel = k => t(KINDS.find(x => x[0] === k)?.[1] || '');
 
@@ -303,7 +304,7 @@ function emptyState() {
     <div class="orb" aria-hidden="true"><i class="ring"></i><i class="core"></i><i class="s1"></i><i class="s2"></i><i class="s3"></i></div>
     <div class="wordmark">Carnet<span class="dot">.</span></div>
     <h1 class="title empty-title">${t('Votre patrimoine, en un seul endroit.')}<em>${t('Et seulement sur cet appareil.')}</em></h1>
-    <p>${t('Importez vos exports (Trade Republic, Linxea, Caisse d’Épargne), restaurez une sauvegarde, ou ajoutez vos comptes à la main.')}</p>
+    <p>${t('Importez vos exports (Trade Republic, Linxea, Caisse d’Épargne, Bricks), restaurez une sauvegarde, ou ajoutez vos comptes à la main.')}</p>
     <div class="btn-row">
       <button class="btn primary" data-action="pick-csv">${ICONS.upload}${t('Importer un CSV Trade Republic')}</button>
       <button class="btn" data-action="section" data-v="import">${ICONS.upload}${t('Autres imports')}</button>
@@ -568,10 +569,10 @@ function shareSheet() {
 // ——— Historique tab ———
 // Operations kept at import: security transactions (buys, sells, splits…) and cash movements
 // (deposits, withdrawals, dividends, interest; card payments summed per month).
-const OP_LABEL = { BUY: 'Achat', SELL: 'Vente', SPLIT: 'Division', BONUS_ISSUE: 'Attribution gratuite', FREE_RECEIPT: 'Réception de titres', PRIVATE_MARKET_BUY: 'Souscription', DIVIDEND: 'Dividende', INTEREST: 'Intérêts', BONUS: 'Bonus', DEPOSIT: 'Versement', WITHDRAWAL: 'Retrait', CARD: 'Paiements par carte', CASH_OTHER: 'Autre mouvement', TAX: 'Impôt', FEE: 'Frais' };
+const OP_LABEL = { BUY: 'Achat', SELL: 'Vente', SPLIT: 'Division', BONUS_ISSUE: 'Attribution gratuite', FREE_RECEIPT: 'Réception de titres', PRIVATE_MARKET_BUY: 'Souscription', DIVIDEND: 'Dividende', INTEREST: 'Intérêts', BONUS: 'Bonus', DEPOSIT: 'Versement', WITHDRAWAL: 'Retrait', CARD: 'Paiements par carte', CASH_OTHER: 'Autre mouvement', TAX: 'Impôt', FEE: 'Frais', REPAYMENT: 'Remboursement' };
 const HIST_KINDS = [['all', 'Toutes'], ['BUY', 'Achats'], ['SELL', 'Ventes'], ['income', 'Revenus'], ['flows', 'Versements'], ['other', 'Autres']];
 const isBuy = tr => tr.kind === 'BUY' || tr.kind === 'PRIVATE_MARKET_BUY';
-const isTrade = tr => isBuy(tr) || tr.kind === 'SELL';
+const isTrade = tr => isBuy(tr) || tr.kind === 'SELL' || tr.kind === 'REPAYMENT';
 const histGroup = tr => isBuy(tr) ? 'BUY' : tr.kind === 'SELL' ? 'SELL' : INCOME_KINDS.has(tr.kind) ? 'income' : FLOW_KINDS.has(tr.kind) ? 'flows' : 'other';
 const isCashMove = tr => INCOME_KINDS.has(tr.kind) || FLOW_KINDS.has(tr.kind) || tr.kind === 'TAX' || tr.kind === 'FEE';
 const opName = tr => { const s = libraryFor(tr.isin)?.short; return s ? t(s) : tr.name || tr.isin || t(OP_LABEL[tr.kind] || tr.kind); };
@@ -599,7 +600,7 @@ function viewHistorique() {
   const h = ui.hist;
   const accs = [...new Set(all.map(tr => tr.accountId))].map(accById).filter(Boolean);
   if (h.acc !== 'all' && !accs.some(a => a.id === h.acc)) h.acc = 'all';
-  const manual = data.lines.some(l => l.source !== 'tr' && !isCashLike(l) && isHeld(l));
+  const manual = data.lines.some(l => !['tr', 'bricks'].includes(l.source) && !isCashLike(l) && isHeld(l));
   const positionsOnly = data.lines.some(l => l.source === 'linxea' && isHeld(l));
   return `${title}
     ${noCashHistory() ? reimportCard() : ''}
@@ -729,7 +730,7 @@ function histRow(tr, showAcc) {
     : INCOME_KINDS.has(tr.kind) && tr.tax ? `<span class="muted">${t('retenue {x}', { x: eur(Math.abs(tr.tax)) })}</span>`
     : tr.fee && !cash ? `<span class="muted">${t('frais {x}', { x: eur(Math.abs(tr.fee)) })}</span>` : '';
   const inner = `<span class="mono t-${esc(tr.type || 'etf')}">${esc(initials(name))}</span>
-    <span class="n">${esc(name)}</span><span class="v ${tr.kind === 'SELL' || (cash && amount > 0) ? 'in' : ''}">${value}</span>
+    <span class="n">${esc(name)}</span><span class="v ${tr.kind === 'SELL' || tr.kind === 'REPAYMENT' || (cash && amount > 0) ? 'in' : ''}">${value}</span>
     <span class="s">${sub}</span><span class="g">${g}</span>`;
   return line ? `<button class="line" data-action="open-line" data-id="${esc(line.id)}">${inner}</button>` : `<div class="line static">${inner}</div>`;
 }
@@ -1066,7 +1067,7 @@ function openLine(id) {
   const stats = isCashLike(l) ? `<div class="stat"><div class="k">${t('Type')}</div><div class="v">${esc(t(TYPE_LABEL[l.type] || l.type))}</div></div><div class="stat"><div class="k">${t('Enveloppe')}</div><div class="v">${esc(t(l.envelope || '—'))}</div></div>`
     : `<div class="stat"><div class="k">${t('Quantité')}</div><div class="v">${fqty(l.qty)}${l.pending ? `<br><span class="small muted">${t('+ {x} en attente', { x: eur(l.pending) })}</span>` : ''}</div></div>
       <div class="stat"><div class="k">${t('Prix de revient')}</div><div class="v">${eur(pru(l))}</div></div>
-      <div class="stat"><div class="k">${t('Cours|prix')}</div><div class="v">${eur(l.price)}<br><span class="small muted">${l.priceDate ? dateLong(l.priceDate) : t('jamais actualisé')}${l.priceSource === 'transaction' ? ' · ' + t('prix de transaction') : l.priceSource === 'yahoo' ? ' · Yahoo' : l.priceSource === 'linxea' ? ' · Linxea' : ''}</span></div></div>
+      <div class="stat"><div class="k">${t('Cours|prix')}</div><div class="v">${eur(l.price)}<br><span class="small muted">${l.priceDate ? dateLong(l.priceDate) : t('jamais actualisé')}${l.priceSource === 'transaction' ? ' · ' + t('prix de transaction') : l.priceSource === 'yahoo' ? ' · Yahoo' : l.priceSource === 'linxea' ? ' · Linxea' : l.priceSource === 'bricks' ? ' · Bricks' : ''}</span></div></div>
       <div class="stat"><div class="k">${t('Plus-value')}</div><div class="v ${Math.abs(g) < 0.5 ? '' : g > 0 ? 'pos' : 'neg'}">${signedEur(g)}<br><span class="small">${c > 0 ? signedPct(g / c) : ''}</span></div></div>`;
   // Full fund name, ISIN and symbol on one line under the title, rather than one more card.
   const ids = [lib && lib.name !== shortName(l) ? lib.name : '', l.subcategory || l.category, l.isin, l.ticker].filter(Boolean);
@@ -1084,6 +1085,7 @@ function openLine(id) {
     ${l.note ? `<p class="note-text">${esc(l.note)}</p>` : ''}
     ${priceSection(l)}
     ${fundPerfSection(l)}
+    ${projectSection(l)}
     <div class="btn-row"><button class="btn primary sm" data-act="edit">${t('Modifier')}</button>${isCashLike(l) ? '' : `<button class="btn sm" data-act="sim">${t('Simuler')}</button>`}<button class="btn sm danger" data-act="del">${t('Supprimer')}</button></div>
     ${holdings}`, {
     label: shortName(l),
@@ -1114,12 +1116,29 @@ function fundPerfSection(l) {
     <p class="note m-x2b14">${t('Performance passée du fonds lui-même, hors frais du contrat ; elle ne dit rien de l’avenir.')}</p>`;
 }
 
+// A crowdfunded property (Bricks): its rate, repayment month, grade and status, as of the last import.
+const ratePct = r => pct(r, Number.isInteger(Math.round(r * 1e6) / 1e4) ? 0 : 1);
+const PROJECT_WARN = { 'repayment-delay': 'neg', 'repayment-default': 'neg', 'repayment-finished': 'pos' };
+function projectSection(l) {
+  const p = l.type === 'immo' && l.project;
+  if (!p) return '';
+  const sums = [
+    p.rate != null && { k: t('Taux annuel'), v: ratePct(p.rate), d: t('brut') },
+    p.maturity && { k: t('Échéance'), v: esc(monthLong(p.maturity)), d: '' },
+    p.grade && { k: t('Note Bricks'), v: esc(p.grade), d: p.coverage != null ? t('couverture {x}', { x: pct(p.coverage, 0) }) : '' },
+    p.status && { k: t('Statut'), v: esc(t(BRICKS_STATUS[p.status] || '')), d: '', cls: PROJECT_WARN[p.status] || '' },
+  ].filter(Boolean);
+  return `<div class="section-head mt8"><h2>${t('Projet')}</h2><span class="aside">${esc([p.city, t('au {date}', { date: dateLong(l.priceDate) })].filter(Boolean).join(' · '))}</span></div>
+    ${sums.length ? sumsCard(sums) : ''}
+    <p class="note m-x2b14">${t('La valeur est le capital restant dû ; les coupons arrivent sur le solde Bricks. Un projet en retard ou en défaut reste compté à sa valeur nominale.')}</p>`;
+}
+
 // Price chart of one product (history fetched on refresh)
 const LRANGES = [['1M', 31], ['6M', 183], ['1A', 366], ['5A', 1830]];
 function priceSection(l) {
   if (isCashLike(l)) return '';
   const h = l.ticker && data.priceHistory?.[l.ticker];
-  if (!h || h.length < 2) return `<p class="note m-x2b14">${t(l.type === 'non-cote' ? 'Pas de cours public pour ce fonds non coté.' : l.type === 'structure' || l.noSymbol ? 'Pas de cours sur Yahoo pour ce support : sa valeur est celle de votre dernier import ou relevé.' : 'L’historique du cours apparaîtra après une actualisation (bouton en haut de l’écran).')}</p>`;
+  if (!h || h.length < 2) return `<p class="note m-x2b14">${t(l.type === 'non-cote' ? 'Pas de cours public pour ce fonds non coté.' : l.type === 'immo' ? 'Pas de cours public : la valeur est le capital restant dû, au dernier import.' : l.type === 'structure' || l.noSymbol ? 'Pas de cours sur Yahoo pour ce support : sa valeur est celle de votre dernier import ou relevé.' : 'L’historique du cours apparaîtra après une actualisation (bouton en haut de l’écran).')}</p>`;
   return `<section class="card chart-card price-card">
     <div class="chart-top"><h3>${t('Cours|prix')}</h3><div class="chips" role="group" aria-label="${t('Période')}">${LRANGES.map(([k]) => `<button class="chip" data-lrange="${k}" aria-pressed="${ui.lineRange === k}">${t(k)}</button>`).join('')}</div></div>
     <div class="chart-hover" data-lhover></div><div class="chart-host" data-lhost></div>
@@ -1361,6 +1380,15 @@ const IMPORTERS = {
     ],
     run: () => importCeFlow(),
   },
+  bricks: {
+    name: 'Bricks',
+    steps: () => [
+      step('compte', t('Sur {link}, ajoutez le favori « BricksBoard »', { link: '<a href="https://bricksboard.fr/dashboard/" target="_blank" rel="noopener">bricksboard.fr</a>' }), t('Glissez le bouton dans la barre de favoris de votre navigateur (sur ordinateur).')),
+      step('download', t('Connectez-vous sur app.bricks.co, puis cliquez sur le favori'), t('Un fichier bricksboard-AAAA-MM-JJ.html arrive dans vos téléchargements.')),
+      step('upload', t('Importez le fichier ici'), t('Carnet lit vos projets, votre solde et vos mouvements. Votre identité, votre adresse et votre IBAN, aussi présents dans le fichier, sont ignorés.')),
+    ],
+    run: () => importBricksFlow(),
+  },
 };
 const imported = l => !!(l && IMPORTERS[l.source]);
 function importGuide(key) {
@@ -1440,6 +1468,36 @@ async function importCeFlow() {
       if (data.demo) { const keep = { profile: data.profile, settings: data.settings }; data = { ...emptyData(), ...keep }; }
       data = mergeCe(data, imp, merge); close(); land('patrimoine');
       commit(tn(imp.lines.length, '{n} compte importé.', '{n} comptes importés.'));
+    }),
+  });
+}
+
+async function importBricksFlow() {
+  const f = await pickFile('.html,.htm,.json,text/html,application/json');
+  if (!f) return;
+  let imp;
+  try { imp = importBricks(readBricksboard(await readText(f))); } catch (e) { toast(e.message || t('Lecture du fichier impossible.')); return; }
+  const st = imp.stats;
+  const held = imp.lines.filter(l => l.type === 'immo' && isHeld(l)).sort((a, b) => lineValue(b) - lineValue(a));
+  const sub = l => [l.project.rate != null ? t('{x} par an', { x: ratePct(l.project.rate) }) : '', l.project.maturity ? t('échéance {x}', { x: monthLong(l.project.maturity) }) : '', ['repayment-delay', 'repayment-default'].includes(l.project.status) ? t(BRICKS_STATUS[l.project.status]) : ''].filter(Boolean).join(' · ');
+  openSheet(`${sheetHead(t('Import Bricks'), tn(st.held, '{n} projet au {date}', '{n} projets au {date}', { date: dateLong(st.to) }))}
+    ${sumsCard([
+      { k: t('Capital investi'), v: eur(st.capital), d: tn(st.repaid, '{n} projet remboursé', '{n} projets remboursés') },
+      { k: t('Solde Bricks'), v: eur(st.cash), d: cashCounted(data) ? '' : t('non comptées') },
+      { k: t('Versé'), v: eur(st.deposits), d: st.from ? t('depuis le {x}', { x: dateLong(st.from) }) : '' },
+      { k: t('Coupons'), v: eur(st.coupons), d: st.tax ? t('retenue {x}', { x: eur(Math.abs(st.tax)) }) : '' },
+    ])}
+    ${st.late || st.default ? `<p class="note">${[st.late ? tn(st.late, '{n} projet en retard', '{n} projets en retard') : '', st.default ? tn(st.default, '{n} projet en défaut', '{n} projets en défaut') : ''].filter(Boolean).join(' · ')}</p>` : ''}
+    <div class="holdings">${held.map(l => `<div class="holding"><span class="r"></span><span class="n">${esc(l.name)}</span><span class="a">${eur(lineValue(l))}</span><span class="w">${esc(sub(l))}</span></div>`).join('')}</div>
+    <div class="callout my16">${t('Valeurs de Bricks au {date}. Un nouvel import remplace ce compte et ses opérations, et ajoute un point à la courbe de chaque projet ; vos renommages, notes et cibles restent.', { date: dateLong(st.to) })}</div>
+    ${st.truncated ? `<p class="note">${t('BricksBoard n’a pas pu lire tout l’historique : les premiers mouvements manquent.')}</p>` : ''}
+    ${data.demo ? `<p class="small muted">${t('Les données d’exemple seront effacées.')}</p>` : ''}
+    <div class="btn-row"><button class="btn primary" data-ok>${t('Importer')}</button><button class="btn" data-close>${t('Annuler')}</button></div>`, {
+    label: t('Import'),
+    onMount: (sh, close) => sh.querySelector('[data-ok]').addEventListener('click', () => {
+      if (data.demo) { const keep = { profile: data.profile, settings: data.settings }; data = { ...emptyData(), ...keep }; }
+      data = mergeBricks(data, imp); close(); land('patrimoine');
+      commit(tn(st.held, '{n} projet importé.', '{n} projets importés.'));
     }),
   });
 }

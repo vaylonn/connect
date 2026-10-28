@@ -14,6 +14,7 @@ import { fileURLToPath } from 'node:url';
 import { CSV } from './tr-export.mjs';
 import { linxeaXlsx } from './linxea-export.mjs';
 import { ceStatement } from './ce-statement.mjs';
+import { bricksboardHtml } from './bricksboard-export.mjs';
 
 const { chromium, devices } = createRequire(import.meta.url)('playwright'); // CommonJS lookup also honours NODE_PATH
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -208,7 +209,7 @@ test('import sources: a dropdown, then the chosen source’s guide opens the fil
   const csv = join(TMP, 'guide.csv');
   writeFileSync(csv, 'datetime,date,account_type,category,type,asset_class,name,symbol,shares,price,amount,fee,tax\n2025-01-02T08:00:00Z,2025-01-02,DEFAULT,CASH,CUSTOMER_INBOUND,,,,,,1000,,\n');
   const { page, done } = await open({ hash: '#donnees/import' });
-  assert.deepEqual(await page.locator('#imp-source option').allInnerTexts(), ['Trade Republic', 'Linxea', 'Caisse d’Épargne']);
+  assert.deepEqual(await page.locator('#imp-source option').allInnerTexts(), ['Trade Republic', 'Linxea', 'Caisse d’Épargne', 'Bricks']);
   await page.locator('[data-action="import-source"]').click(); await page.waitForSelector('.sheet.open');
   assert.equal(await page.locator('.sheet .step').count(), 3);
   await pick(page, page.locator('.sheet [data-go]'), csv);
@@ -358,5 +359,37 @@ test('Caisse d’Épargne: the statement’s balances, in place of the accounts 
   assert.match(await page.locator('.accounts').innerText(), /Livrets[\s\S]*11\s501\s€/);
   const body = await page.evaluate(() => localStorage.getItem('carnet:data:v1'));
   assert.ok(!/01234567890|CAMILLE|BOULANGERIE/.test(body), 'no account number, name or operation stored');
+  await done();
+});
+
+test('Bricks: the BricksBoard file, the projects and the wallet’s operations', async () => {
+  const html = join(TMP, 'bricksboard-2026-10-28.html'); writeFileSync(html, bricksboardHtml());
+  const { page, done } = await open({ hash: '#donnees/import' });
+  await page.selectOption('#imp-source', 'bricks'); await page.locator('[data-action="import-source"]').click(); await page.waitForSelector('.sheet.open');
+  assert.equal(await page.locator('.sheet .step').count(), 3);
+  assert.equal(await page.locator('.sheet .step a').getAttribute('href'), 'https://bricksboard.fr/dashboard/');
+  await pick(page, page.locator('.sheet [data-go]'), html);
+  await page.waitForSelector('.sheet.open');
+  assert.match(await page.locator('.sheet .sheet-head').innerText(), /4 projets au 28 oct\. 2026/);
+  const preview = await page.locator('.sheet.open').innerText();
+  assert.match(preview, /Capital investi\s+400,00\s€\s+1 projet remboursé/);
+  assert.match(preview, /1 projet en retard · 1 projet en défaut/);
+  assert.equal(await page.locator('.sheet .holding').count(), 4);
+  await page.locator('.sheet [data-ok]').click(); await page.waitForTimeout(500);
+  assert.match(await total(page), /^400,00/, 'the wallet’s cash is left out by default');
+  assert.match(await page.locator('.acc').innerText(), /Immobilier participatif[\s\S]*Bricks/);
+  await page.locator('#lines .line', { hasText: 'Hôtel du Port' }).click(); await page.waitForSelector('.sheet.open');
+  const sheet = await page.locator('.sheet.open').innerText();
+  assert.match(sheet, /Projet\s+Marseille · au 28 oct\. 2026/);
+  assert.match(sheet, /Taux annuel\s+11 %[\s\S]*Échéance\s+janvier 2027[\s\S]*Note Bricks\s+C\s+couverture 90 %[\s\S]*Statut\s+En retard/);
+  assert.match(sheet, /Pas de cours public : la valeur est le capital restant dû/);
+  await page.keyboard.press('Escape'); await page.waitForTimeout(400);
+  await tab(page, 'historique');
+  assert.equal(await page.locator('.hist-list .line').count(), 15);
+  assert.match(await page.locator('.hist-list').innerText(), /Bricks\s+\+180,00\s€\s+10 févr\. · Remboursement/);
+  await tab(page, 'analyse');
+  assert.match(await page.locator('#view').innerText(), /Immobilier/);
+  const body = await page.evaluate(() => localStorage.getItem('carnet:data:v1'));
+  assert.ok(!/Camille|FR76|example\.org/.test(body), 'no identity, IBAN or contact stored');
   await done();
 });
