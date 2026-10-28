@@ -2,6 +2,7 @@
 // Pure module (no DOM): usable in the browser as well as in Node.
 import { libraryFor } from './library.js';
 import { t } from './i18n.js';
+import { settleCash } from './compute.js';
 
 export function parseCSV(text) {
   if (text.charCodeAt(0) === 0xfeff) text = text.slice(1);
@@ -242,12 +243,12 @@ export function mergeImport(data, imp) {
   const lines = imp.lines.map(l => old.has(l.id) ? carryOver(old.get(l.id), l) : l);
   const oldAcc = new Map(data.accounts.map(a => [a.id, a]));
   const accounts = imp.accounts.map(a => carryAccount(oldAcc.get(a.id), a));
-  return {
+  return settleCash({
     ...data,
     accounts: [...accounts, ...data.accounts.filter(a => a.source !== 'tr')],
     lines: [...lines, ...data.lines.filter(l => l.source !== 'tr')],
     trStats: imp.stats,
     transactions: [...(imp.transactions || []), ...(data.transactions || []).filter(t => t.source !== 'tr')],
     imports: [...(data.imports || []), { at: new Date().toISOString(), source: 'tr', rows: imp.stats.rows, from: imp.stats.from, to: imp.stats.to }].slice(-20),
-  };
+  });
 }

@@ -1,5 +1,6 @@
 // Local storage (localStorage), plain or encrypted backups.
 import { t } from './i18n.js';
+import { settleCash } from './compute.js';
 const KEY = 'carnet:data:v1';
 export const SCHEMA = 1;
 
@@ -41,7 +42,7 @@ export function normalize(d) {
   out.lines = Array.isArray(d.lines) ? d.lines.map(l => ({ pending: 0, events: [], ...l })) : [];
   out.priceHistory = d.priceHistory && typeof d.priceHistory === 'object' ? d.priceHistory : {};
   out.app = 'carnet'; out.schema = SCHEMA;
-  return out;
+  return settleCash(out);
 }
 
 export function validateBackup(obj) {

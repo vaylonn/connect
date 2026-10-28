@@ -3,8 +3,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readPdf } from '../public/js/pdf.js';
 import { importCe, mergeCe, duplicates } from '../public/js/importer-ce.js';
-import { emptyData } from '../public/js/store.js';
-import { totals, history } from '../public/js/compute.js';
+import { emptyData, normalize } from '../public/js/store.js';
+import { totals, history, lineValue, settleCash } from '../public/js/compute.js';
+import { mergeImport } from '../public/js/importer.js';
 import { ceStatement, ACCOUNTS } from './ce-statement.mjs';
 
 const withCash = () => { const d = emptyData(); d.settings.cash = true; return d; }; // these tests count the accounts' cash
@@ -91,6 +92,41 @@ test('accounts entered by hand merge with the statement’s: the most recent bal
   const next = mergeCe(merged, await load({ date: '20/10/2026' }));
   assert.equal(next.lines.find(l => l.id === livret.id).amount, 21950);
   assert.equal(next.lines.find(l => l.id === cash.id).amount, 1234.56);
+});
+
+test('money paid into a broker after the statement is taken from the current account, not counted twice', async () => {
+  let data = mergeCe(withCash(), await load());
+  const cash = () => data.lines.find(l => l.source === 'ce' && l.type === 'especes');
+  const tr = (id, date, kind, amount) => ({ id, source: 'tr', date, accountId: 'tr-cto', envelope: 'Compte-titres', type: 'especes', kind, amount, fee: 0, tax: 0 });
+  // a Trade Republic import afterwards: deposits before or on the statement's date are already in its balance
+  data = mergeImport(data, {
+    accounts: [{ id: 'tr-cto', name: 'Trade Republic', kind: 'cto', source: 'tr' }],
+    lines: [{ id: 'tr-cash', source: 'tr', accountId: 'tr-cto', type: 'especes', envelope: 'Espèces', name: 'Espèces', qty: 1, amount: 2200, price: 2200, cost: 2200, events: [] }],
+    transactions: [tr('t1', '2026-09-20', 'DEPOSIT', 1000), tr('t2', '2026-10-03', 'DEPOSIT', 500), tr('t3', '2026-10-10', 'DEPOSIT', 800),
+      tr('t4', '2026-10-12', 'CARD', -50), tr('t5', '2026-10-15T09:30:00', 'WITHDRAWAL', -100)],
+    stats: { rows: 5, from: '2026-09-20', to: '2026-10-15' },
+  });
+  assert.deepEqual([cash().amount, cash().moved, lineValue(cash())], [1234.56, 700, 534.56], '800 paid in, 100 back; card payments are not the bank’s');
+  assert.equal(Math.round(totals(data).total * 100) / 100, 2200 + 534.56 + 12500.5);
+  const h = history(data, new Date('2026-10-20T12:00:00Z'), l => l.id === cash().id);
+  assert.equal(h.find(p => p.d === '2026-10-05').value, 1234.56);
+  assert.equal(Math.round(h.find(p => p.d === '2026-10-12').value * 100) / 100, 434.56);
+  assert.equal(Math.round(h.at(-1).value * 100) / 100, 534.56);
+  // recomputed when the data is loaded, restored or synced
+  const { moved, ...bare } = cash();
+  assert.equal(normalize({ ...data, lines: data.lines.map(l => (l.id === bare.id ? bare : l)) }).lines.find(l => l.id === bare.id).moved, 700);
+  // never below zero: pay may have arrived since
+  data.transactions.push(tr('t6', '2026-10-16', 'DEPOSIT', 5000));
+  assert.equal(lineValue(settleCash(data).lines.find(l => l.id === cash().id)), 0);
+  data.transactions.pop();
+  // a deleted broker account, or a second current account (whose money?), leaves the balance as it is
+  assert.equal(settleCash(data).lines.find(l => l.id === cash().id).moved, 700);
+  const two = settleCash({ ...data, accounts: [...data.accounts, { id: 'ce-x', source: 'ce', kind: 'courant' }], lines: [...data.lines, { ...cash(), id: 'ce-x-solde', accountId: 'ce-x' }] });
+  assert.ok(two.lines.every(l => !l.moved));
+  assert.ok(settleCash({ ...data, accounts: data.accounts.filter(a => a.id !== 'tr-cto') }).lines.every(l => !l.moved));
+  // the next statement includes these transfers: nothing is taken from it
+  data = mergeCe(data, await load({ date: '03/11/2026', accounts: ACCOUNTS.map(([l, n, v]) => [l, n, l === 'COMPTE DE DEPOT' ? 610 : v]) }));
+  assert.deepEqual([cash().amount, cash().moved, lineValue(cash())], [610, undefined, 610]);
 });
 
 test('a PDF that is not a statement is refused clearly', async () => {

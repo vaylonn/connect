@@ -4,6 +4,7 @@
 // Pure module (no DOM).
 import { t } from './i18n.js';
 import { carryOver, carryAccount } from './importer.js';
+import { settleCash } from './compute.js';
 
 // « LIV.A EN CPTE N° 17515 00092 00784130620 Solde au 03/10/2026 + 4 400,00 »
 const ROW = /^(.+?)\s*N°\s*((?:\d+\s*)+?)\s*Solde au\s*(\d{2})\s*\/\s*(\d{2})\s*\/\s*(\d{2}\s*\d{2})\s*([+-])\s*(\d[\d .  ]*,\d{2})$/;
@@ -116,10 +117,10 @@ export function mergeCe(data, imp, merge = []) {
     // an older statement keeps the date of the latest one
     accounts.push(id === a.id ? { ...carryAccount(a, n), asOf: a.asOf > n.asOf ? a.asOf : n.asOf } : n);
   }
-  return {
+  return settleCash({
     ...base,
     accounts: [...accounts, ...imp.accounts.filter(a => !placed.has(a.id))],
     lines: [...base.lines.map(l => (fresh.has(l.id) ? merged(fresh.get(l.id)) : l)), ...imp.lines.filter(l => !old.has(l.id))],
     imports: [...(data.imports || []), { at: new Date().toISOString(), source: 'ce', rows: imp.stats.rows, to: imp.stats.to }].slice(-20),
-  };
+  });
 }
