@@ -5,11 +5,11 @@ import { eur, num, qty as fqty } from './format.js';
 
 export const CASH_TYPES = new Set(['especes', 'livret', 'fonds-euros']);
 export const isCashLike = l => CASH_TYPES.has(l.type);
-export const NEEDS_PRICE = l => !isCashLike(l) && !['non-cote', 'structure', 'autre-fixe'].includes(l.type);
+export const NEEDS_PRICE = l => !isCashLike(l) && !['non-cote', 'structure', 'autre-fixe', 'immo'].includes(l.type);
 // A price Yahoo can refresh: a symbol, or an ISIN not yet found absent from Yahoo (noSymbol, set on refresh)
 export const QUOTE_EXPECTED = l => NEEDS_PRICE(l) && !!(l.ticker || (l.isin && !l.noSymbol));
 
-export const ENVELOPE_ORDER = ['PEA', 'Compte-titres', 'Assurance-vie', 'PER', 'Crypto', 'Livrets', 'Espèces', 'Autre'];
+export const ENVELOPE_ORDER = ['PEA', 'Compte-titres', 'Assurance-vie', 'PER', 'Crypto', 'Immobilier', 'Livrets', 'Espèces', 'Autre'];
 
 export function lineValue(l) {
   if (isCashLike(l)) return +(l.amount ?? 0);
@@ -315,7 +315,7 @@ function diffLists(a, b) {
 }
 
 export function envelopeForAccount(acc) {
-  return { pea: 'PEA', cto: 'Compte-titres', av: 'Assurance-vie', per: 'PER', crypto: 'Crypto', livret: 'Livrets', courant: 'Espèces' }[acc?.kind] || 'Autre';
+  return { pea: 'PEA', cto: 'Compte-titres', av: 'Assurance-vie', per: 'PER', crypto: 'Crypto', immo: 'Immobilier', livret: 'Livrets', courant: 'Espèces' }[acc?.kind] || 'Autre';
 }
 
 // ——— Real performance ———

@@ -5,5 +5,5 @@ What is left to do, most urgent first. When an item ships, delete it from this f
 
 ## Useful — features
 
-- **Other brokers' imports (L).** Boursorama, Fortuneo, Bricks (BricksBoard export), etc.: one importer per
+- **Other brokers' imports (L).** Boursorama, Fortuneo, etc.: one importer per
   format, on the model of `importer.js`, written against a real export file (never committed).

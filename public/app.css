@@ -245,6 +245,7 @@ button { cursor: pointer; }
 .line .mono.t-especes, .line .mono.t-livret, .line .mono.t-fonds-euros { background: color-mix(in srgb, var(--green) 20%, var(--surface)); }
 .line .mono.t-non-cote { background: color-mix(in srgb, var(--pink) 25%, var(--surface)); }
 .line .mono.t-fonds { background: color-mix(in srgb, var(--lilac) 22%, var(--surface)); }
+.line .mono.t-immo { background: color-mix(in srgb, var(--orange) 14%, var(--bg-2)); }
 .line .mono.t-structure { background: color-mix(in srgb, var(--blue) 10%, var(--bg-2)); }
 .line .n { font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .line .s { color: var(--muted); font-size: 12.5px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

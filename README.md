@@ -9,7 +9,7 @@ Personal net-worth tracker: PEA, brokerage account, crypto, savings accounts, li
 - Real performance (annualised return on what you paid in), target allocation with rebalancing suggestions.
 - History of buys, sells, dividends, interest and deposits; notes on any holding or account.
 - Chart of the whole net worth, one account or one envelope; PEA 5-year and life insurance 8-year dates, with a reminder; an anonymous view of your allocation to share (percentages only).
-- Trade Republic CSV import, Linxea life insurance import (Excel file), Caisse d’Épargne balances from the monthly statement (PDF), manual entry for any other account.
+- Trade Republic CSV import, Linxea life insurance import (Excel file), Caisse d’Épargne balances from the monthly statement (PDF), Bricks real estate crowdfunding (BricksBoard file), manual entry for any other account.
 - Up-to-date prices from Yahoo Finance.
 - Sync across devices, end-to-end encrypted (optional).
 - Installable on a phone, works offline, light or dark mode.
@@ -25,9 +25,11 @@ Personal net-worth tracker: PEA, brokerage account, crypto, savings accounts, li
    The file holds the contract's funds on a date (units, price, value, cost basis, the fund's performance), not its operations: import it again now and then to update the contract and add a point to its chart.
 3. **Import your Caisse d’Épargne balances.** In the bank's app: *Plus* → *Documents* → *Consulter mes documents personnels*, then the latest *Relevé de comptes* (⋯ to download or share the PDF). Then Carnet → Settings → Import & backup → pick Caisse d’Épargne.
    Only the statement's summary is read: one balance per account (current account → Cash, savings books → Savings books). Transactions, names, addresses and account numbers are not kept. Accounts you had entered by hand can be merged: the most recent balance stays shown, the other joins the chart; an older statement only fills in the chart.
-4. **Add your other accounts.** Settings → Accounts → *Add account* (savings account, life insurance, PER…), then *Add holding*.
-5. **Refresh prices** with the button at the top of the screen.
-6. **Sync your devices** (optional). Settings → Sync → *Create vault* on the first device, then *Sign in* with the same username and passphrase on the others.
+4. **Import Bricks** (real estate crowdfunding). On a computer, open bricksboard.fr/dashboard and drag the *BricksBoard* button to the bookmarks bar; sign in to app.bricks.co and click the bookmark: a `bricksboard-YYYY-MM-DD.html` file lands in your downloads. Then Carnet → Settings → Import & backup → pick Bricks.
+   Carnet reads the projects you hold (bricks, current brick price, yearly rate, maturity, Bricks grade, status), the wallet's balance and its movements (deposits, coupons with the withheld tax, referral and other bonuses, project purchases and capital repayments). Your identity, address and IBAN, also in the file, are ignored. Each import replaces the Bricks account and its operations and adds a point to each project's chart.
+5. **Add your other accounts.** Settings → Accounts → *Add account* (savings account, life insurance, PER…), then *Add holding*.
+6. **Refresh prices** with the button at the top of the screen.
+7. **Sync your devices** (optional). Settings → Sync → *Create vault* on the first device, then *Sign in* with the same username and passphrase on the others.
 
 To install the app: Settings → Install the app shows the steps for your device (it is also offered on a phone's first visit). Installed, it opens full screen and iOS no longer erases its data after 7 days without a visit.
 
@@ -48,6 +50,7 @@ To install the app: Settings → Install the app shows the steps for your device
   Carnet takes the date entered on the account (*Edit account* → *First deposit*), else the account's first known operation, shows it on the account and in the simulator, and reminds you on the home screen from two months before.
 - **Life insurance 8 years**: after 8 years, gains withdrawn get a yearly allowance (€4,600, €9,200 for a couple) and a lower rate. Same date logic as the PEA (*First deposit*, else the first known snapshot).
 - **Linxea contracts**: values are Linxea's on the file's date; the cost basis is the value minus Linxea's gain. Funds Yahoo knows get their price refreshed like any other; the others (and structured products, which have no public price) keep the last imported value, without a stale-price warning. *Fund performance* on a holding is the fund's own past performance as published by Linxea (3, 5 and 10 years: per year), not your return. Funds without a known composition are first broken down by their Linxea category (bonds, commodities, real estate).
+- **Bricks projects**: a project's value and cost are both the capital still owed (bricks × Bricks' current brick price, which falls as capital is repaid), so it shows no gain: the return comes as coupons, in History and in the real performance (deposits against projects plus wallet balance). A late or defaulted project still counts at face value. Projects are real estate in the analysis, in the country of their address (France unless Bricks shows another country's flag). A repaid project leaves the holdings; the file does not date its last repayment, so the chart closes it at its contract's end.
 - Small differences with TR are normal: TR shows real-time prices, Yahoo slightly delayed ones.
 
 ## Your data
@@ -120,19 +123,20 @@ api/            Vercel functions: health, quote, search, composition, sync
 lib/            Yahoo Finance client, compositions (Morningstar, justETF), /api routes,
                 sync vaults (Redis or files), per-address limits
 public/         the app (HTML, CSS, JS, fonts, icons, PWA)
-  js/           UI, Trade Republic, Linxea and Caisse d’Épargne imports (xlsx.js reads Excel files,
+  js/           UI, Trade Republic, Linxea, Caisse d’Épargne and Bricks imports (xlsx.js reads Excel files,
                 pdf.js the text of PDF statements), calculations, storage, sync, chart, ETF library
 tools/          Trade Republic CSV → backup, from the command line
-tests/          calculations, imports (Trade Republic, Linxea, Caisse d’Épargne), performance and target
+tests/          calculations, imports (Trade Republic, Linxea, Caisse d’Épargne, Bricks), performance and target
                 allocation, CSP, restore of old backups, sync API, translations; end-to-end browser tests;
                 fake Yahoo; a realistic Trade Republic export (tr-export.mjs), Linxea workbook
-                (linxea-export.mjs) and Caisse d’Épargne statement (ce-statement.mjs), all with invented
+                (linxea-export.mjs), Caisse d’Épargne statement (ce-statement.mjs) and BricksBoard file
+                (bricksboard-export.mjs), all with invented
                 figures; fixtures (frozen backup files)
 ```
 
 **ETF library** (`public/js/library.js`): Yahoo symbol, sectors, countries and top companies of known funds, as orders of magnitude (mid-2026).
 
-**History**: the tab lists the operations kept from the Trade Republic import: buys, sells, splits and free share grants (with the realised gain of each sale), and cash movements: deposits, withdrawals, dividends and interest (gross, with the withheld tax), saveback, and card payments summed per month. A new import replaces the Trade Republic history; imports made before version 1.4 kept only securities transactions. Linxea's file has no operations: those contracts only show in the other tabs.
+**History**: the tab lists the operations kept from the Trade Republic import: buys, sells, splits and free share grants (with the realised gain of each sale), and cash movements: deposits, withdrawals, dividends and interest (gross, with the withheld tax), saveback, and card payments summed per month. A new import replaces the Trade Republic history; imports made before version 1.4 kept only securities transactions. The Bricks import adds the wallet's movements: deposits, coupons (gross, with the withheld tax), bonuses, project purchases and capital repayments; each import replaces them. Linxea's file has no operations: those contracts only show in the other tabs.
 
 **Holdings**: the tab lists every position held, sorted by wrapper then account: name, ISIN, account, quantity, price and its date, cost basis and average cost, value, gain and weight. *Export as CSV* writes the same table for a spreadsheet (French: « ; » and decimal commas; English: « , » and dots; plain numbers in euros, dates as YYYY-MM-DD); *Copy for a spreadsheet* puts it on the clipboard as tab-separated text. The accounts' cash follows the net-worth setting.
 
