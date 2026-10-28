@@ -427,3 +427,46 @@ export function milestone(data, acc, now = new Date()) {
   const free = iso(d);
   return { years, start, free, guessed: !acc.openedAt, done: free <= iso(now), days: Math.round((Date.parse(free) - Date.parse(iso(now))) / 86400000) };
 }
+
+// ——— Positions export ———
+// One row per position held and shown (heldLines), with raw numbers: the Positions tab lists them and
+// positionsCsv() writes them. Cash lines have a balance only (no quantity, price or gain).
+// Sorted by envelope, then account, then value.
+export function positions(data) {
+  const accs = new Map((data.accounts || []).map(a => [a.id, a]));
+  const lines = heldLines(data);
+  const total = lines.reduce((s, l) => s + lineValue(l), 0);
+  const envRank = e => { const i = ENVELOPE_ORDER.indexOf(e); return i < 0 ? ENVELOPE_ORDER.length : i; };
+  return lines.map(l => {
+    const cash = isCashLike(l), value = lineValue(l), cost = lineCost(l);
+    return {
+      id: l.id, name: cash && !l.customName ? t(l.name) : l.name, isin: l.isin || '', ticker: l.ticker || '',
+      account: accs.get(l.accountId)?.name || '', envelope: l.envelope || 'Autre', type: l.type || 'autre', cash,
+      qty: cash ? null : +l.qty || 0, price: cash ? null : +l.price || 0, priceDate: l.priceDate || '',
+      pru: cash || !l.qty ? null : pru(l), cost, value,
+      gain: cash ? null : value - cost, gainPct: cash || !(cost > 0) ? null : (value - cost) / cost,
+      weight: total > 0 ? value / total : 0,
+    };
+  }).sort((a, b) => envRank(a.envelope) - envRank(b.envelope) || a.account.localeCompare(b.account) || b.value - a.value);
+}
+
+// Spreadsheet-ready CSV: French files use « ; » and decimal commas (what Excel expects in France),
+// English ones « , » and dots. Raw numbers without currency signs or thousands separators.
+// tsv: tab-separated, without the byte order mark, to paste into a spreadsheet.
+// Texts come from imports and backups: a leading = + − @ is neutralised so a spreadsheet never runs it.
+export function positionsCsv(rows, { lang = 'fr', typeLabel = k => k, tsv = false } = {}) {
+  const sep = tsv ? '\t' : lang === 'en' ? ',' : ';';
+  const n = (x, dec) => x == null || !Number.isFinite(x) ? '' : (lang === 'en' ? String(+x.toFixed(dec)) : String(+x.toFixed(dec)).replace('.', ','));
+  const cell = v => {
+    let s = String(v ?? '');
+    if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
+    if (tsv) return s.replace(/[\t\r\n]+/g, ' ');
+    return /["\n\r]/.test(s) || s.includes(sep) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  };
+  const head = [t('Nom'), 'ISIN', t('Symbole'), t('Compte'), t('Enveloppe'), t('Type'), t('Quantité'), t('Cours (€)'), t('Date du cours'),
+    t('Prix de revient unitaire (€)'), t('Prix de revient (€)'), t('Valeur (€)'), t('Plus-value (€)'), t('Plus-value (%)'), t('Poids (%)')];
+  const body = rows.map(r => [cell(r.name), cell(r.isin), cell(r.ticker), cell(r.account), cell(t(r.envelope)), cell(typeLabel(r.type)),
+    n(r.qty, 6), n(r.price, 4), r.cash ? '' : r.priceDate, n(r.pru, 4), n(r.cost, 2), n(r.value, 2), n(r.gain, 2),
+    n(r.gainPct == null ? null : r.gainPct * 100, 2), n(r.weight * 100, 2)].join(sep));
+  return '﻿' + [head.map(cell).join(sep), ...body].join('\r\n') + '\r\n';
+}

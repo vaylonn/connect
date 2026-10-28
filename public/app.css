@@ -126,7 +126,9 @@ button { cursor: pointer; }
 .ic svg { width: 21px; height: 21px; }
 .tab[aria-current="page"] { background: var(--night-ink); color: #1A1613; }
 .tab[aria-current="page"] .lbl { display: inline; }
-@media (max-width: 359px) { .tab { padding: 0 11px; } .tab[aria-current="page"] .lbl { display: none; } }
+/* Six tabs on a phone: tighter spacing; below 375px the current tab shows its icon only */
+@media (max-width: 430px) { .tabbar { gap: 2px; padding: 5px; } .tab { padding: 0 10px; } .tab[aria-current="page"] { padding: 0 12px; gap: 5px; font-size: 12.5px; } }
+@media (max-width: 374px) { .tab[aria-current="page"] { padding: 0 10px; } .tab[aria-current="page"] .lbl { display: none; } }
 
 /* ——— Headings ——— */
 .title { font-family: var(--serif); font-weight: 500; font-size: clamp(29px, 7.6vw, 46px); line-height: 1.1; letter-spacing: -.015em; margin: 0 0 22px; text-wrap: balance; max-width: 22ch; }
@@ -252,6 +254,22 @@ button { cursor: pointer; }
 .badge.warn { background: color-mix(in srgb, var(--orange) 18%, var(--surface)); color: var(--orange); }
 
 /* ——— History ——— */
+/* Positions tab: a table that scrolls sideways inside its card, never the page */
+.table-wrap { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.pos-table { border-collapse: collapse; width: 100%; font-size: 13.5px; font-variant-numeric: tabular-nums; }
+.pos-table th, .pos-table td { padding: 10px 12px; text-align: left; white-space: nowrap; border-top: 1px solid var(--line); vertical-align: top; }
+.pos-table thead th { border-top: 0; font-size: 12px; font-weight: 600; color: var(--muted); position: sticky; top: 0; background: var(--surface); }
+.pos-table tfoot td { font-weight: 600; background: var(--bg-2); }
+.pos-table .num { text-align: right; }
+.pos-table .strong { font-weight: 600; }
+.pos-table td > .small { display: block; }
+.pos-table .pos-n { position: sticky; left: 0; z-index: 1; background: var(--surface); max-width: 240px; white-space: normal; min-width: 140px; }
+.pos-table thead th:first-child { left: 0; z-index: 2; }
+.pos-table .pos-n .linkish { color: var(--ink); font-size: 13.5px; text-align: left; }
+.pos-table .pos-n .linkish:hover { text-decoration: underline; }
+.pos-table .mono-txt { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; }
+.pos-table th:first-child, .pos-table td:first-child { padding-left: 18px; }
+.pos-table th:last-child, .pos-table td:last-child { padding-right: 18px; }
 .hist-tools { display: flex; gap: 8px; margin: 0 0 10px; max-width: 640px; }
 .hist-search { flex: 1 1 140px; min-width: 0; }
 .hist-acc { flex: 0 1 auto; min-width: 0; max-width: 55%; }
