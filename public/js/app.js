@@ -10,11 +10,11 @@ import { importLinxea, mergeLinxea, PERF_KEYS } from './importer-linxea.js';
 import { readXlsx } from './xlsx.js';
 import { importCe, mergeCe, duplicates } from './importer-ce.js';
 import { readPdf } from './pdf.js';
-import { totals, staleLines, lookthrough, DIRECT, heldLines, isHeld, lineComposition, history as buildHistory, lineValue, lineCost, lineGain, pru, isCashLike, QUOTE_EXPECTED, cashCounted, shownLine, simulate, envelopeForAccount, ENVELOPE_ORDER, FLOW_KINDS, INCOME_KINDS, netAmount, performance, allocation, rebalance, milestone, accountStart, MILESTONE_YEARS } from './compute.js';
+import { totals, staleLines, lookthrough, DIRECT, heldLines, isHeld, lineComposition, history as buildHistory, lineValue, lineCost, lineGain, pru, isCashLike, QUOTE_EXPECTED, cashCounted, shownLine, simulate, envelopeForAccount, ENVELOPE_ORDER, FLOW_KINDS, INCOME_KINDS, netAmount, performance, allocation, rebalance, milestone, accountStart, MILESTONE_YEARS, positions, positionsCsv } from './compute.js';
 import { libraryFor, libraryChoices, SECTORS, COMPOSITION_NOTE, setFetchedLibrary, wantsComposition } from './library.js';
 import { lineChart, hoverText } from './chart.js';
 
-const VERSION = '1.8.0';
+const VERSION = '1.9.0';
 let data = load();
 const ui = {
   tab: 'patrimoine', range: '1A', scope: 'all', filter: 'all', group: 'accounts', analyse: 'sectors', server: 'unknown', busy: false, progress: '', lineRange: '1A',
@@ -23,7 +23,7 @@ const ui = {
   reb: { amount: '500', sell: false },
 };
 const TABS = [
-  ['patrimoine', 'Patrimoine'], ['analyse', 'Analyse'], ['historique', 'Historique'], ['simuler', 'Simuler'], ['donnees', 'Réglages'],
+  ['patrimoine', 'Patrimoine'], ['analyse', 'Analyse'], ['historique', 'Historique'], ['positions', 'Positions'], ['simuler', 'Simuler'], ['donnees', 'Réglages'],
 ];
 const COLORS = ['ink', 'orange', 'blue', 'pink', 'lilac', 'green'];
 const KINDS = [['courant', 'Compte courant'], ['livret', 'Livret d’épargne'], ['cto', 'Compte-titres'], ['pea', 'PEA'], ['av', 'Assurance-vie'], ['per', 'PER'], ['crypto', 'Crypto'], ['autre', 'Autre']];
@@ -35,6 +35,7 @@ const ICONS = {
   patrimoine: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 4l9 6.5"/><path d="M5 9.5V20h14V9.5"/><path d="M9.5 20v-5.5h5V20"/></svg>',
   analyse: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 3.5V12l6 6"/></svg>',
   historique: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 12a8.5 8.5 0 1 0 2.6-6.1"/><path d="M3.5 4.5V9H8"/><path d="M12 7.5V12l3 2"/></svg>',
+  positions: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4.5" width="17" height="15" rx="2.5"/><path d="M3.5 9.5h17M3.5 14.5h17M9.5 9.5v10"/></svg>',
   simuler: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2.2"/><circle cx="10" cy="17" r="2.2"/></svg>',
   donnees: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>',
   compte: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5.5" width="18" height="14" rx="2.5"/><path d="M3 10h18M15.5 15h2"/></svg>',
@@ -102,7 +103,7 @@ function render() {
     for (const b of document.querySelectorAll('[data-tab]')) b.setAttribute('aria-current', b.dataset.tab === ui.tab ? 'page' : 'false');
     for (const a of document.querySelectorAll('.avatar')) a.textContent = name ? name[0].toUpperCase() : 'C';
     const sideName = $('#side-name'); if (sideName) sideName.textContent = name || t('Votre profil');
-    const fn = { patrimoine: viewHome, analyse: viewAnalyse, historique: viewHistorique, simuler: viewSimuler, donnees: viewData }[ui.tab] || viewHome;
+    const fn = { patrimoine: viewHome, analyse: viewAnalyse, historique: viewHistorique, positions: viewPositions, simuler: viewSimuler, donnees: viewData }[ui.tab] || viewHome;
     v.innerHTML = (data.demo ? demoBanner() : '') + fn();
     sizeBars(v);
     after[ui.tab]?.();
@@ -610,6 +611,41 @@ function viewHistorique() {
     <div id="hist-body">${histBody()}</div>
     ${manual && !data.demo ? `<p class="note">${t(positionsOnly ? 'Les lignes ajoutées à la main et les contrats Linxea (l’export ne donne que les positions) n’ont pas d’historique d’opérations.' : 'Les lignes ajoutées à la main n’ont pas d’historique d’opérations.')}</p>` : ''}`;
 }
+// ——— Positions tab ———
+// Every position held, as a table to read, download as CSV or copy into a spreadsheet.
+function viewPositions() {
+  const title = `<h1 class="title">${t('Toutes vos positions.')}<em>${t('Nom, ISIN, quantité, cours et valeur.')}</em></h1>`;
+  const rows = positions(data);
+  if (!rows.length) return title + emptyHint();
+  const sum = k => rows.reduce((s, r) => s + (r[k] || 0), 0);
+  const cost = rows.reduce((s, r) => s + (r.cash ? 0 : r.cost), 0), gain = sum('gain');
+  const cls = (g, c) => c > 0 && Math.abs(g / c) >= 0.0005 ? (g > 0 ? 'pos' : 'neg') : '';
+  const dash = '<span class="muted">—</span>';
+  const row = r => `<tr>
+    <td class="pos-n"><button class="linkish" data-action="open-line" data-id="${esc(r.id)}">${esc(r.name)}</button><span class="small muted">${esc(t(TYPE_LABEL[r.type] || r.type))}${r.ticker ? ' · ' + esc(r.ticker) : ''}</span></td>
+    <td class="mono-txt">${r.isin ? esc(r.isin) : dash}</td><td>${esc(r.account)}<span class="small muted">${esc(t(r.envelope))}</span></td>
+    <td class="num">${r.qty == null ? dash : fqty(r.qty)}</td>
+    <td class="num">${r.price == null ? dash : `${eur(r.price)}<span class="small muted">${r.priceDate ? dateShort(r.priceDate) : ''}</span>`}</td>
+    <td class="num">${r.cash ? dash : `${eur(r.cost)}${r.pru == null ? '' : `<span class="small muted">${t('PRU {x}', { x: eur(r.pru) })}</span>`}`}</td>
+    <td class="num strong">${eur(r.value)}</td>
+    <td class="num ${r.gain == null ? '' : cls(r.gain, r.cost)}">${r.gain == null ? dash : `${signedEur(r.gain)}<span class="small">${r.gainPct == null ? '' : signedPct(r.gainPct)}</span>`}</td>
+    <td class="num">${pct(r.weight)}</td></tr>`;
+  const cashOut = !cashCounted(data) && heldLines(data, { cash: true }).some(l => l.type === 'especes');
+  return `${title}
+    <div class="btn-row m-b14"><button class="btn primary" data-action="positions-csv">${ICONS.download}${t('Exporter en CSV')}</button><button class="btn" data-action="positions-copy">${t('Copier pour un tableur')}</button></div>
+    <div class="table-wrap"><table class="pos-table">
+      <thead><tr><th>${t('Nom')}</th><th>ISIN</th><th>${t('Compte')}</th><th class="num">${t('Quantité')}</th><th class="num">${t('Cours|prix')}</th><th class="num">${t('Prix de revient')}</th><th class="num">${t('Valeur')}</th><th class="num">${t('Plus-value')}</th><th class="num">${t('Poids')}</th></tr></thead>
+      <tbody>${rows.map(row).join('')}</tbody>
+      <tfoot><tr><td colspan="5">${t('Total')} · ${tn(rows.length, '{n} ligne', '{n} lignes')}</td><td class="num">${eur(cost)}</td><td class="num strong">${eur(sum('value'))}</td><td class="num ${cls(gain, cost)}">${signedEur(gain)}</td><td class="num">${pct(1)}</td></tr></tfoot>
+    </table></div>
+    <p class="note">${t('Le CSV s’ouvre dans Excel, Numbers ou Google Sheets : nombres bruts en euros, dates au format AAAA-MM-JJ.')}${cashOut ? ' ' + t('Les espèces des comptes n’y figurent pas, comme dans le total (Réglages › Préférences).') : ''}</p>`;
+}
+const positionsText = tsv => positionsCsv(positions(data), { lang: lang(), typeLabel: k => t(TYPE_LABEL[k] || k), tsv });
+async function copyPositions() {
+  try { await navigator.clipboard.writeText(positionsText(true)); toast(t('Tableau copié : collez-le dans un tableur.')); }
+  catch { toast(t('Copie impossible ici : exportez le CSV.')); }
+}
+
 function reimportCard() {
   return `<div class="callout m-b14">${t('Réimportez votre export Trade Republic pour voir aussi vos versements, dividendes et intérêts, et calculer votre performance réelle.')}
     <div class="btn-row mt10"><button class="btn sm" data-action="pick-csv">${ICONS.upload}${t('Importer le CSV')}</button></div></div>`;
@@ -1273,7 +1309,7 @@ function pickFile(accept) {
 }
 const readText = f => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result)); r.onerror = () => rej(new Error(t('Lecture du fichier impossible.'))); r.readAsText(f, 'utf-8'); });
 
-async function saveFile(filename, text) {
+async function saveFile(filename, text, { type = 'application/json', done = t('Sauvegarde exportée : {x}', { x: filename }) } = {}) {
   if (window.claude && typeof window.claude.use === 'function') {
     try {
       const dl = await window.claude.use('downloads');
@@ -1281,11 +1317,11 @@ async function saveFile(filename, text) {
     } catch (e) { if (e && e.code === 'declined') return false; }
   }
   try {
-    const blob = new Blob([text], { type: 'application/json' });
+    const blob = new Blob([text], { type });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a'); a.href = url; a.download = filename; document.body.append(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 4000);
-    toast(t('Sauvegarde exportée : {x}', { x: filename }));
+    toast(done);
     return true;
   } catch {
     openSheet(`${sheetHead(t('Copiez votre sauvegarde'), t('Le téléchargement est bloqué ici.'))}<textarea class="input" readonly id="bk-text">${esc(text)}</textarea><div class="btn-row mt12"><button class="btn primary" data-copy>${t('Copier')}</button></div>`, {
@@ -1884,6 +1920,8 @@ document.addEventListener('click', async e => {
     case 'pick-backup': restoreFlow(); break;
     case 'export-plain': exportFlow(false); break;
     case 'export-enc': exportFlow(true); break;
+    case 'positions-csv': saveFile(`carnet-positions-${today()}.csv`, positionsText(false), { type: 'text/csv;charset=utf-8', done: t('Positions exportées : {x}', { x: `carnet-positions-${today()}.csv` }) }); break;
+    case 'positions-copy': copyPositions(); break;
     case 'demo': data = demoData(); commit(t('Données d’exemple chargées.')); break;
     case 'clear-demo': { const keep = { settings: data.settings }; data = { ...emptyData(), ...keep }; clearAll(); commit(t('Exemple effacé.')); break; }
     case 'wipe':

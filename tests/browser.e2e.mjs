@@ -76,6 +76,15 @@ test('Trade Republic import, refresh and every tab', async () => {
   for (const name of ['analyse', 'historique', 'simuler']) { await tab(page, name); assert.ok((await page.locator('#view').innerText()).length > 100, name); }
   await tab(page, 'historique');
   assert.equal(await page.locator('.hist-list .line').count(), 3, 'the deposit and both buys');
+  await tab(page, 'positions');
+  assert.equal(await page.locator('.pos-table tbody tr').count(), 2, 'one row per fund; the cash is left out like in the total');
+  const [dl] = await Promise.all([page.waitForEvent('download'), page.locator('[data-action="positions-csv"]').click()]);
+  const rows = readFileSync(await dl.path(), 'utf8').split('\r\n');
+  assert.match(dl.suggestedFilename(), /^carnet-positions-\d{4}-\d\d-\d\d\.csv$/);
+  assert.match(rows[0], /^\uFEFFNom;ISIN;/);
+  assert.match(rows.find(r => r.includes(';IE0002XZSHO1;')) || '', /;Trade Republic;Compte-titres;ETF;200;7,25;\d{4}-\d\d-\d\d;6,505;1301;1450;149;/, 'ISIN and raw numbers in the CSV');
+  const bar = await page.locator('.tabbar').boundingBox();
+  assert.ok(bar.x >= 0 && bar.x + bar.width <= 390, 'the six tabs fit on a phone');
   await section(page, 'cours');
   assert.match(await page.locator('.card', { hasText: 'Dernière actualisation' }).locator('p.small').innerText(), /2 à jour, 0 sans cours/);
   // Counting the accounts' cash (Préférences) adds the broker's cash back: 3000 − 1301 − 301
@@ -138,7 +147,7 @@ test('Réglages: one page per section, back returns to the list', async () => {
 
 test('language: device language, then a manual choice that sticks', async () => {
   const { page, done } = await open({ locale: 'en-US', demo: true });
-  assert.deepEqual(await page.locator('.tabbar .lbl').allInnerTexts(), ['Net worth', 'Analysis', 'History', 'Simulate', 'Settings']);
+  assert.deepEqual(await page.locator('.tabbar .lbl').allInnerTexts(), ['Net worth', 'Analysis', 'History', 'Holdings', 'Simulate', 'Settings']);
   assert.match(await total(page), /^12,985\.20/);
   await section(page, 'preferences');
   await page.locator('[data-action="lang"][data-v="fr"]').click(); await page.waitForTimeout(200);
