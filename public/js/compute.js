@@ -12,11 +12,11 @@ export const QUOTE_EXPECTED = l => NEEDS_PRICE(l) && !!(l.ticker || (l.isin && !
 export const ENVELOPE_ORDER = ['PEA', 'Compte-titres', 'Assurance-vie', 'PER', 'Crypto', 'Immobilier', 'Livrets', 'Espèces', 'Autre'];
 
 export function lineValue(l) {
-  if (isCashLike(l)) return +(l.amount ?? 0);
+  if (isCashLike(l)) return +(l.amount ?? 0) - (+l.moved || 0);
   return (+l.qty || 0) * (+l.price || 0) + (+l.pending || 0);
 }
 export function lineCost(l) {
-  if (isCashLike(l)) return +(l.amount ?? 0);
+  if (isCashLike(l)) return lineValue(l);
   return +l.cost || 0;
 }
 export function lineGain(l) { return isCashLike(l) ? 0 : lineValue(l) - lineCost(l); }
@@ -183,6 +183,41 @@ export function lineComposition(l) {
   };
 }
 
+// ——— Bank balance since its statement ———
+// A bank statement's current-account balance (Caisse d'Épargne) is soon stale, and the money deposited since
+// at a broker would count twice: once on the statement, once on the broker's account. The deposits into the
+// other accounts after the statement's date (withdrawals back, the other way) are taken from that balance;
+// never below zero, as the balance itself may not hold the whole deposit (pay arrived since).
+// The bank's account must be the only current account imported from a statement, so the money's origin is plain.
+const FEED_KINDS = new Set(['DEPOSIT', 'WITHDRAWAL']);
+export function feeder(data) {
+  const ce = new Set((data.accounts || []).filter(a => a.source === 'ce').map(a => a.id));
+  const ls = (data.lines || []).filter(l => l.source === 'ce' && l.type === 'especes' && ce.has(l.accountId));
+  if (ls.length !== 1) return null;
+  const ids = new Set((data.accounts || []).map(a => a.id));
+  const flows = (data.transactions || []).filter(tr => FEED_KINDS.has(tr.kind) && ids.has(tr.accountId) && !ce.has(tr.accountId) && tr.date)
+    .map(tr => [tr.date.slice(0, 10), +tr.amount || 0]).sort((a, b) => (a[0] < b[0] ? -1 : 1));
+  return { line: ls[0], flows };
+}
+// Money moved out of the balance [date, amount] known on `from`, up to `to` (included)
+export function movedOut(flows, from, to, amount) {
+  const sum = flows.reduce((s, [d, v]) => s + (d > from && d <= to ? v : 0), 0);
+  return Math.min(sum, Math.max(amount, 0));
+}
+// Sets `moved` on the bank's line, removes it elsewhere. Called whenever the data changes; returns new data,
+// where only the lines whose `moved` changed are new objects.
+export function settleCash(data) {
+  const f = feeder(data);
+  const want = l => (l === f?.line ? Math.round(movedOut(f.flows, l.priceDate || '', '9999-12-31', +l.amount || 0) * 100) / 100 : 0);
+  const lines = (data.lines || []).map(l => {
+    const m = want(l);
+    if ((+l.moved || 0) === m) return l;
+    const { moved, ...n } = l;
+    return m ? { ...n, moved: m } : n;
+  });
+  return { ...data, lines };
+}
+
 // ——— History ———
 function lastLE(arr, d, idx = 0) {
   let lo = 0, hi = arr.length - 1, ans = -1;
@@ -196,6 +231,7 @@ export function history(data, now = new Date(), keep = null) {
   const accIds = new Set((data.accounts || []).map(a => a.id));
   const lines = (data.lines || []).filter(l => accIds.has(l.accountId) && shownLine(data, l) && (!keep || keep(l))); // past sales included
   const ph = data.priceHistory || {};
+  const feed = feeder(data);
   let start = null;
   for (const l of lines) {
     const first = l.events?.length ? l.events[0][0] : (l.since || null);
@@ -223,7 +259,8 @@ export function history(data, now = new Date(), keep = null) {
         q = l.qty; c = lineCost(l);
       }
       if (isCashLike(l)) {
-        const b = l.events?.length ? c : lineValue(l);
+        let b = l.events?.length ? c : lineValue(l);
+        if (l === feed?.line && l.events?.length) b -= movedOut(feed.flows, evDate, d, b);
         value += b; invested += b; continue;
       }
       invested += c;
