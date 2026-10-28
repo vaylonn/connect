@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { importTradeRepublic, mergeImport } from '../public/js/importer.js';
 import { emptyData, backupPayload } from '../public/js/store.js';
-import { totals, heldLines, history, milestone } from '../public/js/compute.js';
+import { totals, heldLines, history, milestone, positions, positionsCsv } from '../public/js/compute.js';
 
 // Minimal export: one row per movement, on the brokerage account
 const H = 'datetime,date,account_type,category,type,asset_class,name,symbol,shares,price,amount,fee,tax';
@@ -94,4 +94,31 @@ test('the accounts’ cash is left out unless counted; savings books always coun
   data.settings.cash = true;
   assert.equal(totals(data).total, 4200);
   assert.equal(totals(data).accounts.length, 3);
+});
+
+test('positions export: held lines only, raw numbers, spreadsheet-safe CSV', () => {
+  const data = withCash();
+  data.accounts.push({ id: 'pea', name: 'Mon PEA', kind: 'pea' }, { id: 'cc', name: 'Courant; perso', kind: 'courant' });
+  data.lines.push(
+    { id: 'a', accountId: 'pea', envelope: 'PEA', type: 'etf', name: 'World ETF', isin: 'FR0011869353', ticker: 'PAEEM.PA', qty: 10, price: 25.5, cost: 200, priceDate: '2026-10-27' },
+    { id: 'b', accountId: 'pea', envelope: 'PEA', type: 'action', name: '=HYPERLINK("x")', isin: '', qty: 1e-7, price: 10, cost: 1 },
+    { id: 'c', accountId: 'cc', envelope: 'Espèces', type: 'especes', name: 'Espèces', amount: 45 },
+  );
+  const rows = positions(data);
+  assert.deepEqual(rows.map(r => r.id), ['a', 'c'], 'sale leftover dropped, PEA before cash');
+  assert.equal(rows[0].value, 255);
+  assert.equal(rows[0].pru, 20);
+  assert.equal(rows[0].gainPct, 0.275);
+  assert.equal(rows[1].qty, null);
+  assert.equal(Math.round(rows[0].weight * 1000), 850);
+  const fr = positionsCsv(rows).split('\r\n');
+  assert.equal(fr[0], '﻿Nom;ISIN;Symbole;Compte;Enveloppe;Type;Quantité;Cours (€);Date du cours;Prix de revient unitaire (€);Prix de revient (€);Valeur (€);Plus-value (€);Plus-value (%);Poids (%)');
+  assert.equal(fr[1], 'World ETF;FR0011869353;PAEEM.PA;Mon PEA;PEA;etf;10;25,5;2026-10-27;20;200;255;55;27,5;85');
+  assert.equal(fr[2], 'Espèces;;;"Courant; perso";Espèces;especes;;;;;45;45;;;15');
+  assert.equal(positionsCsv(rows, { lang: 'en' }).split('\r\n')[1].split(',')[7], '25.5');
+  assert.equal(positionsCsv(rows, { tsv: true }).split('\r\n')[2].split('\t')[3], 'Courant; perso');
+  data.lines[1].qty = 3;
+  assert.match(positionsCsv(positions(data)), /\n"'=HYPERLINK\(""x""\)";/, 'formula neutralised');
+  data.settings.cash = false;
+  assert.deepEqual(positions(data).map(r => r.id), ['a', 'b'], 'cash follows the net worth setting');
 });

@@ -134,6 +134,8 @@ tests/          calculations, imports (Trade Republic, Linxea, Caisse d’Éparg
 
 **History**: the tab lists the operations kept from the Trade Republic import: buys, sells, splits and free share grants (with the realised gain of each sale), and cash movements: deposits, withdrawals, dividends and interest (gross, with the withheld tax), saveback, and card payments summed per month. A new import replaces the Trade Republic history; imports made before version 1.4 kept only securities transactions. Linxea's file has no operations: those contracts only show in the other tabs.
 
+**Holdings**: the tab lists every position held, sorted by wrapper then account: name, ISIN, account, quantity, price and its date, cost basis and average cost, value, gain and weight. *Export as CSV* writes the same table for a spreadsheet (French: « ; » and decimal commas; English: « , » and dots; plain numbers in euros, dates as YYYY-MM-DD); *Copy for a spreadsheet* puts it on the clipboard as tab-separated text. The accounts' cash follows the net-worth setting.
+
 **Automatic compositions**: every ETF, fund (including life-insurance unit-linked funds) and stock gets its composition, fetched by the server (`/api/composition`, only the ISIN is sent). Main source: Morningstar (countries and all 11 sectors, seen through the index even for the PEA's synthetic ETFs, equity share, top holdings). Fallback: justETF (index holdings of synthetic ETFs). Refreshed every 30 days; the library is the fallback when the server finds nothing.
 To add a fund, add an entry with its ISIN. Check that the symbol matches the fund **and the right share class** (Acc or Dist): a neighbouring symbol can give a very different price.
 

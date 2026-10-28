@@ -1,6 +1,6 @@
 {
   "name": "carnet",
-  "version": "1.8.1",
+  "version": "1.9.1",
   "description": "Suivi de patrimoine personnel. Les données restent dans le navigateur.",
   "private": true,
   "type": "module",
