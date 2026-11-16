@@ -378,6 +378,12 @@ test('Bricks: the BricksBoard file, the projects and the wallet’s operations',
   await page.locator('.sheet [data-ok]').click(); await page.waitForTimeout(500);
   assert.match(await total(page), /^400,00/, 'the wallet’s cash is left out by default');
   assert.match(await page.locator('.acc').innerText(), /Immobilier participatif[\s\S]*Bricks/);
+  // The projects fold into one row on the home screen, unfolded on a tap
+  assert.equal(await page.locator('#lines .line', { hasText: 'Hôtel du Port' }).count(), 0);
+  assert.match(await page.locator('#lines .line.fold').innerText(), /Bricks[\s\S]*4 projets · 1 projet en retard · 1 projet en défaut\s+[\d,]+\s%\spar an/);
+  await page.locator('#lines .line.fold').click();
+  assert.equal(await page.locator('#lines .line.fold').getAttribute('aria-expanded'), 'true');
+  assert.equal(await page.locator('#lines .fold-lines .line').count(), 4);
   await page.locator('#lines .line', { hasText: 'Hôtel du Port' }).click(); await page.waitForSelector('.sheet.open');
   const sheet = await page.locator('.sheet.open').innerText();
   assert.match(sheet, /Projet\s+Marseille · au 28 oct\. 2026/);

@@ -285,6 +285,11 @@ button { cursor: pointer; }
 .hist-list .line .s { white-space: normal; }
 @media (max-width: 699px) { .hist-list .where { display: none; } }
 .line.static:hover { background: none; }
+.line.fold .caret { display: inline-block; margin-left: 6px; color: var(--muted); font-weight: 400; transition: transform .15s; }
+.line.fold[aria-expanded="true"] .caret { transform: rotate(90deg); }
+.fold-lines { background: var(--bg-2); }
+.fold-lines .line { padding-left: 28px; }
+.fold-lines .line .mono { background: var(--surface); }
 .line .v.in { color: var(--pos); }
 
 /* ——— Key figures (Analyse, Historique): two columns on phones, one per figure on wider screens ——— */
