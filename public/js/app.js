@@ -15,10 +15,10 @@ import { totals, staleLines, lookthrough, DIRECT, heldLines, isHeld, lineComposi
 import { libraryFor, libraryChoices, SECTORS, COMPOSITION_NOTE, setFetchedLibrary, wantsComposition } from './library.js';
 import { lineChart, hoverText } from './chart.js';
 
-const VERSION = '1.10.0';
+const VERSION = '1.11.0';
 let data = load();
 const ui = {
-  tab: 'patrimoine', range: '1A', scope: 'all', filter: 'all', group: 'accounts', analyse: 'sectors', server: 'unknown', busy: false, progress: '', lineRange: '1A',
+  tab: 'patrimoine', range: '1A', scope: 'all', filter: 'all', group: 'accounts', unfolded: new Set(), analyse: 'sectors', server: 'unknown', busy: false, progress: '', lineRange: '1A',
   hist: { kind: 'all', acc: 'all', q: '', limit: 150 },
   sim: { mode: 'buy', lineId: '', newIsin: '', newName: '', accountId: '', by: 'amount', amount: '1000', qty: '', price: '', fees: '1', useCash: true },
   reb: { amount: '500', sell: false },
@@ -281,7 +281,39 @@ function linesSection() {
       <button class="filter" data-action="filter" data-v="all" aria-pressed="${ui.filter === 'all'}">${t('Toutes')}</button>
       ${envs.map(e => `<button class="filter" data-action="filter" data-v="${esc(e)}" aria-pressed="${ui.filter === e}">${esc(t(e))}</button>`).join('')}
     </div>
-    <div class="lines">${ls.map(lineRow).join('') || `<p class="muted p16">${t('Aucune ligne.')}</p>`}</div></div>`;
+    <div class="lines">${foldProjects(ls).map(x => x.lines ? projectsRow(x) : lineRow(x)).join('') || `<p class="muted p16">${t('Aucune ligne.')}</p>`}</div></div>`;
+}
+
+// Crowdfunding projects (type immo) fold into one row per account, unfolded on demand:
+// a dozen small Bricks projects would otherwise fill the list.
+function foldProjects(ls) {
+  const by = new Map();
+  for (const l of ls) if (l.type === 'immo') by.set(l.accountId, [...by.get(l.accountId) || [], l]);
+  const out = [];
+  for (const l of ls) {
+    const g = l.type === 'immo' && by.get(l.accountId);
+    if (!g || g.length < 2) out.push(l);
+    else if (g[0] === l) out.push({ accountId: l.accountId, lines: g, value: g.reduce((s, x) => s + lineValue(x), 0) });
+  }
+  const val = x => x.lines ? x.value : lineValue(x);
+  return out.sort((a, b) => val(b) - val(a));
+}
+function projectsRow(grp) {
+  const acc = accById(grp.accountId);
+  const open = ui.unfolded.has(grp.accountId);
+  const cost = grp.lines.reduce((s, l) => s + lineCost(l), 0), gain = grp.lines.reduce((s, l) => s + lineGain(l), 0);
+  const late = grp.lines.filter(l => l.project?.status === 'repayment-delay').length, bad = grp.lines.filter(l => l.project?.status === 'repayment-default').length;
+  const sub = [tn(grp.lines.length, '{n} projet', '{n} projets'), late ? tn(late, '{n} projet en retard', '{n} projets en retard') : '', bad ? tn(bad, '{n} projet en défaut', '{n} projets en défaut') : ''].filter(Boolean).join(' · ');
+  // Projects show no gain (value = capital still owed): the average yearly rate, weighted by value, says more.
+  const rated = grp.lines.filter(l => l.project?.rate != null), w = rated.reduce((s, l) => s + lineValue(l), 0);
+  const rate = w > 0 ? rated.reduce((s, l) => s + l.project.rate * lineValue(l), 0) / w : null;
+  const name = acc?.name || t('Immobilier participatif');
+  return `<button class="line fold" data-action="fold" data-id="${esc(grp.accountId)}" aria-expanded="${open}">
+    <span class="mono t-immo">${esc(initials(name))}</span>
+    <span class="n">${esc(name)}<span class="caret" aria-hidden="true">›</span></span><span class="v">${eur(grp.value)}</span>
+    <span class="s">${sub}</span>
+    <span class="g ${rate != null ? 'muted' : cost > 0 && Math.abs(gain / cost) >= 0.0005 ? (gain > 0 ? 'pos' : 'neg') : 'muted'}">${rate != null ? t('{x} par an', { x: pct(rate, 1) }) : cost > 0 ? signedPct(gain / cost) : ''}</span>
+  </button>${open ? `<div class="fold-lines">${grp.lines.map(lineRow).join('')}</div>` : ''}`;
 }
 
 function lineRow(l) {
@@ -1953,6 +1985,7 @@ document.addEventListener('click', async e => {
   switch (a) {
     case 'range': ui.range = v; render(); break;
     case 'filter': ui.filter = v; render(); break;
+    case 'fold': { const id = b.dataset.id; if (!ui.unfolded.delete(id)) ui.unfolded.add(id); render(); break; }
     case 'group': ui.group = v; render(); break;
     case 'env-lines': ui.filter = v; render(); $('#lines')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); break;
     case 'analyse': ui.analyse = v; render(); break;

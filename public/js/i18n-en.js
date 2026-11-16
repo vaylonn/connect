@@ -849,6 +849,8 @@ export const EN = {
   '{n} projets remboursés': '{n} projects repaid',
   'Solde Bricks': 'Bricks balance',
   'Coupons': 'Coupons',
+  '{n} projet': '{n} project',
+  '{n} projets': '{n} projects',
   '{n} projet en retard': '{n} project late',
   '{n} projets en retard': '{n} projects late',
   '{n} projet en défaut': '{n} project in default',
