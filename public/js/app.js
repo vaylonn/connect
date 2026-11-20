@@ -15,7 +15,7 @@ import { totals, staleLines, lookthrough, DIRECT, heldLines, isHeld, lineComposi
 import { libraryFor, libraryChoices, SECTORS, COMPOSITION_NOTE, setFetchedLibrary, wantsComposition } from './library.js';
 import { lineChart, hoverText } from './chart.js';
 
-const VERSION = '1.11.0';
+const VERSION = '1.12.0';
 let data = load();
 const ui = {
   tab: 'patrimoine', range: '1A', scope: 'all', filter: 'all', group: 'accounts', unfolded: new Set(), analyse: 'sectors', server: 'unknown', busy: false, progress: '', lineRange: '1A',
@@ -82,7 +82,7 @@ function applyTheme() {
   if (th === 'light' || th === 'dark') root.dataset.theme = th; else delete root.dataset.theme;
   const dark = th === 'dark' || (th !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches);
   const m = document.querySelector('meta[name="theme-color"]');
-  if (m) m.setAttribute('content', dark ? '#121010' : '#F5F1EB');
+  if (m) m.setAttribute('content', dark ? '#161513' : '#F6F3EE');
 }
 // Static texts of index.html (tab names, labels): the French original is kept in data-t / data-t-aria.
 let shownLang = '';
@@ -530,7 +530,7 @@ async function shareImage(sections) {
   const H = 230 + sections.reduce((s, sec) => s + HEAD + sec.rows.length * ROW + 30, 0) + 70;
   const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
   const c = cv.getContext('2d');
-  const C = { bg: '#F5F1EB', ink: '#1A1613', muted: '#857A70', track: '#E2D8CB', bars: ['#1A1613', '#EE6418', '#3E63F2', '#2F8F6A'] };
+  const C = { bg: '#F6F3EE', ink: '#1F1B16', muted: '#776D61', track: '#E3DCD1', bars: ['#1F1B16', '#C4501A', '#3F5A8A', '#4A7A5D'] };
   const bar = (x, w) => { c.beginPath(); if (c.roundRect) c.roundRect(x, 0, w, 10, 5); else c.rect(x, 0, w, 10); c.fill(); };
   const fit = (text, max) => { if (c.measureText(text).width <= max) return text; let s = text; while (s.length > 1 && c.measureText(s + '…').width > max) s = s.slice(0, -1); return s + '…'; };
   c.fillStyle = C.bg; c.fillRect(0, 0, W, H);
