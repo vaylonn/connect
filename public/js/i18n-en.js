@@ -47,11 +47,9 @@ export const EN = {
   'Tout': 'All',
 
   // ——— Patrimoine ———
-  'Bonjour {name},': 'Hi {name},',
-  'Bonjour,': 'Hi,',
-  '{hi} votre patrimoine est en hausse de {p}.': '{hi} your net worth is up {p}.',
-  '{hi} votre patrimoine est en baisse de {p}.': '{hi} your net worth is down {p}.',
-  '{hi} voici votre patrimoine.': '{hi} here is your net worth.',
+  'Votre patrimoine est en hausse de {p}.': 'Your net worth is up {p}.',
+  'Votre patrimoine est en baisse de {p}.': 'Your net worth is down {p}.',
+  'Voici votre patrimoine.': 'Here is your net worth.',
   'Patrimoine total': 'Total net worth',
   '{x} de plus-value': '{x} gain',
   '{x} en actions': '{x} in stocks',

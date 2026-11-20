@@ -15,7 +15,7 @@ import { totals, staleLines, lookthrough, DIRECT, heldLines, isHeld, lineComposi
 import { libraryFor, libraryChoices, SECTORS, COMPOSITION_NOTE, setFetchedLibrary, wantsComposition } from './library.js';
 import { lineChart, hoverText } from './chart.js';
 
-const VERSION = '1.12.0';
+const VERSION = '1.13.0';
 let data = load();
 const ui = {
   tab: 'patrimoine', range: '1A', scope: 'all', filter: 'all', group: 'accounts', unfolded: new Set(), analyse: 'sectors', server: 'unknown', busy: false, progress: '', lineRange: '1A',
@@ -127,15 +127,15 @@ function demoBanner() {
 }
 
 function headline(tot) {
-  const n = data.profile.firstName;
-  const hi = n ? t('Bonjour {name},', { name: esc(n) }) : t('Bonjour,');
   if (tot.cost > 0 && Math.abs(tot.gainPct) >= 0.0005) {
     const up = tot.gain >= 0;
     const p = `<span class="hl ${up ? '' : 'down'}">${pct(Math.abs(tot.gainPct))}</span>`;
-    return t(up ? '{hi} votre patrimoine est en hausse de {p}.' : '{hi} votre patrimoine est en baisse de {p}.', { hi, p });
+    return t(up ? 'Votre patrimoine est en hausse de {p}.' : 'Votre patrimoine est en baisse de {p}.', { p });
   }
-  return t('{hi} voici votre patrimoine.', { hi });
+  return t('Voici votre patrimoine.');
 }
+// Page header: the day's date above the title, like the top of a ledger page
+const pageHead = (title, cls = '') => `<header class="page-head ${cls}"><p class="dateline">${dateLong(today())}</p><h1 class="title">${title}</h1></header>`;
 
 // ——— Patrimoine tab ———
 function viewHome() {
@@ -168,10 +168,11 @@ function viewHome() {
       <div class="chips" role="group" aria-label="${t('Regrouper par')}">${[['accounts', 'Comptes'], ['envelopes', 'Enveloppes']].map(([k, l]) => `<button class="chip" data-action="group" data-v="${k}" aria-pressed="${ui.group === k}">${t(l)}</button>`).join('')}</div></div>
     <div class="accounts">${groups.join('') || `<p class="muted">${t(ui.group === 'envelopes' ? 'Aucune ligne.' : 'Aucun compte.')}</p>`}</div></div>`;
   const lines = linesSection();
-  if (isWide()) return `<h1 class="title">${headline(tot)}</h1>
-    <div class="grid-home"><div class="col">${hero}${chart}${lines}</div><div class="col">${stale}${accounts}</div></div>`;
-  return `<h1 class="title">${headline(tot)}</h1>
-    <div class="grid-home">${hero}${stale}${chart}${lines}${accounts}</div>`;
+  const page = `<div class="ledger">${hero}${chart}</div>`;
+  if (isWide()) return `${pageHead(headline(tot))}
+    <div class="grid-home"><div class="col">${page}${lines}</div><div class="col">${stale}${accounts}</div></div>`;
+  return `${pageHead(headline(tot))}
+    <div class="grid-home">${page}${stale}${lines}${accounts}</div>`;
 }
 // Chart scope: everything, one account (acc:id) or one envelope (env:name)
 function scopeKeep() {
@@ -250,24 +251,22 @@ function staleCard() {
 
 function accountCard(a) {
   const acc = a.account;
-  const on = Math.round(a.share * 20);
   return `<button class="acc" data-action="open-account" data-id="${esc(acc.id)}">
     <span class="tile c-${esc(acc.color || 'ink')}">${esc(initials(acc.name))}</span>
     <span class="name">${esc(kindLabel(acc.kind) || t('Compte'))}</span><span class="val">${eur(a.value, 0)}</span>
     <span class="sub">${esc(acc.name)}${a.gain && Math.abs(a.gain) >= 0.5 ? ` · <span class="${a.gain >= 0 ? 'pos' : 'neg'}">${signedEur(a.gain, 0)}</span>` : ''}</span><span class="share">${pct(a.share, 0)}</span>
-    <span class="segs" aria-hidden="true">${Array.from({ length: 20 }, (_, i) => `<i class="${i < on ? 'on c-' + esc(acc.color || 'ink') : ''}"></i>`).join('')}</span>
+    <span class="sbar" aria-hidden="true"><i class="c-${esc(acc.color || 'ink')}" data-w="${(a.share * 100).toFixed(1)}"></i></span>
   </button>`;
 }
 
 // Tapping an envelope filters the holdings on it.
 function envelopeCard(e) {
   const n = heldLines(data).filter(l => (l.envelope || 'Autre') === e.name).length;
-  const on = Math.round(e.share * 20);
   return `<button class="acc" data-action="env-lines" data-v="${esc(e.name)}">
     <span class="tile c-ink">${esc(initials(t(e.name)))}</span>
     <span class="name">${esc(t(e.name))}</span><span class="val">${eur(e.value, 0)}</span>
     <span class="sub">${tn(n, '{n} ligne', '{n} lignes')}</span><span class="share">${pct(e.share, 0)}</span>
-    <span class="segs" aria-hidden="true">${Array.from({ length: 20 }, (_, i) => `<i class="${i < on ? 'on c-ink' : ''}"></i>`).join('')}</span>
+    <span class="sbar" aria-hidden="true"><i class="c-ink" data-w="${(e.share * 100).toFixed(1)}"></i></span>
   </button>`;
 }
 
@@ -350,7 +349,7 @@ function emptyState() {
 // ——— Analyse tab ———
 function viewAnalyse() {
   const tot = totals(data);
-  if (!data.lines.length) return `<h1 class="title">${t('Où va votre argent.')}<em>${t('Secteurs, pays et entreprises.')}</em></h1>${emptyHint()}`;
+  if (!data.lines.length) return `${pageHead(`${t('Où va votre argent.')}<em>${t('Secteurs, pays et entreprises.')}</em>`)}${emptyHint()}`;
   const lt = lookthrough(data);
   const top10 = lt.companies.slice(0, 10).reduce((s, c) => s + c.value, 0);
   const first = lt.companies[0];
@@ -364,7 +363,7 @@ function viewAnalyse() {
   ];
   const list = { sectors: lt.sectors, countries: lt.countries, companies: lt.companies.slice(0, 15) }[ui.analyse];
   const max = Math.max(...list.map(x => x.value), 1);
-  return `<h1 class="title">${t('Où va votre argent.')}<em>${t('À travers vos fonds.')}</em></h1>
+  return `${pageHead(`${t('Où va votre argent.')}<em>${t('À travers vos fonds.')}</em>`)}
     ${sumsCard(sums)}
     ${perfSection(perf)}
     <div class="section-head"><h2>${t('Répartition')}</h2><span class="aside">${t('hors espèces · {x}', { x: eur(lt.base, 0) })}</span></div>
@@ -622,7 +621,7 @@ function histFiltered() {
 }
 
 function viewHistorique() {
-  const title = `<h1 class="title">${t('Vos opérations.')}<em>${t('Achats, ventes, revenus et versements.')}</em></h1>`;
+  const title = `${pageHead(`${t('Vos opérations.')}<em>${t('Achats, ventes, revenus et versements.')}</em>`)}`;
   const all = data.transactions || [];
   if (!all.length) {
     if (!data.trStats) return title + (data.lines.length ? `<div class="card"><p class="muted m0">${t('Aucune opération enregistrée : elles viennent de l’import Trade Republic. L’export Linxea et les lignes ajoutées à la main ne donnent que des positions.')}</p></div>` : emptyHint());
@@ -647,7 +646,7 @@ function viewHistorique() {
 // ——— Positions tab ———
 // Every position held, as a table to read, download as CSV or copy into a spreadsheet.
 function viewPositions() {
-  const title = `<h1 class="title">${t('Toutes vos positions.')}<em>${t('Nom, ISIN, quantité, cours et valeur.')}</em></h1>`;
+  const title = `${pageHead(`${t('Toutes vos positions.')}<em>${t('Nom, ISIN, quantité, cours et valeur.')}</em>`)}`;
   const rows = positions(data);
   if (!rows.length) return title + emptyHint();
   const sum = k => rows.reduce((s, r) => s + (r[k] || 0), 0);
@@ -778,7 +777,7 @@ function simOptions() {
   return groups + `<optgroup label="${t('Nouvelle ligne')}">${lib}<option value="new:custom" ${ui.sim.lineId === 'new:custom' ? 'selected' : ''}>${t('Autre produit…')}</option></optgroup>`;
 }
 function viewSimuler() {
-  const title = `<h1 class="title">${t('Et si vous…')}<em>${t('achetiez ou vendiez, avant de le faire.')}</em></h1>`;
+  const title = `${pageHead(`${t('Et si vous…')}<em>${t('achetiez ou vendiez, avant de le faire.')}</em>`)}`;
   if (!data.accounts.length) return title + emptyHint();
   const s = ui.sim;
   if (!s.lineId) { const first = heldLines(data).filter(l => !isCashLike(l)).sort((a, b) => lineValue(b) - lineValue(a))[0]; s.lineId = first ? first.id : 'new:IE0002XZSHO1'; }
@@ -887,10 +886,10 @@ const SECTIONS = {
 function viewData() {
   const s = SECTIONS[ui.section];
   if (s) return `<div class="settings-page"><button class="linkish back" data-action="section-close">‹ ${t('Réglages')}</button>
-    <h1 class="title">${t(s.title)}.<em>${t(s.sub)}</em></h1><div class="settings">${s.body()}</div></div>`;
+    ${pageHead(`${t(s.title)}.<em>${t(s.sub)}</em>`)}<div class="settings">${s.body()}</div></div>`;
   const rows = Object.entries(SECTIONS).map(([k, x]) => `<button class="line" data-action="section" data-v="${k}">
     <span class="mono">${ICONS[x.icon]}</span><span class="n">${t(x.title)}</span><span class="v chev" aria-hidden="true">›</span><span class="s">${esc(x.summary())}</span><span class="g"></span></button>`).join('');
-  return `<div class="settings-page"><h1 class="title">${t('Vos données, chez vous.')}<em>${t(syncState() ? 'Chiffrées avant de partir.' : 'Rien ne quitte cet appareil.')}</em></h1>
+  return `<div class="settings-page">${pageHead(`${t('Vos données, chez vous.')}<em>${t(syncState() ? 'Chiffrées avant de partir.' : 'Rien ne quitte cet appareil.')}</em>`)}
     <div class="settings"><div class="lines">${rows}</div>
       <div><button class="btn danger" data-action="wipe">${t('Effacer toutes les données')}</button>
       <p class="note">Carnet ${VERSION}. ${t(storageWorks() ? 'Stockage local actif.' : 'Stockage local bloqué par le navigateur : les données ne survivront pas à la fermeture.')}</p></div></div></div>`;
