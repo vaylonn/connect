@@ -122,7 +122,7 @@ server.mjs      dependency-free Node server (files + /api)
 api/            Vercel functions: health, quote, search, composition, sync
 lib/            Yahoo Finance client, compositions (Morningstar, justETF), /api routes,
                 sync vaults (Redis or files), per-address limits
-public/         the app (HTML, CSS, JS, fonts, icons, PWA)
+public/         the app (HTML, CSS, JS, icons, PWA)
   js/           UI, Trade Republic, Linxea, Caisse d’Épargne and Bricks imports (xlsx.js reads Excel files,
                 pdf.js the text of PDF statements), calculations, storage, sync, chart, ETF library
 tools/          Trade Republic CSV → backup, from the command line

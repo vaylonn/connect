@@ -15,7 +15,7 @@ import { totals, staleLines, lookthrough, DIRECT, heldLines, isHeld, lineComposi
 import { libraryFor, libraryChoices, SECTORS, COMPOSITION_NOTE, setFetchedLibrary, wantsComposition } from './library.js';
 import { lineChart, hoverText } from './chart.js';
 
-const VERSION = '1.11.0';
+const VERSION = '1.12.0';
 let data = load();
 const ui = {
   tab: 'patrimoine', range: '1A', scope: 'all', filter: 'all', group: 'accounts', unfolded: new Set(), analyse: 'sectors', server: 'unknown', busy: false, progress: '', lineRange: '1A',
@@ -82,7 +82,7 @@ function applyTheme() {
   if (th === 'light' || th === 'dark') root.dataset.theme = th; else delete root.dataset.theme;
   const dark = th === 'dark' || (th !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches);
   const m = document.querySelector('meta[name="theme-color"]');
-  if (m) m.setAttribute('content', dark ? '#121010' : '#F5F1EB');
+  if (m) m.setAttribute('content', dark ? '#000000' : '#FFFFFF');
 }
 // Static texts of index.html (tab names, labels): the French original is kept in data-t / data-t-aria.
 let shownLang = '';
@@ -144,9 +144,9 @@ function viewHome() {
   const parts = bigParts(tot.total);
   const hero = `<section class="hero" aria-label="${t('Patrimoine total')}">
     <div class="eyebrow">${t('Patrimoine total')}</div>
-    <div class="big num"><span>${parts.int}<span class="dec">${parts.sep}${parts.dec}</span></span><span class="unit">${t('euros')}</span></div>
+    <div class="big num"><span>${parts.int}<span class="dec">${parts.sep}${parts.dec}</span></span><span class="unit">€</span></div>
+    ${tot.cost > 0 ? `<p class="delta ${tot.gain >= 0 ? 'pos' : 'neg'}"><span><span class="arrow" aria-hidden="true">${tot.gain >= 0 ? '▲' : '▼'}</span> ${signedEur(tot.gain)} (${signedPct(tot.gainPct)})</span><span class="when">${t('depuis l’achat')}</span></p>` : ''}
     <div class="pills">
-      ${tot.cost > 0 ? `<span class="pill"><span class="dotc"></span>${t('{x} de plus-value', { x: signedEur(tot.gain) })}</span>` : ''}
       <span class="pill">${t('{x} en actions', { x: pct(tot.equityPct, 0) })}</span>
       ${tot.liquid > 0 ? `<span class="pill">${t(cashCounted(data) ? '{x} d’espèces' : '{x} sur livrets', { x: eur(tot.liquid, 0) })}</span>` : ''}
     </div>
@@ -155,10 +155,10 @@ function viewHome() {
   const stale = staleCard() + milestoneCard() + backupCard();
   const chart = `<section class="card chart-card" aria-label="${t('Évolution')}">
     <div class="chart-top"><label class="scope"><span class="sr">${t('Courbe de')}</span><span class="scope-label" aria-hidden="true">${esc(scopeLabel())}</span><select class="scope-select" id="chart-scope" data-scope>${scopeOptions()}</select></label>
-      <div class="chips" role="group" aria-label="${t('Période')}">${['1M', '6M', '1A', 'Tout'].map(r => `<button class="chip" data-action="range" data-v="${r}" aria-pressed="${ui.range === r}">${t(r)}</button>`).join('')}</div>
     </div>
     <div class="chart-hover" id="chart-hover"></div>
     <div class="chart-host" id="chart-host"></div>
+    <div class="chips periods" role="group" aria-label="${t('Période')}">${['1M', '6M', '1A', 'Tout'].map(r => `<button class="chip" data-action="range" data-v="${r}" aria-pressed="${ui.range === r}">${t(r)}</button>`).join('')}</div>
     <div class="legend"><span><i></i>${t('Valeur')}</span><span><i class="dash"></i>${t('Montant investi')}</span></div>
     ${Object.keys(data.priceHistory || {}).length ? '' : `<div class="chart-note">${t('Courbe reconstruite à partir des prix de vos transactions. Actualisez les cours pour un historique complet.')}</div>`}
   </section>`;
@@ -168,9 +168,9 @@ function viewHome() {
       <div class="chips" role="group" aria-label="${t('Regrouper par')}">${[['accounts', 'Comptes'], ['envelopes', 'Enveloppes']].map(([k, l]) => `<button class="chip" data-action="group" data-v="${k}" aria-pressed="${ui.group === k}">${t(l)}</button>`).join('')}</div></div>
     <div class="accounts">${groups.join('') || `<p class="muted">${t(ui.group === 'envelopes' ? 'Aucune ligne.' : 'Aucun compte.')}</p>`}</div></div>`;
   const lines = linesSection();
-  if (isWide()) return `<h1 class="title">${headline(tot)}</h1>
+  if (isWide()) return `<h1 class="title greet">${headline(tot)}</h1>
     <div class="grid-home"><div class="col">${hero}${chart}${lines}</div><div class="col">${stale}${accounts}</div></div>`;
-  return `<h1 class="title">${headline(tot)}</h1>
+  return `<h1 class="title greet">${headline(tot)}</h1>
     <div class="grid-home">${hero}${stale}${chart}${lines}${accounts}</div>`;
 }
 // Chart scope: everything, one account (acc:id) or one envelope (env:name)
@@ -525,22 +525,21 @@ function shareText(sections) {
 // The same, drawn as an image (light colours whatever the theme).
 async function shareImage(sections) {
   const W = 1080, P = 72, ROW = 74, HEAD = 86;
-  const serif = "'Lora', Georgia, serif", sans = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif";
-  try { await document.fonts.load(`500 56px Lora`); } catch { /* system serif */ }
+  const sans = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif";
   const H = 230 + sections.reduce((s, sec) => s + HEAD + sec.rows.length * ROW + 30, 0) + 70;
   const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
   const c = cv.getContext('2d');
-  const C = { bg: '#F5F1EB', ink: '#1A1613', muted: '#857A70', track: '#E2D8CB', bars: ['#1A1613', '#EE6418', '#3E63F2', '#2F8F6A'] };
+  const C = { bg: '#FFFFFF', ink: '#000000', muted: '#8A8A8E', track: '#ECECEE', bars: ['#000000', '#3C3C43', '#636366', '#8A8A8E'] };
   const bar = (x, w) => { c.beginPath(); if (c.roundRect) c.roundRect(x, 0, w, 10, 5); else c.rect(x, 0, w, 10); c.fill(); };
   const fit = (text, max) => { if (c.measureText(text).width <= max) return text; let s = text; while (s.length > 1 && c.measureText(s + '…').width > max) s = s.slice(0, -1); return s + '…'; };
   c.fillStyle = C.bg; c.fillRect(0, 0, W, H);
-  c.fillStyle = C.ink; c.font = `500 56px ${serif}`; c.textBaseline = 'alphabetic';
+  c.fillStyle = C.ink; c.font = `700 56px ${sans}`; c.textBaseline = 'alphabetic';
   c.fillText(t('Ma répartition'), P, 120);
   c.fillStyle = C.muted; c.font = `400 28px ${sans}`;
   c.fillText(t('En pourcentages, sans aucun montant · {date}', { date: dateLong(today()) }), P, 168);
   let y = 230;
   sections.forEach((sec, i) => {
-    c.fillStyle = C.ink; c.font = `500 38px ${serif}`; c.fillText(sec.title, P, y + 44);
+    c.fillStyle = C.ink; c.font = `700 38px ${sans}`; c.fillText(sec.title, P, y + 44);
     if (sec.sub) { const w = c.measureText(sec.title).width; c.fillStyle = C.muted; c.font = `400 24px ${sans}`; c.fillText(sec.sub, P + w + 16, y + 44); }
     y += HEAD;
     const max = Math.max(...sec.rows.map(r => r.pct), 0.0001);
