@@ -273,10 +273,27 @@ test('PEA 5-year reminder, chart of one account, anonymous view to share', async
   await page.locator('[data-action="milestone-seen"]').click(); await page.waitForTimeout(200);
   await page.reload(); await page.waitForTimeout(300);
   assert.equal(await page.locator('.milestone-hint').count(), 0, 'dismissed for good');
-  // The chart narrows to one account
+  // The figure and the chart narrow to one account; the change is over the period, deposits left out
+  const whole = await total(page);
   await page.selectOption('#chart-scope', 'acc:tr-pea'); await page.waitForTimeout(200);
-  assert.equal(await page.locator('.scope-label').innerText(), 'Trade Republic PEA');
-  assert.match(await page.locator('#chart-hover').innerText(), /Sur la période/);
+  assert.equal(await page.locator('.hero .scope-label').innerText(), 'Trade Republic PEA');
+  assert.notEqual(await total(page), whole, 'the big figure is the account’s value');
+  assert.match(await page.locator('#delta').innerText(), /sur 1 an · hors versements/);
+  // A finger on the chart shows that day's value and date in the big figure, until it leaves
+  const box = await page.locator('#chart-host svg').boundingBox();
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2); await page.waitForTimeout(100);
+  assert.match(await page.locator('#delta').innerText(), /\d{4}/, 'the date of the point');
+  await page.mouse.move(box.x + box.width / 2, box.y - 60); await page.waitForTimeout(100);
+  assert.match(await page.locator('#delta').innerText(), /sur 1 an/);
+  // Search: typing narrows the holdings to one list; a tap opens the holding full screen
+  await tab(page, 'patrimoine');
+  await page.locator('[data-action="search"]:visible').first().click(); await page.waitForSelector('.sheet.full.open');
+  await page.fill('#search-q', 'apple'); await page.waitForTimeout(100);
+  assert.equal(await page.locator('#search-body .line').count(), 1);
+  await page.locator('#search-body .line').click(); await page.waitForTimeout(400);
+  assert.equal(await page.locator('.sheet.open').count(), 1, 'search closed, the holding open');
+  assert.ok(await page.locator('.sheet.open .sheet-actions [data-act="edit"]').isVisible());
+  await page.keyboard.press('Escape'); await page.waitForTimeout(400);
   // Anonymous view: an image and a text without any amount
   await tab(page, 'analyse');
   await page.locator('[data-action="share"]').click(); await page.waitForSelector('.sheet.open');

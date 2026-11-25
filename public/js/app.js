@@ -15,10 +15,10 @@ import { totals, staleLines, lookthrough, DIRECT, heldLines, isHeld, lineComposi
 import { libraryFor, libraryChoices, SECTORS, COMPOSITION_NOTE, setFetchedLibrary, wantsComposition } from './library.js';
 import { lineChart, hoverText } from './chart.js';
 
-const VERSION = '1.12.0';
+const VERSION = '1.13.0';
 let data = load();
 const ui = {
-  tab: 'patrimoine', range: '1A', scope: 'all', filter: 'all', group: 'accounts', unfolded: new Set(), analyse: 'sectors', server: 'unknown', busy: false, progress: '', lineRange: '1A',
+  tab: 'patrimoine', range: '1A', scope: 'all', metric: 'pct', filter: 'all', group: 'accounts', unfolded: new Set(), analyse: 'sectors', server: 'unknown', busy: false, progress: '', lineRange: '1A',
   hist: { kind: 'all', acc: 'all', q: '', limit: 150 },
   sim: { mode: 'buy', lineId: '', newIsin: '', newName: '', accountId: '', by: 'amount', amount: '1000', qty: '', price: '', fees: '1', useCash: true },
   reb: { amount: '500', sell: false },
@@ -44,7 +44,9 @@ const ICONS = {
   nuage: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 18.5a4.5 4.5 0 1 1 .9-8.9 6 6 0 0 1 11.6 1.9 3.5 3.5 0 0 1-1.5 7z"/></svg>',
   cours: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/></svg>',
   profil: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.5"/><path d="M5 20c1.2-3.6 4-5.5 7-5.5s5.8 1.9 7 5.5"/></svg>',
+  search: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></svg>',
   refresh: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></svg>',
+  trash: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 7h15"/><path d="M9.5 7V4.5h5V7"/><path d="M6.5 7l1 13h9l1-13"/></svg>',
   close: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>',
   plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>',
   upload: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V4M7 9l5-5 5 5"/><path d="M4 15v4a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-4"/></svg>',
@@ -102,10 +104,15 @@ function render() {
     applyLang();
     const name = data.profile.firstName || '';
     for (const b of document.querySelectorAll('[data-tab]')) b.setAttribute('aria-current', b.dataset.tab === ui.tab ? 'page' : 'false');
+    // The current section's word stays in view in the scrolled tab row
+    const nav = $('.topbar .tabbar'), cur = nav?.querySelector('[aria-current="page"]');
+    if (nav && cur && nav.scrollWidth > nav.clientWidth) nav.scrollLeft = Math.max(0, cur.offsetLeft - nav.offsetLeft - 16);
     for (const a of document.querySelectorAll('.avatar')) a.textContent = name ? name[0].toUpperCase() : 'C';
     const sideName = $('#side-name'); if (sideName) sideName.textContent = name || t('Votre profil');
     const fn = { patrimoine: viewHome, analyse: viewAnalyse, historique: viewHistorique, positions: viewPositions, simuler: viewSimuler, donnees: viewData }[ui.tab] || viewHome;
     v.innerHTML = (data.demo ? demoBanner() : '') + fn();
+    const dock = $('#dock'); if (dock) dock.hidden = !(ui.tab === 'patrimoine' && data.lines.length);
+    document.body.classList.toggle('has-dock', !!dock && !dock.hidden);
     sizeBars(v);
     after[ui.tab]?.();
     setRefreshUI();
@@ -141,24 +148,18 @@ function headline(tot) {
 function viewHome() {
   if (!data.lines.length && !data.accounts.length) return emptyState();
   const tot = totals(data);
-  const parts = bigParts(tot.total);
+  // As in neo-broker apps: what the figure is about (a select), the figure, its change; the chart
+  // below drives the figure while a finger moves over it (after.patrimoine).
   const hero = `<section class="hero" aria-label="${t('Patrimoine total')}">
-    <div class="eyebrow">${t('Patrimoine total')}</div>
-    <div class="big num"><span>${parts.int}<span class="dec">${parts.sep}${parts.dec}</span></span><span class="unit">€</span></div>
-    ${tot.cost > 0 ? `<p class="delta ${tot.gain >= 0 ? 'pos' : 'neg'}"><span><span class="arrow" aria-hidden="true">${tot.gain >= 0 ? '▲' : '▼'}</span> ${signedEur(tot.gain)} (${signedPct(tot.gainPct)})</span><span class="when">${t('depuis l’achat')}</span></p>` : ''}
-    <div class="pills">
-      <span class="pill">${t('{x} en actions', { x: pct(tot.equityPct, 0) })}</span>
-      ${tot.liquid > 0 ? `<span class="pill">${t(cashCounted(data) ? '{x} d’espèces' : '{x} sur livrets', { x: eur(tot.liquid, 0) })}</span>` : ''}
-    </div>
-    <div class="meta">${tot.cost > 0 ? t('Depuis l’achat, sur {x} investis.', { x: eur(tot.cost, 0) }) : t('Ajoutez des placements pour suivre leur plus-value.')}</div>
+    <h1 class="sr">${headline(tot)}</h1>
+    <label class="scope eyebrow-scope"><span class="sr">${t('Courbe de')}</span><span class="scope-label" aria-hidden="true">${esc(scopeLabel())}</span><select class="scope-select" id="chart-scope" data-scope>${scopeOptions()}</select></label>
+    <div class="big num" id="big">${bigHtml(scopeValue())}</div>
+    <p class="delta" id="delta"></p>
   </section>`;
   const stale = staleCard() + milestoneCard() + backupCard();
-  const chart = `<section class="card chart-card" aria-label="${t('Évolution')}">
-    <div class="chart-top"><label class="scope"><span class="sr">${t('Courbe de')}</span><span class="scope-label" aria-hidden="true">${esc(scopeLabel())}</span><select class="scope-select" id="chart-scope" data-scope>${scopeOptions()}</select></label>
-    </div>
-    <div class="chart-hover" id="chart-hover"></div>
-    <div class="chart-host" id="chart-host"></div>
+  const chart = `<section class="chart-card" aria-label="${t('Évolution')}">
     <div class="chips periods" role="group" aria-label="${t('Période')}">${['1M', '6M', '1A', 'Tout'].map(r => `<button class="chip" data-action="range" data-v="${r}" aria-pressed="${ui.range === r}">${t(r)}</button>`).join('')}</div>
+    <div class="chart-host" id="chart-host"></div>
     <div class="legend"><span><i></i>${t('Valeur')}</span><span><i class="dash"></i>${t('Montant investi')}</span></div>
     ${Object.keys(data.priceHistory || {}).length ? '' : `<div class="chart-note">${t('Courbe reconstruite à partir des prix de vos transactions. Actualisez les cours pour un historique complet.')}</div>`}
   </section>`;
@@ -168,10 +169,31 @@ function viewHome() {
       <div class="chips" role="group" aria-label="${t('Regrouper par')}">${[['accounts', 'Comptes'], ['envelopes', 'Enveloppes']].map(([k, l]) => `<button class="chip" data-action="group" data-v="${k}" aria-pressed="${ui.group === k}">${t(l)}</button>`).join('')}</div></div>
     <div class="accounts">${groups.join('') || `<p class="muted">${t(ui.group === 'envelopes' ? 'Aucune ligne.' : 'Aucun compte.')}</p>`}</div></div>`;
   const lines = linesSection();
-  if (isWide()) return `<h1 class="title greet">${headline(tot)}</h1>
-    <div class="grid-home"><div class="col">${hero}${chart}${lines}</div><div class="col">${stale}${accounts}</div></div>`;
-  return `<h1 class="title greet">${headline(tot)}</h1>
-    <div class="grid-home">${hero}${stale}${chart}${lines}${accounts}</div>`;
+  const tiles = homeTiles(tot);
+  if (isWide()) return `<div class="grid-home"><div class="col">${hero}${chart}${tiles}${lines}</div><div class="col">${stale}${accounts}</div></div>`;
+  return `<div class="grid-home">${hero}${chart}${tiles}${stale}${lines}${accounts}</div>`;
+}
+const bigHtml = v => { const p = bigParts(v); return `<span>${p.int}<span class="dec">${p.sep}${p.dec}</span></span><span class="unit">€</span>`; };
+// Value of what the chart shows now: everything, one account or one envelope
+function scopeValue() { const keep = scopeKeep(); return heldLines(data).filter(l => !keep || keep(l)).reduce((s, l) => s + lineValue(l), 0); }
+function scopeGain() {
+  const keep = scopeKeep();
+  const ls = heldLines(data).filter(l => (!keep || keep(l)) && !isCashLike(l));
+  const c = ls.reduce((s, l) => s + lineCost(l), 0);
+  return { gain: ls.reduce((s, l) => s + lineValue(l), 0) - c, cost: c };
+}
+// Shortcuts under the chart, scrolled sideways: one figure each, a tap opens the tab.
+function homeTiles(tot) {
+  const ops = (data.transactions || []).length;
+  const held = heldLines(data).filter(l => !isCashLike(l)).length;
+  const tile = (tab, k, v, d = '') => `<button class="qtile" data-action="go" data-v="${tab}"><span class="k">${k}</span><span class="v">${v}</span>${d ? `<span class="d">${d}</span>` : ''}</button>`;
+  return `<div class="qtiles" role="group" aria-label="${t('Raccourcis')}">
+    ${tile('analyse', t('En actions'), pct(tot.equityPct, 0), tot.liquid > 0 ? t(cashCounted(data) ? '{x} d’espèces' : '{x} sur livrets', { x: eur(tot.liquid, 0) }) : '')}
+    ${tot.cost > 0 ? tile('analyse', t('Investi'), eur(tot.cost, 0), `<span class="${tot.gain >= 0 ? 'pos' : 'neg'}">${signedEur(tot.gain, 0)}</span>`) : ''}
+    ${tile('positions', t('Positions'), String(held))}
+    ${ops ? tile('historique', t('Opérations'), String(ops)) : ''}
+    ${tile('simuler', t('Simuler'), t('Acheter ou vendre'))}
+  </div>`;
 }
 // Chart scope: everything, one account (acc:id) or one envelope (env:name)
 function scopeKeep() {
@@ -184,25 +206,43 @@ function scopeKeep() {
 function scopeLabel() {
   scopeKeep();
   const [k, v] = ui.scope.split(/:(.*)/);
-  return k === 'acc' ? accById(v).name : k === 'env' ? t(v) : t('Évolution');
+  return k === 'acc' ? accById(v).name : k === 'env' ? t(v) : t('Patrimoine total');
 }
 function scopeOptions() {
   const keep = scopeKeep();
   const envs = [...new Set(heldLines(data).map(l => l.envelope || 'Autre'))].sort((a, b) => ENVELOPE_ORDER.indexOf(a) - ENVELOPE_ORDER.indexOf(b));
   const opt = (v, label) => `<option value="${esc(v)}" ${ui.scope === v ? 'selected' : ''}>${esc(label)}</option>`;
-  return opt('all', t('Évolution')) + (keep || data.accounts.length > 1 ? `<optgroup label="${t('Comptes')}">${data.accounts.map(a => opt('acc:' + a.id, a.name)).join('')}</optgroup>` : '')
+  return opt('all', t('Patrimoine total')) + (keep || data.accounts.length > 1 ? `<optgroup label="${t('Comptes')}">${data.accounts.map(a => opt('acc:' + a.id, a.name)).join('')}</optgroup>` : '')
     + (envs.length > 1 ? `<optgroup label="${t('Enveloppes')}">${envs.map(e => opt('env:' + e, t(e))).join('')}</optgroup>` : '');
 }
+const RANGE_WORDS = { '1M': 'sur 1 mois', '6M': 'sur 6 mois', '1A': 'sur 1 an' };
 after.patrimoine = () => {
   const host = $('#chart-host'); if (!host) return;
   const pts_ = buildHistory(data, new Date(), scopeKeep());
   const days = { '1M': 31, '6M': 183, '1A': 366, 'Tout': 1e6 }[ui.range];
   const from = new Date(Date.now() - days * 86400000).toISOString().slice(0, 10);
   const shown = pts_.filter(p => p.d >= from);
-  const hover = $('#chart-hover');
-  const base = shown.length > 1 ? (() => { const a = shown[0], b = shown[shown.length - 1]; const d = b.value - a.value - (b.invested - a.invested); return t('Sur la période : {x} hors versements', { x: signedEur(d, 0) }); })() : '';
-  hover.textContent = base;
-  lineChart(host, shown, { onHover: p => { hover.textContent = p ? hoverText(p) : base; } });
+  const big = $('#big'), delta = $('#delta');
+  const now = scopeValue();
+  const deltaHtml = (d, base, when) => {
+    if (!isFinite(d)) return '';
+    const up = d >= 0, p = base > 0 ? ` (${signedPct(d / base)})` : '';
+    return `<span class="${Math.abs(d) < 0.5 ? '' : up ? 'pos' : 'neg'}"><span class="arrow" aria-hidden="true">${up ? '▲' : '▼'}</span> ${signedEur(d, 0)}${p}</span><span class="when">${when}</span>`;
+  };
+  // At rest: the change over the period, deposits left out; « Tout » is the gain since purchase.
+  const rest = () => {
+    if (ui.range === 'Tout' || shown.length < 2) { const g = scopeGain(); return g.cost > 0 ? deltaHtml(g.gain, g.cost, t('depuis l’achat')) : ''; }
+    const a = shown[0], b = shown[shown.length - 1];
+    return deltaHtml(b.value - a.value - (b.invested - a.invested), a.value, t(RANGE_WORDS[ui.range]) + ' · ' + t('hors versements'));
+  };
+  const show = p => {
+    if (!p) { big.innerHTML = bigHtml(now); delta.innerHTML = rest(); big.classList.remove('scrub'); return; }
+    const a = shown[0];
+    big.innerHTML = bigHtml(p.value); big.classList.add('scrub');
+    delta.innerHTML = deltaHtml(p.value - a.value - (p.invested - a.invested), a.value, dateLong(p.d));
+  };
+  show(null);
+  lineChart(host, shown, { onHover: show });
 };
 
 // Tax milestone reminder (PEA 5 years, life insurance 8 years): from two months before until a month after,
@@ -276,7 +316,8 @@ function linesSection() {
   const envs = [...new Set(held.map(l => l.envelope || 'Autre'))].sort((a, b) => ENVELOPE_ORDER.indexOf(a) - ENVELOPE_ORDER.indexOf(b));
   if (ui.filter !== 'all' && !envs.includes(ui.filter)) ui.filter = 'all';
   const ls = held.filter(l => ui.filter === 'all' || (l.envelope || 'Autre') === ui.filter).sort((a, b) => lineValue(b) - lineValue(a));
-  return `<div id="lines"><div class="section-head"><h2>${t('Lignes')}</h2><button class="linkish" data-action="add-line">${t('Ajouter')}</button></div>
+  return `<div id="lines"><div class="section-head mid"><h2>${t('Lignes')}</h2>
+      <label class="scope metric"><span class="sr">${t('Afficher')}</span><span class="scope-label" aria-hidden="true">${esc(t(METRICS[ui.metric]))}</span><select class="scope-select" data-metric>${Object.entries(METRICS).map(([k, l]) => `<option value="${k}" ${ui.metric === k ? 'selected' : ''}>${esc(t(l))}</option>`).join('')}</select></label></div>
     <div class="filters" role="group" aria-label="${t('Filtrer par enveloppe')}">
       <button class="filter" data-action="filter" data-v="all" aria-pressed="${ui.filter === 'all'}">${t('Toutes')}</button>
       ${envs.map(e => `<button class="filter" data-action="filter" data-v="${esc(e)}" aria-pressed="${ui.filter === e}">${esc(t(e))}</button>`).join('')}
@@ -316,6 +357,17 @@ function projectsRow(grp) {
   </button>${open ? `<div class="fold-lines">${grp.lines.map(lineRow).join('')}</div>` : ''}`;
 }
 
+// What the right column of a holding shows, as the « Depuis l’achat » switch of broker apps
+const METRICS = { pct: 'Depuis l’achat', eur: 'Plus-value en €', share: 'Part du total' };
+function lineMetric(l) {
+  const g = lineGain(l), c = lineCost(l);
+  if (ui.metric === 'share') { const tot = totals(data).total; return `<span class="g muted">${tot > 0 ? pct(lineValue(l) / tot) : ''}</span>`; }
+  const cls = c > 0 && Math.abs(g / c) >= 0.0005 ? (g > 0 ? 'pos' : 'neg') : 'muted';
+  if (isCashLike(l)) return '<span class="g muted">—</span>';
+  if (!(c > 0)) return '<span class="g"></span>';
+  const arrow = cls === 'muted' ? '' : `<span class="arrow" aria-hidden="true">${g > 0 ? '▲' : '▼'}</span> `;
+  return `<span class="g ${cls}">${arrow}${ui.metric === 'eur' ? signedEur(g) : pct(Math.abs(g / c))}</span>`;
+}
 function lineRow(l) {
   const acc = accById(l.accountId);
   const g = lineGain(l), c = lineCost(l);
@@ -327,7 +379,7 @@ function lineRow(l) {
     <span class="mono t-${esc(l.type)}">${esc(initials(shortName(l)))}</span>
     <span class="n">${esc(shortName(l))}${stale ? `<span class="badge warn">${t('cours ancien')}</span>` : ''}</span><span class="v">${eur(lineValue(l))}</span>
     <span class="s">${sub}</span>
-    <span class="g ${c > 0 && Math.abs(g / c) >= 0.0005 ? (g > 0 ? 'pos' : 'neg') : 'muted'}">${isCashLike(l) ? '<span class="muted">—</span>' : c > 0 ? signedPct(g / c) : ''}</span>
+    ${lineMetric(l)}
   </button>`;
 }
 
@@ -1021,9 +1073,9 @@ function sectionPreferences() {
 
 // ——— Bottom sheets ———
 let sheetStack = [];
-function openSheet(html, { onMount, onClose, label = t('Fenêtre') } = {}) {
+function openSheet(html, { onMount, onClose, label = t('Fenêtre'), full = false } = {}) {
   const scrim = document.createElement('div'); scrim.className = 'scrim';
-  const sh = document.createElement('div'); sh.className = 'sheet'; sh.setAttribute('role', 'dialog'); sh.setAttribute('aria-modal', 'true'); sh.setAttribute('aria-label', label);
+  const sh = document.createElement('div'); sh.className = full ? 'sheet full' : 'sheet'; sh.setAttribute('role', 'dialog'); sh.setAttribute('aria-modal', 'true'); sh.setAttribute('aria-label', label);
   sh.innerHTML = '<div class="grab" aria-hidden="true"></div>' + html;
   sizeBars(sh);
   document.body.append(scrim, sh);
@@ -1043,6 +1095,30 @@ function openSheet(html, { onMount, onClose, label = t('Fenêtre') } = {}) {
   return close;
 }
 const sheetHead = (title, sub = '') => `<div class="sheet-head"><h2>${title}${sub ? `<em>${sub}</em>` : ''}</h2><button class="icon-btn close" data-close aria-label="${t('Fermer')}">${ICONS.close}</button></div>`;
+
+// Search, as in broker apps: biggest moves as cards, then holdings by kind; the field sits at the
+// bottom, within thumb reach, and typing narrows everything to one list.
+const SEARCH_GROUPS = [['etf', 'ETF'], ['action', 'Actions'], ['fonds', 'Fonds'], ['crypto', 'Crypto'], ['immo', 'Immobilier participatif'], ['other', 'Autres']];
+function openSearch() {
+  const held = heldLines(data).sort((a, b) => lineValue(b) - lineValue(a));
+  const perf = l => { const c = lineCost(l); return c > 0 && !isCashLike(l) ? lineGain(l) / c : null; };
+  const movers = held.filter(l => perf(l) != null).sort((a, b) => Math.abs(perf(b)) - Math.abs(perf(a))).slice(0, 8);
+  const card = l => { const p = perf(l); return `<button class="mover" data-action="open-line" data-id="${esc(l.id)}"><span class="mono t-${esc(l.type)}">${esc(initials(shortName(l)))}</span><span class="n">${esc(shortName(l))}</span><span class="${p >= 0 ? 'pos' : 'neg'} small"><span class="arrow" aria-hidden="true">${p >= 0 ? '▲' : '▼'}</span> ${pct(Math.abs(p))}</span></button>`; };
+  const group = l => SEARCH_GROUPS.some(([k]) => k === l.type) ? l.type : 'other';
+  const browse = () => `${movers.length ? `<h3 class="search-h">${t('Fortes variations')}</h3><div class="movers">${movers.map(card).join('')}</div>` : ''}
+    ${SEARCH_GROUPS.map(([k, label]) => { const ls = held.filter(l => group(l) === k); return ls.length ? `<h3 class="search-h">${t(label)}</h3><div class="lines">${ls.map(lineRow).join('')}</div>` : ''; }).join('')}`;
+  const norm = x => String(x || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+  const results = q => { const ls = held.filter(l => [shortName(l), l.name, l.isin, l.ticker, accById(l.accountId)?.name].some(x => norm(x).includes(q))); return ls.length ? `<div class="lines">${ls.map(lineRow).join('')}</div>` : `<p class="muted p16">${t('Aucun résultat.')}</p>`; };
+  openSheet(`${sheetHead(t('Recherche'))}<div id="search-body">${browse()}</div>
+    <div class="search-bar"><label class="grow"><span class="sr">${t('Rechercher')}</span><input class="input" type="search" id="search-q" placeholder="${t('Nom, ISIN ou compte')}" autocomplete="off" enterkeyhint="search"></label></div>`, {
+    label: t('Recherche'), full: true,
+    onMount: (sh, close) => {
+      const body = sh.querySelector('#search-body');
+      sh.querySelector('#search-q').addEventListener('input', e => { const q = norm(e.target.value.trim()); body.innerHTML = q ? results(q) : browse(); });
+      sh.addEventListener('click', e => { if (e.target.closest('[data-action="open-line"]')) close(); });
+    },
+  });
+}
 
 function confirmSheet({ title, text, ok = t('Confirmer'), danger = false }) {
   return new Promise(res => {
@@ -1110,16 +1186,17 @@ function openLine(id) {
   openSheet(`${sheetHead(esc(shortName(l)), esc((acc?.name || '') + ' · ' + t(l.envelope || '')))}
     ${ids.length ? `<p class="small muted ids-line">${ids.map(esc).join(' · ')}</p>` : ''}
     <div class="detail-big">${eur(v)}</div>
+    ${!isCashLike(l) && c > 0 ? `<p class="delta"><span class="${Math.abs(g) < 0.5 ? '' : g > 0 ? 'pos' : 'neg'}"><span class="arrow" aria-hidden="true">${g >= 0 ? '▲' : '▼'}</span> ${signedEur(g)} (${signedPct(g / c)})</span><span class="when">${t('depuis l’achat')}</span></p>` : ''}
     ${l.moved ? `<p class="small muted m-t4">${t('Relevé du {date} : {x}, moins {y} versés depuis sur vos autres comptes.', { date: dateShort(l.priceDate), x: eur(l.amount), y: eur(l.moved) })}</p>` : ''}
     ${l.qtyEstimated || l.estimateFromAmount ? `<div class="callout mt12">${t(l.estimateFromAmount ? 'Montant investi connu, quantité pas encore calculée : elle le sera à la prochaine actualisation, avec la valeur liquidative du jour de souscription.' : 'Quantité estimée à partir du montant investi et de la valeur liquidative du jour de souscription. Remplacez-la par celle de votre relevé quand vous l’aurez (Modifier).')}</div>` : ''}
-    <div class="stat-grid">${stats}</div>
-    ${l.note ? `<p class="note-text">${esc(l.note)}</p>` : ''}
     ${priceSection(l)}
+    <div class="stat-grid scroll">${stats}</div>
+    ${l.note ? `<p class="note-text">${esc(l.note)}</p>` : ''}
     ${fundPerfSection(l)}
     ${projectSection(l)}
-    <div class="btn-row"><button class="btn primary sm" data-act="edit">${t('Modifier')}</button>${isCashLike(l) ? '' : `<button class="btn sm" data-act="sim">${t('Simuler')}</button>`}<button class="btn sm danger" data-act="del">${t('Supprimer')}</button></div>
-    ${holdings}`, {
-    label: shortName(l),
+    ${holdings}
+    <div class="sheet-actions">${isCashLike(l) ? '' : `<button class="dock-btn" data-act="sim">${t('Simuler')}</button>`}<button class="dock-btn" data-act="edit">${t('Modifier')}</button><button class="icon-btn danger" data-act="del" aria-label="${t('Supprimer')}">${ICONS.trash}</button></div>`, {
+    label: shortName(l), full: true,
     onMount: (sh, close) => { drawLineChart(sh, l); sh.addEventListener('click', async e => {
       const rg = e.target.closest('[data-lrange]');
       if (rg) { ui.lineRange = rg.dataset.lrange; sh.querySelectorAll('[data-lrange]').forEach(b => b.setAttribute('aria-pressed', b === rg)); drawLineChart(sh, l); return; }
@@ -1171,8 +1248,8 @@ function priceSection(l) {
   const h = l.ticker && data.priceHistory?.[l.ticker];
   if (!h || h.length < 2) return `<p class="note m-x2b14">${t(l.type === 'non-cote' ? 'Pas de cours public pour ce fonds non coté.' : l.type === 'immo' ? 'Pas de cours public : la valeur est le capital restant dû, au dernier import.' : l.type === 'structure' || l.noSymbol ? 'Pas de cours sur Yahoo pour ce support : sa valeur est celle de votre dernier import ou relevé.' : 'L’historique du cours apparaîtra après une actualisation (bouton en haut de l’écran).')}</p>`;
   return `<section class="card chart-card price-card">
-    <div class="chart-top"><h3>${t('Cours|prix')}</h3><div class="chips" role="group" aria-label="${t('Période')}">${LRANGES.map(([k]) => `<button class="chip" data-lrange="${k}" aria-pressed="${ui.lineRange === k}">${t(k)}</button>`).join('')}</div></div>
     <div class="chart-hover" data-lhover></div><div class="chart-host" data-lhost></div>
+    <div class="chips periods" role="group" aria-label="${t('Période')}">${LRANGES.map(([k]) => `<button class="chip" data-lrange="${k}" aria-pressed="${ui.lineRange === k}">${t(k)}</button>`).join('')}</div>
     <div class="legend"><span><i></i>${t('Cours|prix')}</span><span><i class="dash"></i>${t('Prix de revient')}</span></div>
     <div class="chart-note">${t('Source : Yahoo Finance ({x}), en euros.', { x: esc(l.ticker) })}</div></section>`;
 }
@@ -1997,6 +2074,8 @@ document.addEventListener('click', async e => {
     case 'open-line': openLine(b.dataset.id); break;
     case 'open-account': openAccount(b.dataset.id); break;
     case 'add-line': lineForm(null); break;
+    case 'search': openSearch(); break;
+    case 'dock-import': openSection('import'); break;
     case 'add-account': accountForm(null); break;
     case 'edit-account': accountForm(b.dataset.id); break;
     case 'refresh': refreshPrices(); break;
@@ -2064,6 +2143,7 @@ document.addEventListener('input', e => {
     }
     const out = $('#sim-out'); if (out) out.innerHTML = simResult();
   }
+  if (el.dataset.metric !== undefined) { ui.metric = el.value; render(); return; }
   if (el.dataset.scope !== undefined) { ui.scope = el.value; const l = el.parentNode.querySelector('.scope-label'); if (l) l.textContent = scopeLabel(); after.patrimoine(); }
   if (el.dataset.reb) { ui.reb[el.dataset.reb] = el.value; const o = $('#reb-out'); if (o) o.innerHTML = rebalanceRows(); }
   if (el.dataset.hist) { ui.hist[el.dataset.hist] = el.value; ui.hist.limit = 150; const b = $('#hist-body'); if (b) b.innerHTML = histBody(); }
