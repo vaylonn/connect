@@ -15,7 +15,7 @@ import { totals, staleLines, lookthrough, DIRECT, heldLines, isHeld, lineComposi
 import { libraryFor, libraryChoices, SECTORS, COMPOSITION_NOTE, setFetchedLibrary, wantsComposition } from './library.js';
 import { lineChart, hoverText } from './chart.js';
 
-const VERSION = '1.13.1';
+const VERSION = '1.13.2';
 let data = load();
 const ui = {
   tab: 'patrimoine', range: '1A', scope: 'all', metric: 'pct', filter: 'all', group: 'accounts', unfolded: new Set(), analyse: 'sectors', server: 'unknown', busy: false, progress: '', lineRange: '1A',
@@ -2075,7 +2075,6 @@ document.addEventListener('click', async e => {
     case 'open-account': openAccount(b.dataset.id); break;
     case 'add-line': lineForm(null); break;
     case 'search': openSearch(); break;
-    case 'dock-import': openSection('import'); break;
     case 'add-account': accountForm(null); break;
     case 'edit-account': accountForm(b.dataset.id); break;
     case 'refresh': refreshPrices(); break;

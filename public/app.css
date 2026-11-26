@@ -124,12 +124,17 @@ body.has-dock .main { padding-bottom: calc(var(--dock-h) + 40px + env(safe-area-
 .ic { display: grid; place-items: center; }
 .ic svg { width: 21px; height: 21px; }
 
-/* ——— Bottom actions (phones, home): two wide pills within thumb reach ——— */
+/* ——— Search on the home screen (phones): a small rounded square in the bottom-right corner, within thumb reach ——— */
 .dock {
-  position: fixed; left: 0; right: 0; bottom: 0; z-index: 40; display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
-  padding: 18px max(16px, env(safe-area-inset-right, 0px)) calc(12px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
-  background: linear-gradient(to top, var(--bg) 62%, transparent);
+  position: fixed; z-index: 40;
+  right: max(16px, env(safe-area-inset-right, 0px)); bottom: calc(16px + env(safe-area-inset-bottom, 0px));
 }
+.dock-search {
+  width: 52px; height: 52px; border-radius: 16px; border: 1px solid var(--line); display: grid; place-items: center;
+  background: var(--bg-2); color: var(--ink); box-shadow: 0 8px 24px -12px rgba(0, 0, 0, .45);
+}
+.dock-search:hover { background: var(--bar); }
+.dock-search .ic svg { width: 21px; height: 21px; }
 .dock-btn { display: flex; align-items: center; justify-content: space-between; gap: 10px; height: 50px; padding: 0 18px; border: 0; border-radius: 14px; background: var(--bg-2); color: var(--ink); font-size: 15px; font-weight: 600; }
 .dock-btn:hover { background: var(--bar); }
 .dock-btn .ic svg { width: 19px; height: 19px; }

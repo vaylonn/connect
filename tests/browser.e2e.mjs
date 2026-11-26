@@ -74,6 +74,10 @@ test('Trade Republic import, refresh and every tab', async () => {
   await page.locator('.refresh-btn.top').click();
   await page.locator('#toast', { hasText: 'actualisé' }).waitFor({ timeout: 30000 });
   assert.equal(await page.locator('#lines .line').count(), 2, 'the two funds; the cash line is left out');
+  assert.deepEqual(await page.locator('#dock button').evaluateAll(els => els.map(e => e.getAttribute('aria-label'))), ['Rechercher'], 'only search at the bottom');
+  const sq = await page.locator('#dock .dock-search').boundingBox();
+  assert.ok(sq.width < 70 && Math.abs(sq.width - sq.height) < 1 && sq.x + sq.width > 390 - 30, 'a small square in the bottom-right corner');
+  await page.locator('#dock .dock-search').click(); await page.waitForSelector('.sheet.full.open'); await page.keyboard.press('Escape'); await page.waitForTimeout(300);
   for (const name of ['analyse', 'historique', 'simuler']) { await tab(page, name); assert.ok((await page.locator('#view').innerText()).length > 100, name); }
   await tab(page, 'historique');
   assert.equal(await page.locator('.hist-list .line').count(), 3, 'the deposit and both buys');
