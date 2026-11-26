@@ -74,6 +74,10 @@ test('Trade Republic import, refresh and every tab', async () => {
   await page.locator('.refresh-btn.top').click();
   await page.locator('#toast', { hasText: 'actualisé' }).waitFor({ timeout: 30000 });
   assert.equal(await page.locator('#lines .line').count(), 2, 'the two funds; the cash line is left out');
+  assert.deepEqual(await page.locator('#dock button').evaluateAll(els => els.map(e => e.getAttribute('aria-label'))), ['Rechercher'], 'only search at the bottom');
+  const sq = await page.locator('#dock .dock-search').boundingBox();
+  assert.ok(sq.width < 70 && Math.abs(sq.width - sq.height) < 1 && sq.x + sq.width > 390 - 30, 'a small square in the bottom-right corner');
+  await page.locator('#dock .dock-search').click(); await page.waitForSelector('.sheet.full.open'); await page.keyboard.press('Escape'); await page.waitForTimeout(300);
   for (const name of ['analyse', 'historique', 'simuler']) { await tab(page, name); assert.ok((await page.locator('#view').innerText()).length > 100, name); }
   await tab(page, 'historique');
   assert.equal(await page.locator('.hist-list .line').count(), 3, 'the deposit and both buys');
@@ -130,9 +134,12 @@ test('accounts, backup, wipe and restore', async () => {
   await done();
 });
 
-test('Réglages: one page per section, back returns to the list', async () => {
+test('Réglages: opened from the profile initial, one page per section, back returns to the list', async () => {
   const { page, done } = await open({ demo: true });
-  await tab(page, 'donnees');
+  assert.equal(await page.locator('.tabbar [data-tab="donnees"]').count(), 0, 'no Réglages word in the tab row');
+  await page.locator('.topbar .avatar').click(); await page.waitForTimeout(200);
+  assert.equal(new URL(page.url()).hash, '#donnees');
+  assert.equal(await page.locator('.topbar .avatar').getAttribute('aria-current'), 'page');
   const keys = await page.locator('#view [data-action="section"]').evaluateAll(els => els.map(e => e.dataset.v));
   assert.deepEqual(keys, ['comptes', 'import', 'sync', 'cours', 'appareil', 'preferences']);
   for (const k of keys) {
@@ -148,7 +155,8 @@ test('Réglages: one page per section, back returns to the list', async () => {
 
 test('language: device language, then a manual choice that sticks', async () => {
   const { page, done } = await open({ locale: 'en-US', demo: true });
-  assert.deepEqual(await page.locator('.tabbar .lbl').allInnerTexts(), ['Net worth', 'Analysis', 'History', 'Holdings', 'Simulate', 'Settings']);
+  assert.deepEqual(await page.locator('.tabbar .lbl').allInnerTexts(), ['Net worth', 'Analysis', 'History', 'Holdings', 'Simulate']);
+  assert.equal(await page.locator('.topbar .avatar').getAttribute('aria-label'), 'Settings');
   assert.match(await total(page), /^12,985\.20/);
   await section(page, 'preferences');
   await page.locator('[data-action="lang"][data-v="fr"]').click(); await page.waitForTimeout(200);
