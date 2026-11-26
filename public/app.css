@@ -71,6 +71,8 @@ body.has-dock .main { padding-bottom: calc(var(--dock-h) + 40px + env(safe-area-
   width: 42px; height: 42px; border-radius: 50%; border: 0; display: grid; place-items: center; flex: none;
   background: var(--bg-2); color: var(--ink); font-family: var(--sans); font-size: 16px; font-weight: 600;
 }
+/* The profile initial opens Réglages: filled while that page is shown */
+.topbar .avatar[aria-current="page"] { background: var(--ink); color: var(--bg); }
 .wordmark { font-family: var(--sans); font-weight: 700; font-size: 21px; letter-spacing: -.03em; }
 .wordmark .dot { color: var(--muted); }
 .topbar .wordmark { font-size: 18px; flex: 1; text-align: center; }
@@ -100,7 +102,7 @@ body.has-dock .main { padding-bottom: calc(var(--dock-h) + 40px + env(safe-area-
   .side-link svg { width: 20px; height: 20px; }
   .side-link:hover { background: var(--bg-2); }
   .side-link[aria-current="page"] { background: var(--bg-2); color: var(--ink); font-weight: 600; }
-  .side-foot { margin-top: auto; display: flex; align-items: center; gap: 10px; padding: 10px 6px; color: var(--muted); font-size: 13px; }
+  .side-link.side-foot { margin-top: auto; gap: 10px; padding: 8px 10px; font-size: 14px; }
   .side-foot .avatar { width: 36px; height: 36px; font-size: 15px; }
   .tabbar { display: none !important; }
   .topbar { justify-content: flex-end; padding-block: 0 6px; position: static; margin: 0; }

@@ -130,9 +130,12 @@ test('accounts, backup, wipe and restore', async () => {
   await done();
 });
 
-test('Réglages: one page per section, back returns to the list', async () => {
+test('Réglages: opened from the profile initial, one page per section, back returns to the list', async () => {
   const { page, done } = await open({ demo: true });
-  await tab(page, 'donnees');
+  assert.equal(await page.locator('.tabbar [data-tab="donnees"]').count(), 0, 'no Réglages word in the tab row');
+  await page.locator('.topbar .avatar').click(); await page.waitForTimeout(200);
+  assert.equal(new URL(page.url()).hash, '#donnees');
+  assert.equal(await page.locator('.topbar .avatar').getAttribute('aria-current'), 'page');
   const keys = await page.locator('#view [data-action="section"]').evaluateAll(els => els.map(e => e.dataset.v));
   assert.deepEqual(keys, ['comptes', 'import', 'sync', 'cours', 'appareil', 'preferences']);
   for (const k of keys) {
@@ -148,7 +151,8 @@ test('Réglages: one page per section, back returns to the list', async () => {
 
 test('language: device language, then a manual choice that sticks', async () => {
   const { page, done } = await open({ locale: 'en-US', demo: true });
-  assert.deepEqual(await page.locator('.tabbar .lbl').allInnerTexts(), ['Net worth', 'Analysis', 'History', 'Holdings', 'Simulate', 'Settings']);
+  assert.deepEqual(await page.locator('.tabbar .lbl').allInnerTexts(), ['Net worth', 'Analysis', 'History', 'Holdings', 'Simulate']);
+  assert.equal(await page.locator('.topbar .avatar').getAttribute('aria-label'), 'Settings');
   assert.match(await total(page), /^12,985\.20/);
   await section(page, 'preferences');
   await page.locator('[data-action="lang"][data-v="fr"]').click(); await page.waitForTimeout(200);

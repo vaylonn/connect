@@ -15,7 +15,7 @@ import { totals, staleLines, lookthrough, DIRECT, heldLines, isHeld, lineComposi
 import { libraryFor, libraryChoices, SECTORS, COMPOSITION_NOTE, setFetchedLibrary, wantsComposition } from './library.js';
 import { lineChart, hoverText } from './chart.js';
 
-const VERSION = '1.13.0';
+const VERSION = '1.13.1';
 let data = load();
 const ui = {
   tab: 'patrimoine', range: '1A', scope: 'all', metric: 'pct', filter: 'all', group: 'accounts', unfolded: new Set(), analyse: 'sectors', server: 'unknown', busy: false, progress: '', lineRange: '1A',

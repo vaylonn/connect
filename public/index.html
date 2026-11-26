@@ -28,8 +28,7 @@
     <button class="side-link" data-tab="historique"><span class="ic" data-icon="historique"></span><span data-t>Historique</span></button>
     <button class="side-link" data-tab="positions"><span class="ic" data-icon="positions"></span><span data-t>Positions</span></button>
     <button class="side-link" data-tab="simuler"><span class="ic" data-icon="simuler"></span><span data-t>Simuler</span></button>
-    <button class="side-link" data-tab="donnees"><span class="ic" data-icon="donnees"></span><span data-t>Réglages</span></button>
-    <div class="side-foot"><button class="avatar" data-action="section" data-v="preferences" aria-label="Préférences" data-t-aria>C</button><span id="side-name">Votre profil</span></div>
+    <button class="side-link side-foot" data-tab="donnees" aria-label="Réglages" data-t-aria><span class="avatar">C</span><span id="side-name">Votre profil</span></button>
   </aside>
   <main class="main">
     <header class="topbar">
@@ -39,10 +38,9 @@
         <button class="tab" data-tab="historique"><span class="lbl" data-t>Historique</span></button>
         <button class="tab" data-tab="positions"><span class="lbl" data-t>Positions</span></button>
         <button class="tab" data-tab="simuler"><span class="lbl" data-t>Simuler</span></button>
-        <button class="tab" data-tab="donnees"><span class="lbl" data-t>Réglages</span></button>
       </nav>
       <button class="refresh-btn top" data-action="refresh" aria-label="Actualiser les cours et l’historique" data-t-aria><span class="ic" data-icon="refresh"></span><span class="r-short">Actualiser</span><span class="r-long">Actualiser les cours</span></button>
-      <button class="avatar" data-action="section" data-v="preferences" aria-label="Préférences" data-t-aria>C</button>
+      <button class="avatar" data-tab="donnees" aria-label="Réglages" data-t-aria>C</button>
     </header>
     <div id="view" aria-live="polite"></div>
   </main>
